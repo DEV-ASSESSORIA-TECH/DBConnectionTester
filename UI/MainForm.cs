@@ -332,7 +332,7 @@ public sealed class MainForm : Form
         }
 
         cancellation = new CancellationTokenSource();
-        UpdateTrayStatus(settings, new TestProgress(0, 0, 0, 0));
+        UpdateTrayStatus(settings, new TestProgress(0, 0, 0, 0, 0, 0));
         if (chkBackground.Checked)
             HideToTray("Teste iniciado em segundo plano.");
 
@@ -381,18 +381,26 @@ public sealed class MainForm : Form
         if (!chkPing.Checked && !chkTcp.Checked && !chkDatabase.Checked)
             return ValidationError("Selecione pelo menos uma camada de teste.");
 
-        var output = txtOutput.Text.Trim();
-        if (string.IsNullOrWhiteSpace(output))
+        var requestedOutput = txtOutput.Text.Trim();
+        if (string.IsNullOrWhiteSpace(requestedOutput))
             return ValidationError("Informe o arquivo CSV de saída.");
-        if (!output.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-            output += ".csv";
-        var directory = Path.GetDirectoryName(output);
-        if (string.IsNullOrWhiteSpace(directory))
+
+        string output;
+        try
         {
-            directory = Environment.CurrentDirectory;
-            output = Path.Combine(directory, output);
+            if (!requestedOutput.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+                requestedOutput += ".csv";
+            output = Path.GetFullPath(requestedOutput);
+            var directory = Path.GetDirectoryName(output)
+                ?? throw new IOException("Não foi possível determinar a pasta de saída.");
+            Directory.CreateDirectory(directory);
+            output = GetAvailableOutputPath(output);
         }
-        Directory.CreateDirectory(directory);
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or
+                                          PathTooLongException or UnauthorizedAccessException or IOException)
+        {
+            return ValidationError($"Não foi possível preparar o arquivo de saída: {exception.Message}");
+        }
 
         return new TestSettings(
             profile.Type,
@@ -432,7 +440,9 @@ public sealed class MainForm : Form
         var prefix = settings.Continuous
             ? $"Executando continuamente | {value.Completed:N0} testes"
             : $"Executando {value.Completed:N0}/{settings.TestCount:N0}";
-        lblStatus.Text = $"{prefix} | Ping falhas: {value.PingFailures} | TCP falhas: {value.TcpFailures} | DB falhas: {value.DatabaseFailures}";
+        lblStatus.Text = $"{prefix} | DNS: {value.DnsFailures} | Ping: {value.PingFailures} | " +
+                         $"TCP: {value.TcpFailures} | DB conexão: {value.DatabaseConnectFailures} | " +
+                         $"DB consulta: {value.DatabaseQueryFailures}";
         UpdateTrayStatus(settings, value);
     }
 
@@ -574,6 +584,25 @@ public sealed class MainForm : Form
         return !string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory)
             ? directory
             : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+    }
+
+    private static string GetAvailableOutputPath(string requestedPath)
+    {
+        var requestedLogPath = Path.ChangeExtension(requestedPath, ".txt");
+        if (!File.Exists(requestedPath) && !File.Exists(requestedLogPath))
+            return requestedPath;
+
+        var directory = Path.GetDirectoryName(requestedPath)!;
+        var name = Path.GetFileNameWithoutExtension(requestedPath);
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+        for (var suffix = 0; ; suffix++)
+        {
+            var suffixText = suffix == 0 ? "" : $"_{suffix}";
+            var candidate = Path.Combine(directory, $"{name}_{timestamp}{suffixText}.csv");
+            if (!File.Exists(candidate) && !File.Exists(Path.ChangeExtension(candidate, ".txt")))
+                return candidate;
+        }
     }
 
     private void SafeTrayText(string text) => trayIcon.Text = text.Length <= 63 ? text : text[..63];

@@ -52,6 +52,15 @@ public sealed record DatabaseResult(
     public static DatabaseResult Skipped() => new(true, "N/A", 0, true, "N/A", 0, 0, "");
 }
 
-public sealed record TestProgress(long Completed, int PingFailures, int TcpFailures, int DatabaseFailures);
+public sealed record TestProgress(
+    long Completed,
+    int DnsFailures,
+    int PingFailures,
+    int TcpFailures,
+    int DatabaseConnectFailures,
+    int DatabaseQueryFailures)
+{
+    public int DatabaseFailures => DatabaseConnectFailures + DatabaseQueryFailures;
+}
 
 public sealed record RunSummary(long Completed, bool Stopped);

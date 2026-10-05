@@ -14,8 +14,22 @@ public sealed class TestRunner
         CancellationToken token)
     {
         var utf8Bom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
-        await using var csv = new StreamWriter(settings.CsvPath, false, utf8Bom) { AutoFlush = true };
-        await using var log = new StreamWriter(settings.TxtPath, false, utf8Bom) { AutoFlush = true };
+        await using var csvStream = new FileStream(settings.CsvPath, new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Share = FileShare.Read,
+            Options = FileOptions.Asynchronous | FileOptions.SequentialScan
+        });
+        await using var logStream = new FileStream(settings.TxtPath, new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Share = FileShare.Read,
+            Options = FileOptions.Asynchronous | FileOptions.SequentialScan
+        });
+        await using var csv = new StreamWriter(csvStream, utf8Bom) { AutoFlush = true };
+        await using var log = new StreamWriter(logStream, utf8Bom) { AutoFlush = true };
 
         await csv.WriteLineAsync(CsvHeader);
         await WriteLogHeaderAsync(log, settings);
@@ -43,12 +57,17 @@ public sealed class TestRunner
                     ? await DatabaseTester.TestAsync(settings, token)
                     : DatabaseResult.Skipped();
 
-                metrics.Add(settings, ping, tcp, database);
+                metrics.Add(settings, dns, ping, tcp, database);
                 await csv.WriteLineAsync(BuildCsvRow(settings, timestamp, number, dns, ping, tcp, database));
                 await log.WriteLineAsync(BuildLogLine(settings, timestamp, number, dns, ping, tcp, database));
 
-                progress?.Report(new TestProgress(number, metrics.PingFailures, metrics.TcpFailures,
-                    metrics.DatabaseConnectFailures + metrics.DatabaseQueryFailures));
+                progress?.Report(new TestProgress(
+                    number,
+                    metrics.DnsFailures,
+                    metrics.PingFailures,
+                    metrics.TcpFailures,
+                    metrics.DatabaseConnectFailures,
+                    metrics.DatabaseQueryFailures));
 
                 if (!settings.Continuous && number >= settings.TestCount)
                     break;
@@ -89,6 +108,8 @@ public sealed class TestRunner
         await log.WriteLineAsync($"Fim: {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
         await log.WriteLineAsync($"Motivo do encerramento: {(stopped ? "Interrompido manualmente / encerramento do aplicativo" : "Quantidade planejada concluída")}");
         await log.WriteLineAsync($"Testes concluídos: {metrics.Completed}");
+        if (settings.Profile.UsesNetwork)
+            await log.WriteLineAsync($"DNS: OK={metrics.DnsOk} | Falhas={metrics.DnsFailures} | Média={Average(metrics.DnsSum, metrics.DnsOk)}ms");
         if (settings.Ping)
             await log.WriteLineAsync($"PING: OK={metrics.PingOk} | Falhas={metrics.PingFailures} | Média={Average(metrics.PingSum, metrics.PingOk)}ms");
         if (settings.Tcp)
@@ -157,6 +178,9 @@ public sealed class TestRunner
     private sealed class RunMetrics
     {
         public long Completed { get; private set; }
+        public int DnsOk { get; private set; }
+        public int DnsFailures { get; private set; }
+        public long DnsSum { get; private set; }
         public int PingOk { get; private set; }
         public int PingFailures { get; private set; }
         public long PingSum { get; private set; }
@@ -170,9 +194,13 @@ public sealed class TestRunner
         public int DatabaseQueryFailures { get; private set; }
         public long DatabaseQuerySum { get; private set; }
 
-        public void Add(TestSettings settings, StepResult ping, TcpResult tcp, DatabaseResult database)
+        public void Add(TestSettings settings, DnsResult dns, StepResult ping, TcpResult tcp, DatabaseResult database)
         {
             Completed++;
+            if (settings.Profile.UsesNetwork)
+            {
+                if (dns.Status is "OK" or "IP") { DnsOk++; DnsSum += dns.ElapsedMs; } else DnsFailures++;
+            }
             if (settings.Ping)
             {
                 if (ping.Ok) { PingOk++; PingSum += ping.ElapsedMs; } else PingFailures++;
@@ -184,7 +212,10 @@ public sealed class TestRunner
             if (settings.DatabaseTest)
             {
                 if (database.ConnectOk) { DatabaseConnectOk++; DatabaseConnectSum += database.ConnectMs; } else DatabaseConnectFailures++;
-                if (database.QueryOk) { DatabaseQueryOk++; DatabaseQuerySum += database.QueryMs; } else DatabaseQueryFailures++;
+                if (database.ConnectOk)
+                {
+                    if (database.QueryOk) { DatabaseQueryOk++; DatabaseQuerySum += database.QueryMs; } else DatabaseQueryFailures++;
+                }
             }
         }
     }
