@@ -5,12 +5,26 @@ namespace DBConnectionTester.Services;
 
 public sealed class TestRunner : ITestRunner
 {
+    private readonly ITestCycleExecutor cycleExecutor;
+    private readonly IRunOutputFactory outputFactory;
+
+    public TestRunner()
+        : this(new TestCycleExecutor(), new RunOutputFactory())
+    {
+    }
+
+    public TestRunner(ITestCycleExecutor cycleExecutor, IRunOutputFactory outputFactory)
+    {
+        this.cycleExecutor = cycleExecutor;
+        this.outputFactory = outputFactory;
+    }
+
     public async Task<RunSummary> RunAsync(
         TestSettings settings,
         IProgress<TestProgress>? progress,
         CancellationToken token)
     {
-        await using var output = await RunOutputSession.CreateAsync(settings);
+        await using var output = await outputFactory.CreateAsync(settings);
         var metrics = new RunMetrics();
         var stopped = false;
 
@@ -19,22 +33,7 @@ public sealed class TestRunner : ITestRunner
             for (long number = 1; settings.Continuous || number <= settings.TestCount; number++)
             {
                 token.ThrowIfCancellationRequested();
-                var startedAt = DateTimeOffset.Now;
-
-                var dns = settings.Profile.UsesNetwork
-                    ? await NetworkTester.TestDnsAsync(settings.Host, settings.Timeout, token)
-                    : DnsResult.Skipped();
-                var ping = settings.Ping
-                    ? await NetworkTester.TestPingAsync(settings.Host, settings.Timeout, token)
-                    : StepResult.Skipped();
-                var tcp = settings.Tcp
-                    ? await NetworkTester.TestTcpAsync(settings.Host, settings.Port, settings.Timeout, token)
-                    : TcpResult.Skipped();
-                var database = settings.DatabaseTest
-                    ? await DatabaseTester.TestAsync(settings, token)
-                    : DatabaseResult.Skipped();
-
-                var cycle = new TestCycleResult(number, startedAt, dns, ping, tcp, database);
+                var cycle = await cycleExecutor.ExecuteAsync(settings, number, token);
                 metrics.Add(settings, cycle);
                 await output.WriteCycleAsync(cycle, token);
                 progress?.Report(metrics.CreateProgress());

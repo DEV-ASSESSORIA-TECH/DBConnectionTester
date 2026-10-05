@@ -1,0 +1,224 @@
+using DBConnectionTester.Application;
+using DBConnectionTester.Models;
+
+namespace DBConnectionTester.UI;
+
+public sealed partial class MainForm
+{
+    private async Task StartAsync()
+    {
+        if (runCoordinator.IsRunning)
+            return;
+
+        var settings = TryBuildSettings();
+        if (settings is null)
+            return;
+
+        currentCsvPath = settings.CsvPath;
+        currentTxtPath = settings.TxtPath;
+        exitRequested = false;
+        completedTests = 0;
+        ApplyRunUiState(RunUiState.Running, settings);
+        UpdateTrayStatus(settings, new TestProgress(0, 0, 0, 0, 0, 0));
+
+        if (chkBackground.Checked)
+            HideToTray("Teste iniciado em segundo plano.");
+
+        try
+        {
+            var uiProgress = new Progress<TestProgress>(value => UpdateProgress(settings, value));
+            var summary = await runCoordinator.StartAsync(settings, uiProgress);
+            completedTests = summary.Completed;
+            CompleteRun(settings, summary);
+        }
+        catch (Exception exception)
+        {
+            ApplyRunUiState(RunUiState.Failed);
+            lblStatus.Text = $"Erro: {exception.Message}";
+            ShowPanel();
+            MessageBox.Show(this, exception.ToString(), "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            if (exitRequested)
+            {
+                trayIcon.Visible = false;
+                Close();
+            }
+        }
+    }
+
+    private TestSettings? TryBuildSettings()
+    {
+        var input = new TestSettingsInput(
+            SelectedProfile.Type,
+            txtHost.Text,
+            (int)numPort.Value,
+            txtUser.Text,
+            txtPassword.Text,
+            txtDatabase.Text,
+            txtSqliteFile.Text,
+            SelectedSqlServerAuthentication,
+            txtOdbcDriver.Text,
+            (long)numTests.Value,
+            chkContinuous.Checked,
+            TimeSpan.FromSeconds((double)numInterval.Value),
+            TimeSpan.FromSeconds((double)numTimeout.Value),
+            chkPing.Checked,
+            chkTcp.Checked,
+            chkDatabase.Checked,
+            txtOutput.Text);
+
+        var result = settingsValidator.Validate(input);
+        return result.IsValid ? result.Settings : ValidationError(result.ErrorMessage);
+    }
+
+    private TestSettings? ValidationError(string message)
+    {
+        MessageBox.Show(this, message, "Validação", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return null;
+    }
+
+    private void UpdateProgress(TestSettings settings, TestProgress value)
+    {
+        completedTests = value.Completed;
+        if (!settings.Continuous)
+        {
+            var percentage = (int)Math.Round(value.Completed * 100.0 / settings.TestCount);
+            progressBar.Value = Math.Clamp(percentage, 0, 100);
+        }
+        var prefix = settings.Continuous
+            ? $"Executando continuamente | {value.Completed:N0} testes"
+            : $"Executando {value.Completed:N0}/{settings.TestCount:N0}";
+        lblStatus.Text = $"{prefix} | DNS: {value.DnsFailures} | Ping: {value.PingFailures} | " +
+                         $"TCP: {value.TcpFailures} | DB conexão: {value.DatabaseConnectFailures} | " +
+                         $"DB consulta: {value.DatabaseQueryFailures}";
+        UpdateTrayStatus(settings, value);
+    }
+
+    private void CompleteRun(TestSettings settings, RunSummary summary)
+    {
+        ApplyRunUiState(RunUiState.Completed);
+        if (summary.Stopped)
+        {
+            lblStatus.Text = $"Teste interrompido. {summary.Completed:N0} verificações gravadas.";
+            trayStatus.Text = $"Interrompido - {summary.Completed:N0} testes";
+            SafeTrayText($"DB Connection Tester - parado - {summary.Completed:N0}");
+            return;
+        }
+
+        lblStatus.Text = $"Concluído. CSV: {Path.GetFileName(settings.CsvPath)} | TXT: {Path.GetFileName(settings.TxtPath)}";
+        progressBar.Value = 100;
+        trayStatus.Text = $"Concluído - {summary.Completed:N0} testes";
+        SafeTrayText($"DB Connection Tester - concluído - {summary.Completed:N0}");
+        trayIcon.Visible = true;
+        trayIcon.BalloonTipTitle = "DB Connection Tester";
+        trayIcon.BalloonTipText = $"Teste concluído. {summary.Completed:N0} verificações executadas.";
+        trayIcon.BalloonTipIcon = ToolTipIcon.Info;
+        trayIcon.ShowBalloonTip(3000);
+    }
+
+    private void RequestStop()
+    {
+        if (!runCoordinator.IsRunning || runUiState == RunUiState.Stopping)
+            return;
+
+        ApplyRunUiState(RunUiState.Stopping);
+        lblStatus.Text = "Encerrando teste e finalizando o log...";
+        trayStatus.Text = "Encerrando teste...";
+        runCoordinator.Stop();
+    }
+
+    private void RequestExit()
+    {
+        if (runCoordinator.IsRunning)
+        {
+            var result = MessageBox.Show(
+                "Há um teste em andamento. Deseja encerrar o teste, finalizar o log e sair?",
+                "Sair do DB Connection Tester",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (result != DialogResult.Yes)
+                return;
+            exitRequested = true;
+            ApplyRunUiState(RunUiState.Stopping);
+            runCoordinator.Stop();
+            return;
+        }
+
+        exitRequested = true;
+        trayIcon.Visible = false;
+        Close();
+    }
+
+    private void OnFormClosing(object? sender, FormClosingEventArgs e)
+    {
+        if (e.CloseReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing)
+        {
+            exitRequested = true;
+            runCoordinator.Stop();
+            trayIcon.Visible = false;
+            return;
+        }
+        if (runCoordinator.IsRunning && !exitRequested)
+        {
+            e.Cancel = true;
+            HideToTray("Teste continua em execução.");
+        }
+    }
+
+    private void ApplyRunUiState(RunUiState state, TestSettings? settings = null)
+    {
+        runUiState = state;
+        var active = state is RunUiState.Running or RunUiState.Stopping;
+        var stopping = state == RunUiState.Stopping;
+        SetConfigurationEnabled(!active);
+        btnStart.Enabled = !active;
+        btnStop.Enabled = active && !stopping;
+        trayStop.Enabled = active && !stopping;
+
+        var hasOutput = !string.IsNullOrWhiteSpace(currentCsvPath);
+        btnOpenCsv.Enabled = hasOutput;
+        btnOpenLog.Enabled = hasOutput;
+        trayOpenCsv.Enabled = hasOutput;
+        trayOpenLog.Enabled = hasOutput;
+
+        if (state == RunUiState.Running && settings?.Continuous == true)
+        {
+            progressBar.Style = ProgressBarStyle.Marquee;
+            progressBar.MarqueeAnimationSpeed = 30;
+        }
+        else
+        {
+            progressBar.Style = ProgressBarStyle.Blocks;
+            if (state == RunUiState.Running)
+                progressBar.Value = 0;
+        }
+    }
+
+    private void SetConfigurationEnabled(bool enabled)
+    {
+        configurationEnabled = enabled;
+        foreach (var control in new Control[]
+                 {
+                     cmbDatabaseType, txtHost, numPort, cmbSqlServerAuth, txtUser, txtPassword, txtDatabase,
+                     txtOdbcDriver, txtSqliteFile, btnBrowseSqlite, numInterval, numTimeout, chkContinuous,
+                     chkBackground, txtOutput, btnBrowseOutput
+                 })
+            control.Enabled = enabled;
+        numTests.Enabled = enabled && !chkContinuous.Checked;
+        ApplyDatabaseType(resetPort: false);
+    }
+
+    private void UpdateTrayStatus(TestSettings settings, TestProgress value)
+    {
+        trayIcon.Visible = true;
+        trayStatus.Text = settings.Continuous
+            ? $"Executando - {value.Completed:N0} testes"
+            : $"Executando - {value.Completed:N0}/{settings.TestCount:N0}";
+        var tooltip = settings.Continuous
+            ? $"DB Tester - {value.Completed:N0} - falhas P:{value.PingFailures} T:{value.TcpFailures} DB:{value.DatabaseFailures}"
+            : $"DB Tester - {value.Completed:N0}/{settings.TestCount:N0} - falhas P:{value.PingFailures} T:{value.TcpFailures} DB:{value.DatabaseFailures}";
+        SafeTrayText(tooltip);
+    }
+}
