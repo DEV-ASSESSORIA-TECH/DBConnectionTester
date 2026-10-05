@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using DBConnectionTester.Application;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services;
 
@@ -51,8 +52,8 @@ public sealed class MainForm : Form
     private RowBinding odbcDriverRow = null!;
     private RowBinding sqliteFileRow = null!;
 
-    private CancellationTokenSource? cancellation;
-    private bool running;
+    private readonly RunCoordinator runCoordinator = new(new TestRunner());
+    private readonly TestSettingsValidator settingsValidator = new(new OutputPathPolicy());
     private bool exitRequested;
     private bool configurationEnabled = true;
     private long completedTests;
@@ -221,6 +222,7 @@ public sealed class MainForm : Form
         FormClosing += OnFormClosing;
         FormClosed += (_, _) =>
         {
+            runCoordinator.Dispose();
             trayIcon.Visible = false;
             trayIcon.Dispose();
         };
@@ -299,7 +301,7 @@ public sealed class MainForm : Form
 
     private async Task StartAsync()
     {
-        if (running)
+        if (runCoordinator.IsRunning)
             return;
 
         var settings = TryBuildSettings();
@@ -308,7 +310,6 @@ public sealed class MainForm : Form
 
         currentCsvPath = settings.CsvPath;
         currentTxtPath = settings.TxtPath;
-        running = true;
         exitRequested = false;
         completedTests = 0;
         SetConfigurationEnabled(false);
@@ -331,7 +332,6 @@ public sealed class MainForm : Form
             progressBar.Value = 0;
         }
 
-        cancellation = new CancellationTokenSource();
         UpdateTrayStatus(settings, new TestProgress(0, 0, 0, 0, 0, 0));
         if (chkBackground.Checked)
             HideToTray("Teste iniciado em segundo plano.");
@@ -339,7 +339,7 @@ public sealed class MainForm : Form
         try
         {
             var uiProgress = new Progress<TestProgress>(value => UpdateProgress(settings, value));
-            var summary = await new TestRunner().RunAsync(settings, uiProgress, cancellation.Token);
+            var summary = await runCoordinator.StartAsync(settings, uiProgress);
             completedTests = summary.Completed;
             CompleteRun(settings, summary);
         }
@@ -351,9 +351,6 @@ public sealed class MainForm : Form
         }
         finally
         {
-            cancellation.Dispose();
-            cancellation = null;
-            running = false;
             SetConfigurationEnabled(true);
             btnStart.Enabled = true;
             btnStop.Enabled = false;
@@ -369,49 +366,16 @@ public sealed class MainForm : Form
 
     private TestSettings? TryBuildSettings()
     {
-        var profile = SelectedProfile;
-        var host = txtHost.Text.Trim();
-        var sqliteFile = txtSqliteFile.Text.Trim();
-        if (profile.UsesNetwork && string.IsNullOrWhiteSpace(host))
-            return ValidationError("Informe o servidor ou host.");
-        if (profile.UsesFile && !File.Exists(sqliteFile))
-            return ValidationError("Selecione um arquivo SQLite existente.");
-        if (profile.UsesOdbcDriver && string.IsNullOrWhiteSpace(txtOdbcDriver.Text))
-            return ValidationError("Informe o nome do driver ODBC do SQL Anywhere.");
-        if (!chkPing.Checked && !chkTcp.Checked && !chkDatabase.Checked)
-            return ValidationError("Selecione pelo menos uma camada de teste.");
-
-        var requestedOutput = txtOutput.Text.Trim();
-        if (string.IsNullOrWhiteSpace(requestedOutput))
-            return ValidationError("Informe o arquivo CSV de saída.");
-
-        string output;
-        try
-        {
-            if (!requestedOutput.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-                requestedOutput += ".csv";
-            output = Path.GetFullPath(requestedOutput);
-            var directory = Path.GetDirectoryName(output)
-                ?? throw new IOException("Não foi possível determinar a pasta de saída.");
-            Directory.CreateDirectory(directory);
-            output = GetAvailableOutputPath(output);
-        }
-        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or
-                                          PathTooLongException or UnauthorizedAccessException or IOException)
-        {
-            return ValidationError($"Não foi possível preparar o arquivo de saída: {exception.Message}");
-        }
-
-        return new TestSettings(
-            profile.Type,
-            host,
+        var input = new TestSettingsInput(
+            SelectedProfile.Type,
+            txtHost.Text,
             (int)numPort.Value,
             txtUser.Text,
             txtPassword.Text,
-            txtDatabase.Text.Trim(),
-            sqliteFile,
+            txtDatabase.Text,
+            txtSqliteFile.Text,
             SelectedSqlServerAuthentication,
-            txtOdbcDriver.Text.Trim(),
+            txtOdbcDriver.Text,
             (long)numTests.Value,
             chkContinuous.Checked,
             TimeSpan.FromSeconds((double)numInterval.Value),
@@ -419,8 +383,10 @@ public sealed class MainForm : Form
             chkPing.Checked,
             chkTcp.Checked,
             chkDatabase.Checked,
-            output,
-            Path.ChangeExtension(output, ".txt"));
+            txtOutput.Text);
+
+        var result = settingsValidator.Validate(input);
+        return result.IsValid ? result.Settings : ValidationError(result.ErrorMessage);
     }
 
     private TestSettings? ValidationError(string message)
@@ -469,17 +435,17 @@ public sealed class MainForm : Form
 
     private void RequestStop()
     {
-        if (!running)
+        if (!runCoordinator.IsRunning)
             return;
         lblStatus.Text = "Encerrando teste e finalizando o log...";
         trayStatus.Text = "Encerrando teste...";
         trayStop.Enabled = false;
-        cancellation?.Cancel();
+        runCoordinator.Stop();
     }
 
     private void RequestExit()
     {
-        if (running)
+        if (runCoordinator.IsRunning)
         {
             var result = MessageBox.Show(
                 "Há um teste em andamento. Deseja encerrar o teste, finalizar o log e sair?",
@@ -490,7 +456,7 @@ public sealed class MainForm : Form
                 return;
             exitRequested = true;
             trayStop.Enabled = false;
-            cancellation?.Cancel();
+            runCoordinator.Stop();
             return;
         }
 
@@ -504,11 +470,11 @@ public sealed class MainForm : Form
         if (e.CloseReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing)
         {
             exitRequested = true;
-            cancellation?.Cancel();
+            runCoordinator.Stop();
             trayIcon.Visible = false;
             return;
         }
-        if (running && !exitRequested)
+        if (runCoordinator.IsRunning && !exitRequested)
         {
             e.Cancel = true;
             HideToTray("Teste continua em execução.");
@@ -584,25 +550,6 @@ public sealed class MainForm : Form
         return !string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory)
             ? directory
             : Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-    }
-
-    private static string GetAvailableOutputPath(string requestedPath)
-    {
-        var requestedLogPath = Path.ChangeExtension(requestedPath, ".txt");
-        if (!File.Exists(requestedPath) && !File.Exists(requestedLogPath))
-            return requestedPath;
-
-        var directory = Path.GetDirectoryName(requestedPath)!;
-        var name = Path.GetFileNameWithoutExtension(requestedPath);
-        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-
-        for (var suffix = 0; ; suffix++)
-        {
-            var suffixText = suffix == 0 ? "" : $"_{suffix}";
-            var candidate = Path.Combine(directory, $"{name}_{timestamp}{suffixText}.csv");
-            if (!File.Exists(candidate) && !File.Exists(Path.ChangeExtension(candidate, ".txt")))
-                return candidate;
-        }
     }
 
     private void SafeTrayText(string text) => trayIcon.Text = text.Length <= 63 ? text : text[..63];

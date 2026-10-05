@@ -3,7 +3,7 @@ using DBConnectionTester.Services.Output;
 
 namespace DBConnectionTester.Services;
 
-public sealed class TestRunner
+public sealed class TestRunner : ITestRunner
 {
     public async Task<RunSummary> RunAsync(
         TestSettings settings,
