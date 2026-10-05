@@ -14,6 +14,7 @@ public sealed record TestSettings(
     bool Continuous,
     TimeSpan Interval,
     TimeSpan Timeout,
+    bool Dns,
     bool Ping,
     bool Tcp,
     bool DatabaseTest,
@@ -87,7 +88,8 @@ public sealed record TestProgress(
     int TcpFailures,
     int DatabaseConnectFailures,
     int DatabaseQueryFailures,
-    TestCycleResult? LatestCycle = null)
+    TestCycleResult? LatestCycle = null,
+    RunStatisticsSnapshot? Statistics = null)
 {
     public int DatabaseFailures => DatabaseConnectFailures + DatabaseQueryFailures;
 }

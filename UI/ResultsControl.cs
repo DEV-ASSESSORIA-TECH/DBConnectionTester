@@ -12,6 +12,7 @@ public sealed class ResultsControl : UserControl
     private readonly StageResultCard connectCard = new("Conexão DB");
     private readonly StageResultCard queryCard = new("SELECT 1");
     private readonly DataGridView grid = new();
+    private readonly DataGridView statisticsGrid = new();
 
     public ResultsControl()
     {
@@ -34,6 +35,15 @@ public sealed class ResultsControl : UserControl
         cards.Controls.Add(queryCard, 4, 0);
 
         ConfigureGrid();
+        ConfigureStatisticsGrid();
+
+        var tabs = new TabControl { Dock = DockStyle.Fill };
+        var recentTab = new TabPage("Ciclos recentes");
+        var statisticsTab = new TabPage("Resumo estatístico");
+        recentTab.Controls.Add(grid);
+        statisticsTab.Controls.Add(statisticsGrid);
+        tabs.TabPages.Add(recentTab);
+        tabs.TabPages.Add(statisticsTab);
 
         var content = new TableLayoutPanel
         {
@@ -45,7 +55,7 @@ public sealed class ResultsControl : UserControl
         content.RowStyles.Add(new RowStyle(SizeType.Absolute, 94));
         content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         content.Controls.Add(cards, 0, 0);
-        content.Controls.Add(grid, 0, 1);
+        content.Controls.Add(tabs, 0, 1);
 
         var group = new GroupBox { Text = "Resultados recentes", Dock = DockStyle.Fill };
         group.Controls.Add(content);
@@ -60,6 +70,16 @@ public sealed class ResultsControl : UserControl
         connectCard.ResetResult();
         queryCard.ResetResult();
         grid.Rows.Clear();
+        ResetStatistics();
+    }
+
+    public void UpdateStatistics(RunStatisticsSnapshot statistics)
+    {
+        UpdateStatisticsRow(0, statistics.Dns);
+        UpdateStatisticsRow(1, statistics.Ping);
+        UpdateStatisticsRow(2, statistics.Tcp);
+        UpdateStatisticsRow(3, statistics.DatabaseConnect);
+        UpdateStatisticsRow(4, statistics.DatabaseQuery);
     }
 
     public void AddCycle(TestCycleResult cycle)
@@ -117,6 +137,89 @@ public sealed class ResultsControl : UserControl
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Connect", HeaderText = "Conexão DB", FillWeight = 82 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Query", HeaderText = "SELECT 1", FillWeight = 72 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Error", HeaderText = "Erro", FillWeight = 180 });
+    }
+
+    private void ConfigureStatisticsGrid()
+    {
+        statisticsGrid.Dock = DockStyle.Fill;
+        statisticsGrid.AllowUserToAddRows = false;
+        statisticsGrid.AllowUserToDeleteRows = false;
+        statisticsGrid.AllowUserToResizeRows = false;
+        statisticsGrid.ReadOnly = true;
+        statisticsGrid.MultiSelect = false;
+        statisticsGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        statisticsGrid.RowHeadersVisible = false;
+        statisticsGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        statisticsGrid.BackgroundColor = SystemColors.Window;
+        statisticsGrid.BorderStyle = BorderStyle.Fixed3D;
+        statisticsGrid.EnableHeadersVisualStyles = false;
+        statisticsGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(240, 242, 245);
+        statisticsGrid.ColumnHeadersDefaultCellStyle.Font = new Font(statisticsGrid.Font, FontStyle.Bold);
+        statisticsGrid.Columns.Add("Stage", "Etapa");
+        statisticsGrid.Columns.Add("Success", "Resultados");
+        statisticsGrid.Columns.Add("Rate", "Taxa");
+        statisticsGrid.Columns.Add("Average", "Média");
+        statisticsGrid.Columns.Add("Minimum", "Mínimo");
+        statisticsGrid.Columns.Add("Maximum", "Máximo");
+        statisticsGrid.Columns.Add("Median", "Mediana");
+        statisticsGrid.Columns.Add("P95", "P95");
+        statisticsGrid.Columns.Add("Streak", "Falhas seguidas");
+        statisticsGrid.Columns.Add("MaxStreak", "Maior sequência");
+        statisticsGrid.Columns.Add("SinceFailure", "Desde última falha");
+        statisticsGrid.Columns[0].DefaultCellStyle.Font = new Font(statisticsGrid.Font, FontStyle.Bold);
+        statisticsGrid.Columns[1].FillWeight = 130;
+        statisticsGrid.Columns[10].FillWeight = 135;
+
+        foreach (var stage in new[] { "DNS", "Ping / ICMP", "TCP", "Conexão DB", "SELECT 1" })
+            statisticsGrid.Rows.Add(stage, "—", "—", "—", "—", "—", "—", "—", "0", "0", "Nunca");
+    }
+
+    private void ResetStatistics()
+    {
+        foreach (DataGridViewRow row in statisticsGrid.Rows)
+        {
+            for (var column = 1; column <= 7; column++)
+                row.Cells[column].Value = "—";
+            row.Cells[8].Value = "0";
+            row.Cells[9].Value = "0";
+            row.Cells[10].Value = "Nunca";
+        }
+    }
+
+    private void UpdateStatisticsRow(int rowIndex, StageStatisticsSnapshot statistics)
+    {
+        var row = statisticsGrid.Rows[rowIndex];
+        row.Cells[1].Value = statistics.Attempts == 0
+            ? "—"
+            : $"{statistics.Successes:N0} OK · {statistics.Failures:N0} falhas";
+        row.Cells[2].Value = statistics.SuccessRate is null ? "—" : $"{statistics.SuccessRate:0.0}%";
+        row.Cells[3].Value = FormatLatency(statistics.AverageMs);
+        row.Cells[4].Value = FormatLatency(statistics.MinimumMs);
+        row.Cells[5].Value = FormatLatency(statistics.MaximumMs);
+        row.Cells[6].Value = FormatLatency(statistics.MedianMs);
+        row.Cells[7].Value = FormatLatency(statistics.P95Ms);
+        row.Cells[8].Value = statistics.ConsecutiveFailures.ToString("N0");
+        row.Cells[9].Value = statistics.MaximumConsecutiveFailures.ToString("N0");
+        row.Cells[10].Value = FormatElapsed(statistics.TimeSinceLastFailure(DateTimeOffset.Now));
+        row.DefaultCellStyle.BackColor = statistics.ConsecutiveFailures > 0
+            ? Color.FromArgb(255, 242, 242)
+            : SystemColors.Window;
+    }
+
+    private static string FormatLatency(double? milliseconds) =>
+        milliseconds is null ? "—" : $"{milliseconds:0.0} ms";
+
+    private static string FormatElapsed(TimeSpan? elapsed)
+    {
+        if (elapsed is null)
+            return "Nunca";
+        if (elapsed.Value.TotalSeconds < 60)
+            return $"{Math.Max(0, elapsed.Value.TotalSeconds):0} s";
+        if (elapsed.Value.TotalMinutes < 60)
+            return $"{elapsed.Value.TotalMinutes:0.0} min";
+        if (elapsed.Value.TotalHours < 24)
+            return $"{elapsed.Value.TotalHours:0.0} h";
+        return $"{elapsed.Value.TotalDays:0.0} dias";
     }
 
     private static string FormatStep(StepStatus status, long elapsedMs) => status == StepStatus.Skipped

@@ -2,60 +2,47 @@ namespace DBConnectionTester.Models;
 
 public sealed class RunMetrics
 {
+    private readonly StageStatistics dns = new();
+    private readonly StageStatistics ping = new();
+    private readonly StageStatistics tcp = new();
+    private readonly StageStatistics databaseConnect = new();
+    private readonly StageStatistics databaseQuery = new();
+
     public long Completed { get; private set; }
-    public int DnsOk { get; private set; }
-    public int DnsFailures { get; private set; }
-    public long DnsSum { get; private set; }
-    public int PingOk { get; private set; }
-    public int PingFailures { get; private set; }
-    public long PingSum { get; private set; }
-    public int TcpOk { get; private set; }
-    public int TcpFailures { get; private set; }
-    public long TcpSum { get; private set; }
-    public int DatabaseConnectOk { get; private set; }
-    public int DatabaseConnectFailures { get; private set; }
-    public long DatabaseConnectSum { get; private set; }
-    public int DatabaseQueryOk { get; private set; }
-    public int DatabaseQueryFailures { get; private set; }
-    public long DatabaseQuerySum { get; private set; }
+    public int DnsOk => checked((int)dns.Successes);
+    public int DnsFailures => checked((int)dns.Failures);
+    public int PingOk => checked((int)ping.Successes);
+    public int PingFailures => checked((int)ping.Failures);
+    public int TcpOk => checked((int)tcp.Successes);
+    public int TcpFailures => checked((int)tcp.Failures);
+    public int DatabaseConnectOk => checked((int)databaseConnect.Successes);
+    public int DatabaseConnectFailures => checked((int)databaseConnect.Failures);
+    public int DatabaseQueryOk => checked((int)databaseQuery.Successes);
+    public int DatabaseQueryFailures => checked((int)databaseQuery.Failures);
 
     public void Add(TestSettings settings, TestCycleResult cycle)
     {
         Completed++;
-        if (settings.Profile.UsesNetwork)
-        {
-            if (cycle.Dns.Ok) { DnsOk++; DnsSum += cycle.Dns.ElapsedMs; } else DnsFailures++;
-        }
+        var recordedAt = DateTimeOffset.Now;
+        if (settings.Dns)
+            dns.Record(cycle.Dns.Status, cycle.Dns.ElapsedMs, recordedAt);
         if (settings.Ping)
-        {
-            if (cycle.Ping.Ok) { PingOk++; PingSum += cycle.Ping.ElapsedMs; } else PingFailures++;
-        }
+            ping.Record(cycle.Ping.Status, cycle.Ping.ElapsedMs, recordedAt);
         if (settings.Tcp)
-        {
-            if (cycle.Tcp.Ok) { TcpOk++; TcpSum += cycle.Tcp.ElapsedMs; } else TcpFailures++;
-        }
+            tcp.Record(cycle.Tcp.Status, cycle.Tcp.ElapsedMs, recordedAt);
         if (settings.DatabaseTest)
         {
-            if (cycle.Database.ConnectOk)
-            {
-                DatabaseConnectOk++;
-                DatabaseConnectSum += cycle.Database.ConnectMs;
-                if (cycle.Database.QueryOk)
-                {
-                    DatabaseQueryOk++;
-                    DatabaseQuerySum += cycle.Database.QueryMs;
-                }
-                else
-                {
-                    DatabaseQueryFailures++;
-                }
-            }
-            else
-            {
-                DatabaseConnectFailures++;
-            }
+            databaseConnect.Record(cycle.Database.ConnectStatus, cycle.Database.ConnectMs, recordedAt);
+            databaseQuery.Record(cycle.Database.QueryStatus, cycle.Database.QueryMs, recordedAt);
         }
     }
+
+    public RunStatisticsSnapshot CreateStatistics() => new(
+        dns.CreateSnapshot(),
+        ping.CreateSnapshot(),
+        tcp.CreateSnapshot(),
+        databaseConnect.CreateSnapshot(),
+        databaseQuery.CreateSnapshot());
 
     public TestProgress CreateProgress(TestCycleResult? latestCycle = null) => new(
         Completed,
@@ -64,7 +51,6 @@ public sealed class RunMetrics
         TcpFailures,
         DatabaseConnectFailures,
         DatabaseQueryFailures,
-        latestCycle);
-
-    public static long Average(long sum, int count) => count == 0 ? 0 : sum / count;
+        latestCycle,
+        CreateStatistics());
 }

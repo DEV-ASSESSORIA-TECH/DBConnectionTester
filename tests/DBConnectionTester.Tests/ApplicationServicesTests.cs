@@ -18,6 +18,24 @@ public sealed class ApplicationServicesTests
     }
 
     [Fact]
+    public void DnsCanBeTheOnlySelectedLayer()
+    {
+        var outputPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".csv");
+        var validator = new TestSettingsValidator(new OutputPathPolicy());
+
+        var result = validator.Validate(Input(outputPath) with
+        {
+            Ping = false,
+            Tcp = false,
+            DatabaseTest = false,
+            Dns = true
+        });
+
+        Assert.True(result.IsValid);
+        Assert.True(result.Settings!.Dns);
+    }
+
+    [Fact]
     public async Task OutputPolicyPreservesExistingRun()
     {
         var directory = CreateTemporaryDirectory();
@@ -71,6 +89,7 @@ public sealed class ApplicationServicesTests
         false,
         TimeSpan.Zero,
         TimeSpan.FromSeconds(1),
+        true,
         false,
         false,
         true,
@@ -90,6 +109,7 @@ public sealed class ApplicationServicesTests
         false,
         TimeSpan.Zero,
         TimeSpan.FromSeconds(1),
+        true,
         false,
         false,
         true,

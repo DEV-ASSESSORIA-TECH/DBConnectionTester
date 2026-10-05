@@ -20,6 +20,7 @@ public sealed partial class MainForm : Form
     private readonly CheckBox chkContinuous = new() { Text = "Execução contínua (até encerrar manualmente)", AutoSize = true };
     private readonly NumericUpDown numInterval = new() { Minimum = 0, Maximum = 3600, Value = 5, DecimalPlaces = 1, Increment = 0.5M };
     private readonly NumericUpDown numTimeout = new() { Minimum = 1, Maximum = 120, Value = 5 };
+    private readonly CheckBox chkDns = new() { Text = "DNS", Checked = true, AutoSize = true };
     private readonly CheckBox chkPing = new() { Text = "Ping / ICMP", Checked = true, AutoSize = true };
     private readonly CheckBox chkTcp = new() { Text = "TCP", Checked = true, AutoSize = true };
     private readonly CheckBox chkDatabase = new() { Text = "Banco + SELECT 1", Checked = true, AutoSize = true };

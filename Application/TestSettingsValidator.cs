@@ -16,6 +16,7 @@ public sealed record TestSettingsInput(
     bool Continuous,
     TimeSpan Interval,
     TimeSpan Timeout,
+    bool Dns,
     bool Ping,
     bool Tcp,
     bool DatabaseTest,
@@ -43,6 +44,10 @@ public sealed class TestSettingsValidator
         var profile = DatabaseProfiles.Get(input.DatabaseType);
         var host = input.Host.Trim();
         var sqliteFile = input.SqliteFile.Trim();
+        var dns = input.Dns && profile.UsesNetwork;
+        var ping = input.Ping && profile.UsesNetwork;
+        var tcp = input.Tcp && profile.UsesNetwork;
+        var databaseTest = input.DatabaseTest && profile.SupportsDatabaseTest;
 
         if (profile.UsesNetwork && string.IsNullOrWhiteSpace(host))
             return TestSettingsValidationResult.Failure("Informe o servidor ou host.");
@@ -50,7 +55,7 @@ public sealed class TestSettingsValidator
             return TestSettingsValidationResult.Failure("Selecione um arquivo SQLite existente.");
         if (profile.UsesOdbcDriver && string.IsNullOrWhiteSpace(input.OdbcDriver))
             return TestSettingsValidationResult.Failure("Informe o nome do driver ODBC do SQL Anywhere.");
-        if (!input.Ping && !input.Tcp && !input.DatabaseTest)
+        if (!dns && !ping && !tcp && !databaseTest)
             return TestSettingsValidationResult.Failure("Selecione pelo menos uma camada de teste.");
 
         OutputPaths output;
@@ -79,9 +84,10 @@ public sealed class TestSettingsValidator
             input.Continuous,
             input.Interval,
             input.Timeout,
-            input.Ping,
-            input.Tcp,
-            input.DatabaseTest,
+            dns,
+            ping,
+            tcp,
+            databaseTest,
             output.CsvPath,
             output.TxtPath));
     }

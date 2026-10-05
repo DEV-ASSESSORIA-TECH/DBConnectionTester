@@ -115,6 +115,7 @@ public sealed class DatabaseConnectionFactoryTests
         TimeSpan.FromSeconds(5),
         true,
         true,
+        true,
         type != DatabaseType.TcpOnly,
         "result.csv",
         "result.txt");

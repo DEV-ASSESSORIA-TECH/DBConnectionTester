@@ -22,7 +22,7 @@ Para SQL Anywhere, instale o cliente/driver ODBC do SAP SQL Anywhere na mesma ar
 - Quantidade fixa de ciclos ou execução contínua sem limite.
 - Teste único para validar rapidamente todas as camadas selecionadas.
 - Execução assíncrona, intervalo configurável e timeout por etapa.
-- Seleção independente de Ping, TCP e teste de banco quando aplicável.
+- Seleção independente de DNS, Ping, TCP e teste de banco quando aplicável.
 - Resultado visual por etapa e grade com os 100 ciclos mais recentes.
 - Minimização para a bandeja, reabertura do painel e status no ícone.
 - Abertura do CSV, TXT e pasta de saída.
@@ -39,7 +39,7 @@ O CSV é UTF-8 com BOM e separado por ponto e vírgula. As colunas de banco são
 
 `DB_Type`, `DB_Connect_Status`, `DB_Connect_ms`, `DB_Query_Status`, `DB_Query_ms`, `DB_Total_ms` e `DB_Error`.
 
-Etapas não aplicáveis são registradas como `N/A`, com tempo zero. O TXT contém o detalhe de cada ciclo e um resumo de sucessos, falhas e tempos médios.
+Etapas não aplicáveis são registradas como `N/A`, com tempo zero. O TXT contém o detalhe de cada ciclo e um resumo com taxa de sucesso, média, mínimo, máximo, mediana, p95, sequências de falhas e tempo desde a última falha.
 
 ## Requisitos
 

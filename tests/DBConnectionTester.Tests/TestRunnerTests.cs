@@ -43,6 +43,10 @@ public sealed class TestRunnerTests
             Assert.Equal(1, progress.Last.DatabaseFailures);
             Assert.NotNull(progress.Last.LatestCycle);
             Assert.Equal(1, progress.Last.LatestCycle.Number);
+            var log = await File.ReadAllTextAsync(settings.TxtPath);
+            Assert.Contains("Mediana=", log);
+            Assert.Contains("P95=", log);
+            Assert.Contains("Maior sequência=", log);
         }
         finally
         {
@@ -105,6 +109,7 @@ public sealed class TestRunnerTests
         false,
         TimeSpan.Zero,
         TimeSpan.FromSeconds(1),
+        true,
         false,
         false,
         true,

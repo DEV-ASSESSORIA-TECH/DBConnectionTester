@@ -16,6 +16,7 @@ public sealed class DatabaseUiStateTests
         Assert.True(state.ShowPort);
         Assert.True(state.ShowCredentials);
         Assert.True(state.ShowDatabase);
+        Assert.True(state.AllowDns);
         Assert.True(state.AllowPing);
         Assert.True(state.AllowTcp);
         Assert.True(state.AllowDatabaseTest);
@@ -40,6 +41,7 @@ public sealed class DatabaseUiStateTests
         Assert.True(state.ShowSqliteFile);
         Assert.False(state.ShowHost);
         Assert.False(state.ShowPort);
+        Assert.False(state.AllowDns);
         Assert.False(state.AllowPing);
         Assert.False(state.AllowTcp);
         Assert.False(state.AllowDatabaseTest);

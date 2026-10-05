@@ -103,7 +103,7 @@ public sealed partial class MainForm
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = true
         };
-        layers.Controls.AddRange(new Control[] { chkPing, chkTcp, chkDatabase });
+        layers.Controls.AddRange(new Control[] { chkDns, chkPing, chkTcp, chkDatabase });
         AddRow(table, row++, "Camadas:", layers);
         AddRow(table, row, "Comportamento:", chkBackground);
 
@@ -264,23 +264,27 @@ public sealed partial class MainForm
 
         if (resetPort && state.RequireDatabaseTest)
         {
+            chkDns.Checked = false;
             chkPing.Checked = false;
             chkTcp.Checked = false;
             chkDatabase.Checked = true;
         }
         else if (resetPort && state.RequireTcp)
         {
+            chkDns.Checked = true;
             chkPing.Checked = true;
             chkTcp.Checked = true;
             chkDatabase.Checked = false;
         }
         else if (resetPort)
         {
+            chkDns.Checked = true;
             chkPing.Checked = true;
             chkTcp.Checked = true;
             chkDatabase.Checked = true;
         }
 
+        chkDns.Enabled = configurationEnabled && state.AllowDns;
         chkPing.Enabled = configurationEnabled && state.AllowPing;
         chkTcp.Enabled = configurationEnabled && state.AllowTcp;
         chkDatabase.Enabled = configurationEnabled && state.AllowDatabaseTest;

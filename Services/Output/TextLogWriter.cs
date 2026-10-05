@@ -46,16 +46,17 @@ public sealed class TextLogWriter : IAsyncDisposable
         await writer.WriteLineAsync($"Fim: {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
         await writer.WriteLineAsync($"Motivo do encerramento: {(summary.Stopped ? "Interrompido manualmente / encerramento do aplicativo" : "Quantidade planejada concluída")}");
         await writer.WriteLineAsync($"Testes concluídos: {metrics.Completed}");
-        if (settings.Profile.UsesNetwork)
-            await writer.WriteLineAsync($"DNS: OK={metrics.DnsOk} | Falhas={metrics.DnsFailures} | Média={RunMetrics.Average(metrics.DnsSum, metrics.DnsOk)}ms");
+        var statistics = metrics.CreateStatistics();
+        if (settings.Dns)
+            await WriteStatisticsAsync("DNS", statistics.Dns);
         if (settings.Ping)
-            await writer.WriteLineAsync($"PING: OK={metrics.PingOk} | Falhas={metrics.PingFailures} | Média={RunMetrics.Average(metrics.PingSum, metrics.PingOk)}ms");
+            await WriteStatisticsAsync("PING", statistics.Ping);
         if (settings.Tcp)
-            await writer.WriteLineAsync($"TCP: OK={metrics.TcpOk} | Falhas={metrics.TcpFailures} | Média={RunMetrics.Average(metrics.TcpSum, metrics.TcpOk)}ms");
+            await WriteStatisticsAsync("TCP", statistics.Tcp);
         if (settings.DatabaseTest)
         {
-            await writer.WriteLineAsync($"DB CONNECT: OK={metrics.DatabaseConnectOk} | Falhas={metrics.DatabaseConnectFailures} | Média={RunMetrics.Average(metrics.DatabaseConnectSum, metrics.DatabaseConnectOk)}ms");
-            await writer.WriteLineAsync($"DB SELECT 1: OK={metrics.DatabaseQueryOk} | Falhas={metrics.DatabaseQueryFailures} | Média={RunMetrics.Average(metrics.DatabaseQuerySum, metrics.DatabaseQueryOk)}ms");
+            await WriteStatisticsAsync("DB CONNECT", statistics.DatabaseConnect);
+            await WriteStatisticsAsync("DB SELECT 1", statistics.DatabaseQuery);
         }
     }
 
@@ -72,7 +73,7 @@ public sealed class TextLogWriter : IAsyncDisposable
             await writer.WriteLineAsync($"Banco informado: {(string.IsNullOrWhiteSpace(settings.Database) ? "(nenhum)" : settings.Database)}");
         await writer.WriteLineAsync($"Modo: {(settings.Continuous ? "CONTÍNUO - até encerramento manual" : $"LIMITADO - {settings.TestCount} testes")}");
         await writer.WriteLineAsync($"Intervalo: {settings.Interval.TotalSeconds:0.0}s | Timeout: {settings.Timeout.TotalSeconds:0.0}s");
-        await writer.WriteLineAsync($"Camadas: DNS={settings.Profile.UsesNetwork} | Ping={settings.Ping} | TCP={settings.Tcp} | Banco={settings.DatabaseTest}");
+        await writer.WriteLineAsync($"Camadas: DNS={settings.Dns} | Ping={settings.Ping} | TCP={settings.Tcp} | Banco={settings.DatabaseTest}");
         await writer.WriteLineAsync(new string('-', 120));
     }
 
@@ -88,4 +89,32 @@ public sealed class TextLogWriter : IAsyncDisposable
 
     private static string FirstNonEmpty(params string[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
+
+    private async Task WriteStatisticsAsync(string name, StageStatisticsSnapshot statistics)
+    {
+        var successRate = statistics.SuccessRate is null ? "N/A" : $"{statistics.SuccessRate:0.0}%";
+        var sinceFailure = FormatElapsed(statistics.TimeSinceLastFailure(DateTimeOffset.Now));
+        await writer.WriteLineAsync(
+            $"{name}: OK={statistics.Successes}/{statistics.Attempts} ({successRate}) | Falhas={statistics.Failures} | " +
+            $"Média={FormatLatency(statistics.AverageMs)} | Mín={FormatLatency(statistics.MinimumMs)} | " +
+            $"Máx={FormatLatency(statistics.MaximumMs)} | Mediana={FormatLatency(statistics.MedianMs)} | " +
+            $"P95={FormatLatency(statistics.P95Ms)} | Falhas seguidas={statistics.ConsecutiveFailures} | " +
+            $"Maior sequência={statistics.MaximumConsecutiveFailures} | Desde última falha={sinceFailure}");
+    }
+
+    private static string FormatLatency(double? milliseconds) =>
+        milliseconds is null ? "N/A" : $"{milliseconds:0.0}ms";
+
+    private static string FormatElapsed(TimeSpan? elapsed)
+    {
+        if (elapsed is null)
+            return "nunca";
+        if (elapsed.Value.TotalSeconds < 60)
+            return $"{Math.Max(0, elapsed.Value.TotalSeconds):0}s";
+        if (elapsed.Value.TotalMinutes < 60)
+            return $"{elapsed.Value.TotalMinutes:0.0}min";
+        if (elapsed.Value.TotalHours < 24)
+            return $"{elapsed.Value.TotalHours:0.0}h";
+        return $"{elapsed.Value.TotalDays:0.0}d";
+    }
 }

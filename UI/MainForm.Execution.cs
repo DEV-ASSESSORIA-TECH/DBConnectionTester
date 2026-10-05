@@ -68,6 +68,7 @@ public sealed partial class MainForm
             chkContinuous.Checked,
             TimeSpan.FromSeconds((double)numInterval.Value),
             TimeSpan.FromSeconds((double)numTimeout.Value),
+            chkDns.Checked,
             chkPing.Checked,
             chkTcp.Checked,
             chkDatabase.Checked,
@@ -88,6 +89,8 @@ public sealed partial class MainForm
         completedTests = value.Completed;
         if (value.LatestCycle is not null)
             resultsControl.AddCycle(value.LatestCycle);
+        if (value.Statistics is not null)
+            resultsControl.UpdateStatistics(value.Statistics);
         if (!settings.Continuous)
         {
             var percentage = (int)Math.Round(value.Completed * 100.0 / settings.TestCount);
@@ -212,7 +215,7 @@ public sealed partial class MainForm
                  {
                      cmbDatabaseType, txtHost, numPort, cmbSqlServerAuth, txtUser, txtPassword, txtDatabase,
                      txtOdbcDriver, txtSqliteFile, btnBrowseSqlite, numInterval, numTimeout, chkContinuous,
-                     chkBackground, txtOutput, btnBrowseOutput
+                     chkDns, chkBackground, txtOutput, btnBrowseOutput
                  })
             control.Enabled = enabled;
         numTests.Enabled = enabled && !chkContinuous.Checked;
@@ -226,8 +229,8 @@ public sealed partial class MainForm
             ? $"Executando - {value.Completed:N0} testes"
             : $"Executando - {value.Completed:N0}/{settings.TestCount:N0}";
         var tooltip = settings.Continuous
-            ? $"DB Tester - {value.Completed:N0} - falhas P:{value.PingFailures} T:{value.TcpFailures} DB:{value.DatabaseFailures}"
-            : $"DB Tester - {value.Completed:N0}/{settings.TestCount:N0} - falhas P:{value.PingFailures} T:{value.TcpFailures} DB:{value.DatabaseFailures}";
+            ? $"DB Tester - {value.Completed:N0} - falhas D:{value.DnsFailures} P:{value.PingFailures} T:{value.TcpFailures} DB:{value.DatabaseFailures}"
+            : $"DB Tester - {value.Completed:N0}/{settings.TestCount:N0} - falhas D:{value.DnsFailures} P:{value.PingFailures} T:{value.TcpFailures} DB:{value.DatabaseFailures}";
         SafeTrayText(tooltip);
     }
 }

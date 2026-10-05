@@ -18,7 +18,7 @@ public sealed class TestCycleExecutor : ITestCycleExecutor
         CancellationToken token)
     {
         var startedAt = DateTimeOffset.Now;
-        var dns = settings.Profile.UsesNetwork
+        var dns = settings.Dns
             ? await NetworkTester.TestDnsAsync(settings.Host, settings.Timeout, token)
             : DnsResult.Skipped();
         var ping = settings.Ping
