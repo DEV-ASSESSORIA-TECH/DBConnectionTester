@@ -24,8 +24,10 @@ public sealed class RunMetricsTests
         var metrics = new RunMetrics();
         var settings = Settings();
 
-        metrics.Add(settings, Cycle(new DatabaseResult(
-            StepStatus.Success, 8, StepStatus.Success, 2, 10, "")));
+        var cycle = Cycle(new DatabaseResult(
+            StepStatus.Success, 8, StepStatus.Success, 2, 10, ""));
+        metrics.Add(settings, cycle);
+        var progress = metrics.CreateProgress(cycle);
 
         Assert.Equal(1, metrics.Completed);
         Assert.Equal(1, metrics.DnsOk);
@@ -33,6 +35,7 @@ public sealed class RunMetricsTests
         Assert.Equal(1, metrics.TcpOk);
         Assert.Equal(1, metrics.DatabaseConnectOk);
         Assert.Equal(1, metrics.DatabaseQueryOk);
+        Assert.Same(cycle, progress.LatestCycle);
     }
 
     private static TestCycleResult Cycle(DatabaseResult database) => new(

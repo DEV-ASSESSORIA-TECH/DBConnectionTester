@@ -5,7 +5,7 @@ namespace DBConnectionTester.UI;
 
 public sealed partial class MainForm
 {
-    private async Task StartAsync()
+    private async Task StartAsync(bool singleRun)
     {
         if (runCoordinator.IsRunning)
             return;
@@ -13,20 +13,24 @@ public sealed partial class MainForm
         var settings = TryBuildSettings();
         if (settings is null)
             return;
+        if (singleRun)
+            settings = settings with { TestCount = 1, Continuous = false, Interval = TimeSpan.Zero };
 
         currentCsvPath = settings.CsvPath;
         currentTxtPath = settings.TxtPath;
         exitRequested = false;
         completedTests = 0;
+        resultsControl.ResetResults();
         ApplyRunUiState(RunUiState.Running, settings);
         UpdateTrayStatus(settings, new TestProgress(0, 0, 0, 0, 0, 0));
+        lblStatus.Text = singleRun ? "Executando teste único..." : "Preparando execução...";
 
-        if (chkBackground.Checked)
+        if (!singleRun && chkBackground.Checked)
             HideToTray("Teste iniciado em segundo plano.");
 
         try
         {
-            var uiProgress = new Progress<TestProgress>(value => UpdateProgress(settings, value));
+            var uiProgress = new Progress<TestProgress>(value => UpdateProgress(settings, value, singleRun));
             var summary = await runCoordinator.StartAsync(settings, uiProgress);
             completedTests = summary.Completed;
             CompleteRun(settings, summary);
@@ -79,15 +83,19 @@ public sealed partial class MainForm
         return null;
     }
 
-    private void UpdateProgress(TestSettings settings, TestProgress value)
+    private void UpdateProgress(TestSettings settings, TestProgress value, bool singleRun)
     {
         completedTests = value.Completed;
+        if (value.LatestCycle is not null)
+            resultsControl.AddCycle(value.LatestCycle);
         if (!settings.Continuous)
         {
             var percentage = (int)Math.Round(value.Completed * 100.0 / settings.TestCount);
             progressBar.Value = Math.Clamp(percentage, 0, 100);
         }
-        var prefix = settings.Continuous
+        var prefix = singleRun
+            ? "Teste único concluído"
+            : settings.Continuous
             ? $"Executando continuamente | {value.Completed:N0} testes"
             : $"Executando {value.Completed:N0}/{settings.TestCount:N0}";
         lblStatus.Text = $"{prefix} | DNS: {value.DnsFailures} | Ping: {value.PingFailures} | " +
@@ -173,6 +181,7 @@ public sealed partial class MainForm
         var active = state is RunUiState.Running or RunUiState.Stopping;
         var stopping = state == RunUiState.Stopping;
         SetConfigurationEnabled(!active);
+        btnTestOnce.Enabled = !active;
         btnStart.Enabled = !active;
         btnStop.Enabled = active && !stopping;
         trayStop.Enabled = active && !stopping;

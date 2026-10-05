@@ -57,13 +57,14 @@ public sealed class RunMetrics
         }
     }
 
-    public TestProgress CreateProgress() => new(
+    public TestProgress CreateProgress(TestCycleResult? latestCycle = null) => new(
         Completed,
         DnsFailures,
         PingFailures,
         TcpFailures,
         DatabaseConnectFailures,
-        DatabaseQueryFailures);
+        DatabaseQueryFailures,
+        latestCycle);
 
     public static long Average(long sum, int count) => count == 0 ? 0 : sum / count;
 }

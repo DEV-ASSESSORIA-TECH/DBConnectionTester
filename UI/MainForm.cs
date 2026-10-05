@@ -23,9 +23,10 @@ public sealed partial class MainForm : Form
     private readonly CheckBox chkPing = new() { Text = "Ping / ICMP", Checked = true, AutoSize = true };
     private readonly CheckBox chkTcp = new() { Text = "TCP", Checked = true, AutoSize = true };
     private readonly CheckBox chkDatabase = new() { Text = "Banco + SELECT 1", Checked = true, AutoSize = true };
-    private readonly CheckBox chkBackground = new() { Text = "Minimizar para a bandeja ao iniciar", Checked = true, AutoSize = true };
+    private readonly CheckBox chkBackground = new() { Text = "Minimizar para a bandeja ao iniciar", AutoSize = true };
     private readonly TextBox txtOutput = new();
     private readonly Button btnBrowseOutput = new() { Text = "Escolher..." };
+    private readonly Button btnTestOnce = new() { Text = "Testar uma vez", AutoSize = true };
     private readonly Button btnStart = new() { Text = "Iniciar teste", AutoSize = true };
     private readonly Button btnStop = new() { Text = "Parar", AutoSize = true, Enabled = false };
     private readonly Button btnOpenCsv = new() { Text = "Abrir CSV", AutoSize = true, Enabled = false };
@@ -33,6 +34,7 @@ public sealed partial class MainForm : Form
     private readonly Button btnOpenFolder = new() { Text = "Abrir pasta", AutoSize = true };
     private readonly Label lblStatus = new() { AutoSize = true, Text = "Pronto." };
     private readonly ProgressBar progressBar = new() { Minimum = 0, Maximum = 100, Value = 0, Dock = DockStyle.Fill };
+    private readonly ResultsControl resultsControl = new();
 
     private readonly NotifyIcon trayIcon = new();
     private readonly ToolStripMenuItem trayStatus = new("Pronto") { Enabled = false };
@@ -64,9 +66,9 @@ public sealed partial class MainForm : Form
     {
         Text = "DB Connection Tester";
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(800, 720);
-        Size = new Size(860, 800);
-        MaximizeBox = false;
+        MinimumSize = new Size(980, 720);
+        Size = new Size(1120, 900);
+        MaximizeBox = true;
 
         txtOutput.Text = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),

@@ -14,18 +14,52 @@ public sealed partial class MainForm
                 ? "Autenticação do Windows"
                 : "Usuário e senha do SQL Server";
 
-        var table = new TableLayoutPanel
+        var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(14),
-            ColumnCount = 3,
-            AutoScroll = true,
-            AutoSize = true
+            Padding = new Padding(12),
+            ColumnCount = 1,
+            RowCount = 5,
+            AutoScroll = true
         };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 205));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
+        var settingsArea = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty
+        };
+        settingsArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56));
+        settingsArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
+        settingsArea.Controls.Add(BuildConnectionGroup(), 0, 0);
+        settingsArea.Controls.Add(BuildExecutionGroup(), 1, 0);
+
+        root.Controls.Add(settingsArea, 0, 0);
+        root.Controls.Add(BuildOutputGroup(), 0, 1);
+        root.Controls.Add(BuildControlArea(), 0, 2);
+        root.Controls.Add(resultsControl, 0, 3);
+        root.Controls.Add(new Label
+        {
+            AutoSize = true,
+            ForeColor = SystemColors.GrayText,
+            Margin = new Padding(6, 8, 6, 0),
+            Text = "Credenciais ficam somente na memória e não são gravadas nos relatórios. " +
+                   "A grade mantém os 100 ciclos mais recentes; CSV e TXT preservam toda a execução."
+        }, 0, 4);
+
+        Controls.Add(root);
+    }
+
+    private GroupBox BuildConnectionGroup()
+    {
+        var table = CreateSettingsTable(labelWidth: 145);
         var row = 0;
         AddRow(table, row++, "Tipo de banco:", cmbDatabaseType);
         hostRow = AddRow(table, row++, "Servidor / host:", txtHost);
@@ -36,57 +70,117 @@ public sealed partial class MainForm
         databaseRow = AddRow(table, row++, "Banco (opcional):", txtDatabase);
         odbcDriverRow = AddRow(table, row++, "Driver ODBC:", txtOdbcDriver);
 
-        var sqlitePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true, Margin = Padding.Empty };
+        var sqlitePanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            AutoSize = true,
+            Margin = Padding.Empty
+        };
         sqlitePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         sqlitePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         txtSqliteFile.Dock = DockStyle.Fill;
         sqlitePanel.Controls.Add(txtSqliteFile, 0, 0);
         sqlitePanel.Controls.Add(btnBrowseSqlite, 1, 0);
-        sqliteFileRow = AddRow(table, row++, "Arquivo SQLite (.db):", sqlitePanel);
+        sqliteFileRow = AddRow(table, row, "Arquivo SQLite:", sqlitePanel);
 
+        return CreateGroup("Conexão", table);
+    }
+
+    private GroupBox BuildExecutionGroup()
+    {
+        var table = CreateSettingsTable(labelWidth: 170);
+        var row = 0;
         AddRow(table, row++, "Quantidade de testes:", numTests);
         AddRow(table, row++, "Modo de execução:", chkContinuous);
-        AddRow(table, row++, "Intervalo entre testes (s):", numInterval);
-        AddRow(table, row++, "Timeout por etapa (s):", numTimeout);
+        AddRow(table, row++, "Intervalo entre testes:", WithSuffix(numInterval, "segundos"));
+        AddRow(table, row++, "Timeout por etapa:", WithSuffix(numTimeout, "segundos"));
 
-        var layers = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
+        var layers = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true
+        };
         layers.Controls.AddRange(new Control[] { chkPing, chkTcp, chkDatabase });
         AddRow(table, row++, "Camadas:", layers);
-        AddRow(table, row++, "Comportamento:", chkBackground);
+        AddRow(table, row, "Comportamento:", chkBackground);
 
-        table.Controls.Add(new Label { Text = "Arquivo CSV:", Anchor = AnchorStyles.Left, AutoSize = true }, 0, row);
+        return CreateGroup("Execução", table);
+    }
+
+    private GroupBox BuildOutputGroup()
+    {
+        var table = CreateSettingsTable(labelWidth: 145);
         txtOutput.Dock = DockStyle.Fill;
-        table.Controls.Add(txtOutput, 1, row);
-        table.Controls.Add(btnBrowseOutput, 2, row++);
+        AddRowWithButton(table, 0, "Arquivo CSV:", txtOutput, btnBrowseOutput);
+        return CreateGroup("Saída", table);
+    }
 
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        buttons.Controls.AddRange(new Control[] { btnStart, btnStop, btnOpenCsv, btnOpenLog, btnOpenFolder });
-        table.Controls.Add(new Label { Text = "Controle:", Anchor = AnchorStyles.Left, AutoSize = true }, 0, row);
-        table.Controls.Add(buttons, 1, row);
-        table.SetColumnSpan(buttons, 2);
-        row++;
-
-        table.Controls.Add(new Label { Text = "Progresso:", Anchor = AnchorStyles.Left, AutoSize = true }, 0, row);
-        table.Controls.Add(progressBar, 1, row);
-        table.SetColumnSpan(progressBar, 2);
-        row++;
-
-        table.Controls.Add(new Label { Text = "Status:", Anchor = AnchorStyles.Left, AutoSize = true }, 0, row);
-        table.Controls.Add(lblStatus, 1, row);
-        table.SetColumnSpan(lblStatus, 2);
-        row++;
-
-        var note = new Label
+    private Control BuildControlArea()
+    {
+        var area = new TableLayoutPanel
         {
+            Dock = DockStyle.Top,
             AutoSize = true,
-            MaximumSize = new Size(760, 0),
-            Text = "A senha fica apenas na memória. CSV e TXT não armazenam credenciais nem connection strings. " +
-                   "Em execução contínua, o teste termina apenas por ação manual, saída ou desligamento do Windows. " +
-                   "O programa não configura inicialização automática."
+            ColumnCount = 1,
+            RowCount = 3,
+            Margin = new Padding(0, 6, 0, 6)
         };
-        table.Controls.Add(note, 0, row);
-        table.SetColumnSpan(note, 3);
-        Controls.Add(table);
+
+        var buttons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = Padding.Empty
+        };
+        btnTestOnce.Font = new Font(btnTestOnce.Font, FontStyle.Bold);
+        btnStart.Font = new Font(btnStart.Font, FontStyle.Bold);
+        buttons.Controls.AddRange(new Control[]
+        {
+            btnTestOnce, btnStart, btnStop, btnOpenCsv, btnOpenLog, btnOpenFolder
+        });
+
+        progressBar.Margin = new Padding(3, 8, 3, 3);
+        lblStatus.Margin = new Padding(4, 4, 4, 0);
+        area.Controls.Add(buttons, 0, 0);
+        area.Controls.Add(progressBar, 0, 1);
+        area.Controls.Add(lblStatus, 0, 2);
+        return area;
+    }
+
+    private static TableLayoutPanel CreateSettingsTable(int labelWidth) => new TableLayoutPanel
+    {
+        Dock = DockStyle.Fill,
+        AutoSize = true,
+        ColumnCount = 3,
+        Padding = new Padding(8)
+    }.WithColumns(labelWidth);
+
+    private static GroupBox CreateGroup(string title, Control content)
+    {
+        var group = new GroupBox
+        {
+            Text = title,
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            Margin = new Padding(4)
+        };
+        group.Controls.Add(content);
+        return group;
+    }
+
+    private static Control WithSuffix(Control control, string suffix)
+    {
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, Margin = Padding.Empty };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        control.Dock = DockStyle.Fill;
+        panel.Controls.Add(control, 0, 0);
+        panel.Controls.Add(new Label { Text = suffix, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(6, 4, 0, 0) }, 1, 0);
+        return panel;
     }
 
     private static RowBinding AddRow(TableLayoutPanel table, int row, string text, Control control)
@@ -97,6 +191,14 @@ public sealed partial class MainForm
         table.Controls.Add(control, 1, row);
         table.SetColumnSpan(control, 2);
         return new RowBinding(label, control);
+    }
+
+    private static void AddRowWithButton(TableLayoutPanel table, int row, string text, Control control, Control button)
+    {
+        table.Controls.Add(new Label { Text = text, Anchor = AnchorStyles.Left, AutoSize = true }, 0, row);
+        control.Dock = DockStyle.Fill;
+        table.Controls.Add(control, 1, row);
+        table.Controls.Add(button, 2, row);
     }
 
     private void ConfigureTray()
@@ -129,7 +231,8 @@ public sealed partial class MainForm
         btnOpenFolder.Click += (_, _) => OpenOutputFolder();
         btnOpenCsv.Click += (_, _) => OpenFile(currentCsvPath);
         btnOpenLog.Click += (_, _) => OpenFile(currentTxtPath);
-        btnStart.Click += async (_, _) => await StartAsync();
+        btnTestOnce.Click += async (_, _) => await StartAsync(singleRun: true);
+        btnStart.Click += async (_, _) => await StartAsync(singleRun: false);
         btnStop.Click += (_, _) => RequestStop();
         trayOpenPanel.Click += (_, _) => ShowPanel();
         trayOpenCsv.Click += (_, _) => OpenFile(currentCsvPath);
@@ -198,5 +301,16 @@ public sealed partial class MainForm
             Label.Visible = visible;
             Control.Visible = visible;
         }
+    }
+}
+
+internal static class TableLayoutExtensions
+{
+    public static TableLayoutPanel WithColumns(this TableLayoutPanel table, int labelWidth)
+    {
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, labelWidth));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        return table;
     }
 }

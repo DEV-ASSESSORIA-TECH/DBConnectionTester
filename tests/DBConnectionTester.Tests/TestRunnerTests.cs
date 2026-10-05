@@ -41,6 +41,8 @@ public sealed class TestRunnerTests
             Assert.Equal(1, progress.Last.DatabaseConnectFailures);
             Assert.Equal(0, progress.Last.DatabaseQueryFailures);
             Assert.Equal(1, progress.Last.DatabaseFailures);
+            Assert.NotNull(progress.Last.LatestCycle);
+            Assert.Equal(1, progress.Last.LatestCycle.Number);
         }
         finally
         {

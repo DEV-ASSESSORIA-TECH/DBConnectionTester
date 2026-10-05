@@ -86,7 +86,8 @@ public sealed record TestProgress(
     int PingFailures,
     int TcpFailures,
     int DatabaseConnectFailures,
-    int DatabaseQueryFailures)
+    int DatabaseQueryFailures,
+    TestCycleResult? LatestCycle = null)
 {
     public int DatabaseFailures => DatabaseConnectFailures + DatabaseQueryFailures;
 }
