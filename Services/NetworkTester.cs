@@ -1,0 +1,73 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using DBConnectionTester.Models;
+
+namespace DBConnectionTester.Services;
+
+internal static class NetworkTester
+{
+    public static async Task<DnsResult> TestDnsAsync(string host, TimeSpan timeout, CancellationToken token)
+    {
+        if (IPAddress.TryParse(host, out var parsed))
+            return new DnsResult("IP", parsed.ToString(), 0, "");
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var addresses = await Dns.GetHostAddressesAsync(host).WaitAsync(timeout, token);
+            stopwatch.Stop();
+            var ip = addresses.FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork)?.ToString()
+                     ?? addresses.FirstOrDefault()?.ToString()
+                     ?? "";
+            return new DnsResult(addresses.Length > 0 ? "OK" : "FALHA", ip,
+                (long)stopwatch.Elapsed.TotalMilliseconds,
+                addresses.Length > 0 ? "" : "Nenhum endereço retornado");
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            stopwatch.Stop();
+            return new DnsResult("FALHA", "", (long)stopwatch.Elapsed.TotalMilliseconds, ErrorFormatter.Short(exception));
+        }
+    }
+
+    public static async Task<StepResult> TestPingAsync(string host, TimeSpan timeout, CancellationToken token)
+    {
+        using var ping = new Ping();
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var reply = await ping.SendPingAsync(host, (int)timeout.TotalMilliseconds)
+                .WaitAsync(timeout + TimeSpan.FromSeconds(1), token);
+            stopwatch.Stop();
+            return reply.Status == IPStatus.Success
+                ? new StepResult(true, "OK", reply.RoundtripTime, reply.Options?.Ttl.ToString() ?? "", "")
+                : new StepResult(false, reply.Status.ToString(), (long)stopwatch.Elapsed.TotalMilliseconds, "", reply.Status.ToString());
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            stopwatch.Stop();
+            return new StepResult(false, "FALHA", (long)stopwatch.Elapsed.TotalMilliseconds, "", ErrorFormatter.Short(exception));
+        }
+    }
+
+    public static async Task<TcpResult> TestTcpAsync(string host, int port, TimeSpan timeout, CancellationToken token)
+    {
+        using var client = new TcpClient();
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            await client.ConnectAsync(host, port).WaitAsync(timeout, token);
+            stopwatch.Stop();
+            var local = (client.Client.LocalEndPoint as IPEndPoint)?.Address.ToString() ?? "";
+            var remote = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "";
+            return new TcpResult(true, "OK", (long)stopwatch.Elapsed.TotalMilliseconds, local, remote, "");
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            stopwatch.Stop();
+            return new TcpResult(false, "FALHA", (long)stopwatch.Elapsed.TotalMilliseconds, "", "", ErrorFormatter.Short(exception));
+        }
+    }
+}
