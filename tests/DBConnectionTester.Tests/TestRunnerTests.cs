@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services;
+using DBConnectionTester.Services.Output;
 
 namespace DBConnectionTester.Tests;
 
@@ -10,11 +11,11 @@ public sealed class TestRunnerTests
     [Fact]
     public void CsvSchemaIsGeneric()
     {
-        Assert.Contains("DB_Type", TestRunner.CsvHeader);
-        Assert.Contains("DB_Connect_Status", TestRunner.CsvHeader);
-        Assert.Contains("DB_Query_Status", TestRunner.CsvHeader);
-        Assert.Contains("DB_Error", TestRunner.CsvHeader);
-        Assert.DoesNotContain("MySQL", TestRunner.CsvHeader, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DB_Type", CsvResultWriter.Header);
+        Assert.Contains("DB_Connect_Status", CsvResultWriter.Header);
+        Assert.Contains("DB_Query_Status", CsvResultWriter.Header);
+        Assert.Contains("DB_Error", CsvResultWriter.Header);
+        Assert.DoesNotContain("MySQL", CsvResultWriter.Header, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -60,6 +61,27 @@ public sealed class TestRunnerTests
                 new TestRunner().RunAsync(settings, progress: null, CancellationToken.None));
 
             Assert.Equal("conteúdo anterior", await File.ReadAllTextAsync(settings.CsvPath));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExistingLogIsPreservedAndPartialCsvIsRemoved()
+    {
+        var directory = CreateTemporaryDirectory();
+        var settings = Settings(directory);
+        await File.WriteAllTextAsync(settings.TxtPath, "log anterior");
+
+        try
+        {
+            await Assert.ThrowsAsync<IOException>(() =>
+                new TestRunner().RunAsync(settings, progress: null, CancellationToken.None));
+
+            Assert.Equal("log anterior", await File.ReadAllTextAsync(settings.TxtPath));
+            Assert.False(File.Exists(settings.CsvPath));
         }
         finally
         {
