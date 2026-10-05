@@ -11,7 +11,7 @@ internal static class NetworkTester
     public static async Task<DnsResult> TestDnsAsync(string host, TimeSpan timeout, CancellationToken token)
     {
         if (IPAddress.TryParse(host, out var parsed))
-            return new DnsResult("IP", parsed.ToString(), 0, "");
+            return new DnsResult(StepStatus.Success, parsed.ToString(), 0, "");
 
         var stopwatch = Stopwatch.StartNew();
         try
@@ -21,14 +21,14 @@ internal static class NetworkTester
             var ip = addresses.FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork)?.ToString()
                      ?? addresses.FirstOrDefault()?.ToString()
                      ?? "";
-            return new DnsResult(addresses.Length > 0 ? "OK" : "FALHA", ip,
+            return new DnsResult(addresses.Length > 0 ? StepStatus.Success : StepStatus.Failed, ip,
                 (long)stopwatch.Elapsed.TotalMilliseconds,
                 addresses.Length > 0 ? "" : "Nenhum endereço retornado");
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             stopwatch.Stop();
-            return new DnsResult("FALHA", "", (long)stopwatch.Elapsed.TotalMilliseconds, ErrorFormatter.Short(exception));
+            return new DnsResult(StepStatus.Failed, "", (long)stopwatch.Elapsed.TotalMilliseconds, ErrorFormatter.Short(exception));
         }
     }
 
@@ -42,13 +42,13 @@ internal static class NetworkTester
                 .WaitAsync(timeout + TimeSpan.FromSeconds(1), token);
             stopwatch.Stop();
             return reply.Status == IPStatus.Success
-                ? new StepResult(true, "OK", reply.RoundtripTime, reply.Options?.Ttl.ToString() ?? "", "")
-                : new StepResult(false, reply.Status.ToString(), (long)stopwatch.Elapsed.TotalMilliseconds, "", reply.Status.ToString());
+                ? new StepResult(StepStatus.Success, reply.RoundtripTime, reply.Options?.Ttl.ToString() ?? "", "")
+                : new StepResult(StepStatus.Failed, (long)stopwatch.Elapsed.TotalMilliseconds, "", reply.Status.ToString());
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             stopwatch.Stop();
-            return new StepResult(false, "FALHA", (long)stopwatch.Elapsed.TotalMilliseconds, "", ErrorFormatter.Short(exception));
+            return new StepResult(StepStatus.Failed, (long)stopwatch.Elapsed.TotalMilliseconds, "", ErrorFormatter.Short(exception));
         }
     }
 
@@ -62,12 +62,12 @@ internal static class NetworkTester
             stopwatch.Stop();
             var local = (client.Client.LocalEndPoint as IPEndPoint)?.Address.ToString() ?? "";
             var remote = (client.Client.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "";
-            return new TcpResult(true, "OK", (long)stopwatch.Elapsed.TotalMilliseconds, local, remote, "");
+            return new TcpResult(StepStatus.Success, (long)stopwatch.Elapsed.TotalMilliseconds, local, remote, "");
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             stopwatch.Stop();
-            return new TcpResult(false, "FALHA", (long)stopwatch.Elapsed.TotalMilliseconds, "", "", ErrorFormatter.Short(exception));
+            return new TcpResult(StepStatus.Failed, (long)stopwatch.Elapsed.TotalMilliseconds, "", "", ErrorFormatter.Short(exception));
         }
     }
 }

@@ -27,7 +27,7 @@ internal static class DatabaseTester
                 connect.Stop();
                 total.Stop();
                 connectMs = (long)connect.Elapsed.TotalMilliseconds;
-                return new DatabaseResult(false, "FALHA", connectMs, false, "N/A", 0,
+                return new DatabaseResult(StepStatus.Failed, connectMs, StepStatus.Skipped, 0,
                     (long)total.Elapsed.TotalMilliseconds, "CONNECT: " + ErrorFormatter.Short(exception));
             }
 
@@ -42,7 +42,7 @@ internal static class DatabaseTester
                 total.Stop();
                 queryMs = (long)query.Elapsed.TotalMilliseconds;
                 var ok = Convert.ToInt32(value, CultureInfo.InvariantCulture) == 1;
-                return new DatabaseResult(true, "OK", connectMs, ok, ok ? "OK" : "FALHA", queryMs,
+                return new DatabaseResult(StepStatus.Success, connectMs, ok ? StepStatus.Success : StepStatus.Failed, queryMs,
                     (long)total.Elapsed.TotalMilliseconds, ok ? "" : "SELECT 1 retornou valor inesperado");
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
@@ -50,14 +50,14 @@ internal static class DatabaseTester
                 query.Stop();
                 total.Stop();
                 queryMs = (long)query.Elapsed.TotalMilliseconds;
-                return new DatabaseResult(true, "OK", connectMs, false, "FALHA", queryMs,
+                return new DatabaseResult(StepStatus.Success, connectMs, StepStatus.Failed, queryMs,
                     (long)total.Elapsed.TotalMilliseconds, "QUERY: " + ErrorFormatter.Short(exception));
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             total.Stop();
-            return new DatabaseResult(false, "FALHA", connectMs, false, "N/A", queryMs,
+            return new DatabaseResult(StepStatus.Failed, connectMs, StepStatus.Skipped, queryMs,
                 (long)total.Elapsed.TotalMilliseconds, ErrorFormatter.Short(exception));
         }
     }

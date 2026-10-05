@@ -24,33 +24,61 @@ public sealed record TestSettings(
     public string Target => DatabaseType == DatabaseType.Sqlite ? SqliteFile : $"{Host}:{Port}";
 }
 
-public sealed record DnsResult(string Status, string ResolvedIp, long ElapsedMs, string Error)
+public enum StepStatus
 {
-    public static DnsResult Skipped() => new("N/A", "", 0, "");
+    Success,
+    Failed,
+    Skipped
 }
 
-public sealed record StepResult(bool Ok, string Status, long ElapsedMs, string Extra, string Error)
+public static class StepStatusExtensions
 {
-    public static StepResult Skipped() => new(true, "N/A", 0, "", "");
+    public static string ToOutputText(this StepStatus status) => status switch
+    {
+        StepStatus.Success => "OK",
+        StepStatus.Failed => "FALHA",
+        _ => "N/A"
+    };
 }
 
-public sealed record TcpResult(bool Ok, string Status, long ElapsedMs, string LocalIp, string RemoteIp, string Error)
+public sealed record DnsResult(StepStatus Status, string ResolvedIp, long ElapsedMs, string Error)
 {
-    public static TcpResult Skipped() => new(true, "N/A", 0, "", "", "");
+    public bool Ok => Status == StepStatus.Success;
+    public static DnsResult Skipped() => new(StepStatus.Skipped, "", 0, "");
+}
+
+public sealed record StepResult(StepStatus Status, long ElapsedMs, string Extra, string Error)
+{
+    public bool Ok => Status == StepStatus.Success;
+    public static StepResult Skipped() => new(StepStatus.Skipped, 0, "", "");
+}
+
+public sealed record TcpResult(StepStatus Status, long ElapsedMs, string LocalIp, string RemoteIp, string Error)
+{
+    public bool Ok => Status == StepStatus.Success;
+    public static TcpResult Skipped() => new(StepStatus.Skipped, 0, "", "", "");
 }
 
 public sealed record DatabaseResult(
-    bool ConnectOk,
-    string ConnectStatus,
+    StepStatus ConnectStatus,
     long ConnectMs,
-    bool QueryOk,
-    string QueryStatus,
+    StepStatus QueryStatus,
     long QueryMs,
     long TotalMs,
     string Error)
 {
-    public static DatabaseResult Skipped() => new(true, "N/A", 0, true, "N/A", 0, 0, "");
+    public bool ConnectOk => ConnectStatus == StepStatus.Success;
+    public bool QueryOk => QueryStatus == StepStatus.Success;
+    public static DatabaseResult Skipped() => new(StepStatus.Skipped, 0, StepStatus.Skipped, 0, 0, "");
 }
+
+public sealed record TestCycleResult(
+    long Number,
+    DateTimeOffset StartedAt,
+    DnsResult Dns,
+    StepResult Ping,
+    TcpResult Tcp,
+    DatabaseResult Database);
 
 public sealed record TestProgress(
     long Completed,
