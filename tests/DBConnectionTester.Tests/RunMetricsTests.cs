@@ -88,6 +88,23 @@ public sealed class RunMetricsTests
         Assert.Equal(0, metrics.CreateStatistics().Dns.Attempts);
     }
 
+    [Fact]
+    public void LatencyDistributionUsesFixedMemoryForContinuousRuns()
+    {
+        var statistics = new StageStatistics();
+        var timestamp = DateTimeOffset.UtcNow;
+
+        for (var latency = 0; latency < StageStatistics.MaximumExactLatencyMs * 2; latency++)
+            statistics.Record(StepStatus.Success, latency, timestamp);
+
+        var snapshot = statistics.CreateSnapshot();
+        Assert.Equal(StageStatistics.MaximumExactLatencyMs + 3, statistics.DistributionBucketCount);
+        Assert.Equal(0, snapshot.MinimumMs);
+        Assert.Equal(StageStatistics.MaximumExactLatencyMs * 2L - 1, snapshot.MaximumMs);
+        Assert.NotNull(snapshot.MedianMs);
+        Assert.NotNull(snapshot.P95Ms);
+    }
+
     private static TestCycleResult Cycle(DatabaseResult database) => new(
         1,
         DateTimeOffset.UtcNow,

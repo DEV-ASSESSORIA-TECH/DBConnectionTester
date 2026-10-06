@@ -28,8 +28,13 @@ public sealed record RunStatisticsSnapshot(
 
 internal sealed class StageStatistics
 {
-    private readonly SortedDictionary<long, long> latencyDistribution = new();
-    private long latencySum;
+    internal static readonly int MaximumExactLatencyMs = checked((int)StageTimeout.Maximum.TotalMilliseconds);
+    private static readonly int OverflowBucket = MaximumExactLatencyMs + 1;
+
+    private long[]? latencyTree;
+    private double latencyAverage;
+    private long? minimumLatency;
+    private long? maximumLatency;
 
     public long Attempts { get; private set; }
     public long Successes { get; private set; }
@@ -37,6 +42,7 @@ internal sealed class StageStatistics
     public int ConsecutiveFailures { get; private set; }
     public int MaximumConsecutiveFailures { get; private set; }
     public DateTimeOffset? LastFailureAt { get; private set; }
+    internal int DistributionBucketCount => latencyTree?.Length ?? 0;
 
     public void Record(StepStatus status, long elapsedMs, DateTimeOffset timestamp)
     {
@@ -48,8 +54,10 @@ internal sealed class StageStatistics
         {
             Successes++;
             ConsecutiveFailures = 0;
-            latencySum += elapsedMs;
-            latencyDistribution[elapsedMs] = latencyDistribution.GetValueOrDefault(elapsedMs) + 1;
+            latencyAverage += (elapsedMs - latencyAverage) / Successes;
+            minimumLatency = minimumLatency is null ? elapsedMs : Math.Min(minimumLatency.Value, elapsedMs);
+            maximumLatency = maximumLatency is null ? elapsedMs : Math.Max(maximumLatency.Value, elapsedMs);
+            AddLatency(elapsedMs);
             return;
         }
 
@@ -61,8 +69,6 @@ internal sealed class StageStatistics
 
     public StageStatisticsSnapshot CreateSnapshot()
     {
-        long? minimum = Successes == 0 ? null : latencyDistribution.First().Key;
-        long? maximum = Successes == 0 ? null : latencyDistribution.Last().Key;
         double? median = Successes == 0
             ? null
             : (ValueAtIndex((Successes - 1) / 2) + ValueAtIndex(Successes / 2)) / 2.0;
@@ -74,9 +80,9 @@ internal sealed class StageStatistics
             Attempts,
             Successes,
             Failures,
-            Successes == 0 ? null : latencySum / (double)Successes,
-            minimum,
-            maximum,
+            Successes == 0 ? null : latencyAverage,
+            minimumLatency,
+            maximumLatency,
             median,
             p95,
             ConsecutiveFailures,
@@ -86,14 +92,35 @@ internal sealed class StageStatistics
 
     private long ValueAtIndex(long targetIndex)
     {
-        long seen = 0;
-        foreach (var (latency, count) in latencyDistribution)
+        var tree = latencyTree ?? throw new InvalidOperationException("Não há latências registradas.");
+        var rank = targetIndex + 1;
+        var index = 0;
+        for (var bit = HighestPowerOfTwoAtMost(tree.Length - 1); bit != 0; bit >>= 1)
         {
-            seen += count;
-            if (seen > targetIndex)
-                return latency;
+            var next = index + bit;
+            if (next < tree.Length && tree[next] < rank)
+            {
+                index = next;
+                rank -= tree[next];
+            }
         }
 
-        return latencyDistribution.Last().Key;
+        return index == OverflowBucket ? maximumLatency!.Value : index;
+    }
+
+    private void AddLatency(long elapsedMs)
+    {
+        latencyTree ??= new long[OverflowBucket + 2];
+        var bucket = (int)Math.Clamp(elapsedMs, 0, OverflowBucket);
+        for (var index = bucket + 1; index < latencyTree.Length; index += index & -index)
+            latencyTree[index]++;
+    }
+
+    private static int HighestPowerOfTwoAtMost(int value)
+    {
+        var result = 1;
+        while (result <= value / 2)
+            result <<= 1;
+        return result;
     }
 }
