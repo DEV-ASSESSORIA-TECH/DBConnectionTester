@@ -1,6 +1,7 @@
 using DBConnectionTester.Application;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services;
+using DBConnectionTester.Services.Storage;
 
 namespace DBConnectionTester.UI;
 
@@ -55,6 +56,7 @@ public sealed partial class MainForm : Form
     private RowBinding sqliteFileRow = null!;
 
     private readonly RunCoordinator runCoordinator = new(new TestRunner());
+    private readonly SqliteApplicationStore applicationStore;
     private readonly TestSettingsValidator settingsValidator = new(new OutputPathPolicy());
     private RunUiState runUiState = RunUiState.Idle;
     private bool exitRequested;
@@ -63,8 +65,9 @@ public sealed partial class MainForm : Form
     private string currentCsvPath = "";
     private string currentTxtPath = "";
 
-    public MainForm()
+    public MainForm(SqliteApplicationStore applicationStore)
     {
+        this.applicationStore = applicationStore;
         Text = "DB Connection Tester";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(980, 720);
