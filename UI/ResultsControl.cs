@@ -13,6 +13,7 @@ public sealed class ResultsControl : UserControl
     private readonly StageResultCard queryCard = new("SELECT 1");
     private readonly DataGridView grid = new();
     private readonly DataGridView statisticsGrid = new();
+    private readonly StatisticsDashboardControl statisticsDashboard = new();
 
     public ResultsControl()
     {
@@ -40,10 +41,13 @@ public sealed class ResultsControl : UserControl
         var tabs = new TabControl { Dock = DockStyle.Fill };
         var recentTab = new TabPage("Ciclos recentes");
         var statisticsTab = new TabPage("Resumo estatístico");
+        var trendTab = new TabPage("Tendência");
         recentTab.Controls.Add(grid);
         statisticsTab.Controls.Add(statisticsGrid);
+        trendTab.Controls.Add(statisticsDashboard);
         tabs.TabPages.Add(recentTab);
         tabs.TabPages.Add(statisticsTab);
+        tabs.TabPages.Add(trendTab);
 
         var content = new TableLayoutPanel
         {
@@ -71,6 +75,7 @@ public sealed class ResultsControl : UserControl
         queryCard.ResetResult();
         grid.Rows.Clear();
         ResetStatistics();
+        statisticsDashboard.ResetDashboard();
     }
 
     public void UpdateStatistics(RunStatisticsSnapshot statistics)
@@ -80,6 +85,7 @@ public sealed class ResultsControl : UserControl
         UpdateStatisticsRow(2, statistics.Tcp);
         UpdateStatisticsRow(3, statistics.DatabaseConnect);
         UpdateStatisticsRow(4, statistics.DatabaseQuery);
+        statisticsDashboard.UpdateStatistics(statistics);
     }
 
     public void AddCycle(TestCycleResult cycle)
@@ -111,6 +117,7 @@ public sealed class ResultsControl : UserControl
 
         while (grid.Rows.Count > MaximumVisibleCycles)
             grid.Rows.RemoveAt(grid.Rows.Count - 1);
+        statisticsDashboard.AddCycle(cycle);
     }
 
     private void ConfigureGrid()
