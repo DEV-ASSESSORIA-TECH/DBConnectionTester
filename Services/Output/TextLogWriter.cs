@@ -37,8 +37,15 @@ public sealed class TextLogWriter : IAsyncDisposable
         }
     }
 
-    public Task WriteCycleAsync(TestCycleResult cycle, CancellationToken token) =>
-        writer.WriteLineAsync(BuildLine(cycle).AsMemory(), token);
+    public async Task WriteCycleAsync(TestCycleResult cycle, CancellationToken token)
+    {
+        await writer.WriteLineAsync(BuildLine(cycle).AsMemory(), token);
+        foreach (var (stage, diagnostic) in Diagnostics(cycle))
+        {
+            if (diagnostic is not null)
+                await writer.WriteLineAsync(BuildDiagnosticLine(stage, diagnostic).AsMemory(), token);
+        }
+    }
 
     public async Task CompleteAsync(RunSummary summary, RunMetrics metrics)
     {
@@ -85,6 +92,26 @@ public sealed class TextLogWriter : IAsyncDisposable
                    $"DB_QUERY={cycle.Database.QueryStatus.ToOutputText()} {cycle.Database.QueryMs}ms";
         var error = FirstNonEmpty(cycle.Dns.Error, cycle.Ping.Error, cycle.Tcp.Error, cycle.Database.Error);
         return string.IsNullOrWhiteSpace(error) ? line : line + $" | ERRO={error}";
+    }
+
+    private static IEnumerable<(string Stage, DiagnosticIssue? Diagnostic)> Diagnostics(TestCycleResult cycle)
+    {
+        yield return ("DNS", cycle.Dns.Diagnostic);
+        yield return ("PING", cycle.Ping.Diagnostic);
+        yield return ("TCP", cycle.Tcp.Diagnostic);
+        yield return ("DB_CONNECT", cycle.Database.ConnectDiagnostic);
+        yield return ("DB_QUERY", cycle.Database.QueryDiagnostic);
+    }
+
+    private static string BuildDiagnosticLine(string stage, DiagnosticIssue issue)
+    {
+        var suggestion = DiagnosticCatalog.GetSuggestion(issue.SuggestionCode);
+        var provider = issue.ProviderError;
+        return $"  DIAGNÓSTICO {stage}: Código={issue.DiagnosticCode} | Sugestão={issue.SuggestionCode} | " +
+               $"Ação={suggestion.Action} | Provider={provider?.Provider ?? "N/A"} | " +
+               $"Código original={provider?.OriginalCode ?? "N/A"} | SQLSTATE={provider?.SqlState ?? "N/A"} | " +
+               $"Código nativo={provider?.NativeCode ?? "N/A"} | Confiança={issue.Confidence} | " +
+               $"Detalhe={issue.TechnicalMessage}";
     }
 
     private static string FirstNonEmpty(params string[] values) =>

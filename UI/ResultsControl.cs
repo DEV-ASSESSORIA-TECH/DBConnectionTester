@@ -90,15 +90,21 @@ public sealed class ResultsControl : UserControl
 
     public void AddCycle(TestCycleResult cycle)
     {
-        dnsCard.ShowResult(cycle.Dns.Status, cycle.Dns.ElapsedMs, cycle.Dns.Error);
-        pingCard.ShowResult(cycle.Ping.Status, cycle.Ping.ElapsedMs, cycle.Ping.Error);
-        tcpCard.ShowResult(cycle.Tcp.Status, cycle.Tcp.ElapsedMs, cycle.Tcp.Error);
+        dnsCard.ShowResult(cycle.Dns.Status, cycle.Dns.ElapsedMs, cycle.Dns.Diagnostic);
+        pingCard.ShowResult(cycle.Ping.Status, cycle.Ping.ElapsedMs, cycle.Ping.Diagnostic);
+        tcpCard.ShowResult(cycle.Tcp.Status, cycle.Tcp.ElapsedMs, cycle.Tcp.Diagnostic);
         connectCard.ShowResult(cycle.Database.ConnectStatus, cycle.Database.ConnectMs,
-            cycle.Database.ConnectStatus == StepStatus.Failed ? cycle.Database.Error : "");
+            cycle.Database.ConnectDiagnostic);
         queryCard.ShowResult(cycle.Database.QueryStatus, cycle.Database.QueryMs,
-            cycle.Database.QueryStatus == StepStatus.Failed ? cycle.Database.Error : "");
+            cycle.Database.QueryDiagnostic);
 
-        var error = FirstNonEmpty(cycle.Dns.Error, cycle.Ping.Error, cycle.Tcp.Error, cycle.Database.Error);
+        var diagnostic = FirstDiagnostic(
+            cycle.Dns.Diagnostic,
+            cycle.Ping.Diagnostic,
+            cycle.Tcp.Diagnostic,
+            cycle.Database.ConnectDiagnostic,
+            cycle.Database.QueryDiagnostic);
+        var error = DiagnosticFormatting.Compact(diagnostic);
         grid.Rows.Insert(0,
             cycle.Number.ToString("N0"),
             cycle.StartedAt.ToString("HH:mm:ss.fff"),
@@ -113,7 +119,7 @@ public sealed class ResultsControl : UserControl
         if (HasFailure(cycle))
             row.DefaultCellStyle.BackColor = Color.FromArgb(255, 242, 242);
         if (!string.IsNullOrWhiteSpace(error))
-            row.Cells[^1].ToolTipText = error;
+            row.Cells[^1].ToolTipText = DiagnosticFormatting.Detailed(diagnostic);
 
         while (grid.Rows.Count > MaximumVisibleCycles)
             grid.Rows.RemoveAt(grid.Rows.Count - 1);
@@ -240,8 +246,8 @@ public sealed class ResultsControl : UserControl
         cycle.Database.ConnectStatus == StepStatus.Failed ||
         cycle.Database.QueryStatus == StepStatus.Failed;
 
-    private static string FirstNonEmpty(params string[] values) =>
-        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
+    private static DiagnosticIssue? FirstDiagnostic(params DiagnosticIssue?[] values) =>
+        values.FirstOrDefault(value => value is not null);
 }
 
 internal sealed class StageResultCard : Panel
@@ -296,7 +302,7 @@ internal sealed class StageResultCard : Panel
         toolTip.SetToolTip(statusLabel, "");
     }
 
-    public void ShowResult(StepStatus status, long elapsedMs, string error)
+    public void ShowResult(StepStatus status, long elapsedMs, DiagnosticIssue? diagnostic)
     {
         statusLabel.Text = status switch
         {
@@ -317,8 +323,9 @@ internal sealed class StageResultCard : Panel
             StepStatus.Failed => Color.FromArgb(185, 45, 45),
             _ => SystemColors.GrayText
         };
-        toolTip.SetToolTip(this, error);
-        toolTip.SetToolTip(statusLabel, error);
+        var details = DiagnosticFormatting.Detailed(diagnostic);
+        toolTip.SetToolTip(this, details);
+        toolTip.SetToolTip(statusLabel, details);
     }
 
     protected override void Dispose(bool disposing)
