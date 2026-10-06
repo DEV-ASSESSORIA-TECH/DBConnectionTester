@@ -14,7 +14,7 @@ internal static partial class DiagnosticClassifier
 {
     public static DiagnosticIssue Dns(Exception exception)
     {
-        var source = Unwrap(exception);
+        var source = FindNetworkSource(exception);
         var code = source switch
         {
             TimeoutException => DiagnosticCodes.DnsTimeout,
@@ -43,7 +43,7 @@ internal static partial class DiagnosticClassifier
 
     public static DiagnosticIssue Ping(Exception exception)
     {
-        var source = Unwrap(exception);
+        var source = FindNetworkSource(exception);
         if (source is SocketException socket)
             return TcpFromSocket(socket, DiagnosticLayer.Ping);
         var code = source is TimeoutException ? DiagnosticCodes.PingTimeout : DiagnosticCodes.PingUnknown;
@@ -52,7 +52,7 @@ internal static partial class DiagnosticClassifier
 
     public static DiagnosticIssue Tcp(Exception exception)
     {
-        var source = Unwrap(exception);
+        var source = FindNetworkSource(exception);
         if (source is SocketException socket)
             return TcpFromSocket(socket, DiagnosticLayer.Tcp);
         var code = source is TimeoutException ? DiagnosticCodes.TcpTimeout : DiagnosticCodes.TcpUnknown;
@@ -61,8 +61,9 @@ internal static partial class DiagnosticClassifier
 
     public static DiagnosticIssue Database(Exception exception, DiagnosticLayer layer, TestSettings settings)
     {
-        var source = Unwrap(exception);
-        var provider = DatabaseProvider(source);
+        var source = FindDatabaseSource(exception);
+        var providerSource = FindProviderSource(exception) ?? source;
+        var provider = DatabaseProvider(providerSource);
         var exactCode = source switch
         {
             SqlException sql => SqlServerCode(sql.Number, layer),
@@ -74,17 +75,18 @@ internal static partial class DiagnosticClassifier
                 ? DiagnosticCodes.DatabaseQueryTimeout
                 : DiagnosticCodes.DatabaseConnectTimeout,
             FileNotFoundException when settings.DatabaseType == DatabaseType.Sqlite => DiagnosticCodes.SqliteInvalid,
+            SocketException => DiagnosticCodes.DatabaseUnavailable,
             _ => null
         };
 
         if (exactCode is not null)
-            return Create(exactCode, exception, provider, secrets: [settings.Password]);
+            return Create(exactCode, source, provider, secrets: [settings.Password]);
 
         var heuristicCode = MessageCode(source.Message, layer);
         if (heuristicCode is not null)
-            return Create(heuristicCode, exception, provider, DiagnosticConfidence.Heuristic, [settings.Password]);
+            return Create(heuristicCode, source, provider, DiagnosticConfidence.Heuristic, [settings.Password]);
 
-        return Create(DiagnosticCodes.DatabaseUnknown, exception, provider, DiagnosticConfidence.Fallback,
+        return Create(DiagnosticCodes.DatabaseUnknown, source, provider, DiagnosticConfidence.Fallback,
             [settings.Password], layer);
     }
 
@@ -198,6 +200,9 @@ internal static partial class DiagnosticClassifier
                 error.Number.ToString(), null, error.Number.ToString(), Sanitize(error.Message))).ToArray()),
         PostgresException postgres => new("PostgreSQL", postgres.SqlState, postgres.SqlState, null, postgres.GetType().Name,
             [new(postgres.SqlState, postgres.SqlState, null, Sanitize(postgres.MessageText))]),
+        NpgsqlException npgsql => new("PostgreSQL", OriginalCode(npgsql.InnerException), null,
+            NativeCode(npgsql.InnerException), npgsql.GetType().Name,
+            ProviderEntries(npgsql)),
         MySqlException mysql => new("MySQL/MariaDB", mysql.Number.ToString(), mysql.SqlState, mysql.Number.ToString(), mysql.GetType().Name,
             [new(mysql.Number.ToString(), mysql.SqlState, mysql.Number.ToString(), Sanitize(mysql.Message))]),
         SqliteException sqlite => new("SQLite", sqlite.SqliteErrorCode.ToString(), null, sqlite.SqliteExtendedErrorCode.ToString(), sqlite.GetType().Name,
@@ -210,6 +215,24 @@ internal static partial class DiagnosticClassifier
         _ => new(exception.GetType().Name, null, null, null, exception.GetType().Name,
             [new(null, null, null, Sanitize(exception.Message))])
     };
+
+    private static IReadOnlyList<ProviderErrorEntry> ProviderEntries(Exception exception)
+    {
+        var entries = new List<ProviderErrorEntry>();
+        for (var current = exception; current is not null; current = current.InnerException)
+            entries.Add(new ProviderErrorEntry(
+                OriginalCode(current),
+                null,
+                NativeCode(current),
+                Sanitize(current.Message)));
+        return entries;
+    }
+
+    private static string? OriginalCode(Exception? exception) =>
+        exception is SocketException socket ? socket.SocketErrorCode.ToString() : null;
+
+    private static string? NativeCode(Exception? exception) =>
+        exception is SocketException socket ? socket.NativeErrorCode.ToString() : null;
 
     private static ProviderErrorInfo NetworkProvider(Exception exception) => exception switch
     {
@@ -227,16 +250,41 @@ internal static partial class DiagnosticClassifier
         IEnumerable<string>? secrets = null,
         DiagnosticLayer? layer = null)
     {
-        var source = Unwrap(exception);
-        var message = $"{source.GetType().Name}: {source.Message}";
+        var message = $"{exception.GetType().Name}: {exception.Message}";
         return DiagnosticCatalog.Create(code, Sanitize(message, secrets), Redact(provider, secrets), confidence, layer);
     }
 
-    private static Exception Unwrap(Exception exception)
+    private static Exception FindNetworkSource(Exception exception)
     {
         while (exception is AggregateException { InnerExceptions.Count: 1 } aggregate)
             exception = aggregate.InnerExceptions[0];
-        return exception.GetBaseException();
+        while (exception is not SocketException and not TimeoutException && exception.InnerException is not null)
+            exception = exception.InnerException;
+        return exception;
+    }
+
+    private static Exception FindDatabaseSource(Exception exception)
+    {
+        while (exception is AggregateException { InnerExceptions.Count: 1 } aggregate)
+            exception = aggregate.InnerExceptions[0];
+
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is SqlException or PostgresException or MySqlException or SqliteException or OdbcException or
+                TimeoutException or FileNotFoundException or SocketException)
+                return current;
+        }
+        return exception;
+    }
+
+    private static Exception? FindProviderSource(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is SqlException or NpgsqlException or MySqlException or SqliteException or OdbcException)
+                return current;
+        }
+        return null;
     }
 
     private static ProviderErrorInfo? Redact(ProviderErrorInfo? provider, IEnumerable<string>? secrets)

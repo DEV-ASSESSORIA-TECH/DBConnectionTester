@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services;
+using Microsoft.Data.Sqlite;
 
 namespace DBConnectionTester.Tests;
 
@@ -44,6 +45,22 @@ public sealed class DiagnosticTests
         Assert.Equal(DiagnosticConfidence.Heuristic, diagnostic.Confidence);
         Assert.DoesNotContain(secret, diagnostic.TechnicalMessage);
         Assert.All(diagnostic.ProviderError!.Errors, error => Assert.DoesNotContain(secret, error.Message));
+    }
+
+    [Fact]
+    public void DatabaseDiagnosticKeepsTypedProviderInsteadOfInnerException()
+    {
+        var providerException = new SqliteException("file is not a database", 26, 26);
+
+        var diagnostic = DiagnosticClassifier.Database(
+            providerException,
+            DiagnosticLayer.DatabaseConnect,
+            Settings("secret") with { DatabaseType = DatabaseType.Sqlite });
+
+        Assert.Equal(DiagnosticCodes.SqliteInvalid, diagnostic.DiagnosticCode);
+        Assert.Equal("SQLite", diagnostic.ProviderError?.Provider);
+        Assert.Equal("26", diagnostic.ProviderError?.OriginalCode);
+        Assert.Equal("26", diagnostic.ProviderError?.NativeCode);
     }
 
     [Fact]
