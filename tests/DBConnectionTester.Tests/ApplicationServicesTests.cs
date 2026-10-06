@@ -36,6 +36,64 @@ public sealed class ApplicationServicesTests
     }
 
     [Fact]
+    public void ValidatorRejectsInvalidExecutionAndNetworkValues()
+    {
+        var validator = new TestSettingsValidator(new OutputPathPolicy());
+        var outputPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".csv");
+        var valid = Input(outputPath);
+        var invalidInputs = new[]
+        {
+            valid with { Port = 0 },
+            valid with { Port = 65_536 },
+            valid with { TestCount = 0 },
+            valid with { TestCount = RunCount.Maximum + 1 },
+            valid with { Interval = TimeSpan.FromMilliseconds(-1) },
+            valid with { Interval = TestInterval.Maximum + TimeSpan.FromMilliseconds(1) },
+            valid with { Timeout = TimeSpan.Zero },
+            valid with { Timeout = StageTimeout.Maximum + TimeSpan.FromSeconds(1) }
+        };
+
+        Assert.All(invalidInputs, input => Assert.False(validator.Validate(input).IsValid));
+    }
+
+    [Fact]
+    public void ValidatorRequiresCredentialsOnlyWhenAuthenticationUsesThem()
+    {
+        var validator = new TestSettingsValidator(new OutputPathPolicy());
+        var outputPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".csv");
+
+        var sqlLogin = validator.Validate(Input(outputPath) with
+        {
+            DatabaseType = DatabaseType.SqlServer,
+            SqlServerAuthentication = SqlServerAuthentication.SqlLogin,
+            User = " "
+        });
+        var windowsAuthentication = validator.Validate(Input(outputPath) with
+        {
+            DatabaseType = DatabaseType.SqlServer,
+            SqlServerAuthentication = SqlServerAuthentication.Windows,
+            User = " "
+        });
+
+        Assert.False(sqlLogin.IsValid);
+        Assert.True(windowsAuthentication.IsValid);
+    }
+
+    [Fact]
+    public void ValidatorProducesTypedDomainValues()
+    {
+        var outputPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".csv");
+
+        var result = new TestSettingsValidator(new OutputPathPolicy()).Validate(Input(outputPath));
+
+        Assert.True(result.IsValid);
+        Assert.Equal(3306, result.Settings!.Port!.Value);
+        Assert.Equal(1, result.Settings.TestCount.Value);
+        Assert.Equal(TimeSpan.Zero, result.Settings.Interval.Value);
+        Assert.Equal(TimeSpan.FromSeconds(1), result.Settings.Timeout.Value);
+    }
+
+    [Fact]
     public async Task OutputPolicyPreservesExistingRun()
     {
         var directory = CreateTemporaryDirectory();
@@ -98,17 +156,17 @@ public sealed class ApplicationServicesTests
     private static TestSettings Settings() => new(
         DatabaseType.MySqlMariaDb,
         "127.0.0.1",
-        3306,
+        NetworkPort.Create(3306),
         "user",
         "password",
         "database",
         "",
         SqlServerAuthentication.SqlLogin,
         "SQL Anywhere 17",
-        1,
+        RunCount.Create(1),
         false,
-        TimeSpan.Zero,
-        TimeSpan.FromSeconds(1),
+        TestInterval.Create(TimeSpan.Zero),
+        StageTimeout.Create(TimeSpan.FromSeconds(1)),
         true,
         false,
         false,

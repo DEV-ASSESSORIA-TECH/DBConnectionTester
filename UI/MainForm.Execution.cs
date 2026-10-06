@@ -14,7 +14,12 @@ public sealed partial class MainForm
         if (settings is null)
             return;
         if (singleRun)
-            settings = settings with { TestCount = 1, Continuous = false, Interval = TimeSpan.Zero };
+            settings = settings with
+            {
+                TestCount = RunCount.Create(1),
+                Continuous = false,
+                Interval = TestInterval.Create(TimeSpan.Zero)
+            };
 
         currentCsvPath = settings.CsvPath;
         currentTxtPath = settings.TxtPath;
@@ -93,14 +98,14 @@ public sealed partial class MainForm
             resultsControl.UpdateStatistics(value.Statistics);
         if (!settings.Continuous)
         {
-            var percentage = (int)Math.Round(value.Completed * 100.0 / settings.TestCount);
+            var percentage = (int)Math.Round(value.Completed * 100.0 / settings.TestCount.Value);
             progressBar.Value = Math.Clamp(percentage, 0, 100);
         }
         var prefix = singleRun
             ? "Teste único concluído"
             : settings.Continuous
             ? $"Executando continuamente | {value.Completed:N0} testes"
-            : $"Executando {value.Completed:N0}/{settings.TestCount:N0}";
+            : $"Executando {value.Completed:N0}/{settings.TestCount.Value:N0}";
         lblStatus.Text = $"{prefix} | DNS: {value.DnsFailures} | Ping: {value.PingFailures} | " +
                          $"TCP: {value.TcpFailures} | DB conexão: {value.DatabaseConnectFailures} | " +
                          $"DB consulta: {value.DatabaseQueryFailures}";
@@ -236,10 +241,10 @@ public sealed partial class MainForm
         trayIcon.Visible = true;
         trayStatus.Text = settings.Continuous
             ? $"Executando - {value.Completed:N0} testes"
-            : $"Executando - {value.Completed:N0}/{settings.TestCount:N0}";
+            : $"Executando - {value.Completed:N0}/{settings.TestCount.Value:N0}";
         var tooltip = settings.Continuous
             ? $"DB Tester - {value.Completed:N0} - falhas D:{value.DnsFailures} P:{value.PingFailures} T:{value.TcpFailures} DB:{value.DatabaseFailures}"
-            : $"DB Tester - {value.Completed:N0}/{settings.TestCount:N0} - falhas D:{value.DnsFailures} P:{value.PingFailures} T:{value.TcpFailures} DB:{value.DatabaseFailures}";
+            : $"DB Tester - {value.Completed:N0}/{settings.TestCount.Value:N0} - falhas D:{value.DnsFailures} P:{value.PingFailures} T:{value.TcpFailures} DB:{value.DatabaseFailures}";
         SafeTrayText(tooltip);
     }
 }

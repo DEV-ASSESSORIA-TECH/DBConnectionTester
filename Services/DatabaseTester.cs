@@ -27,7 +27,7 @@ internal static class DatabaseTester
                     var openTask = Task.Run(connection.Open, CancellationToken.None);
                     try
                     {
-                        await openTask.WaitAsync(settings.Timeout, token);
+                        await openTask.WaitAsync(settings.Timeout.Value, token);
                     }
                     catch
                     {
@@ -37,7 +37,7 @@ internal static class DatabaseTester
                 }
                 else
                 {
-                    await connection.OpenAsync(token).WaitAsync(settings.Timeout, token);
+                    await connection.OpenAsync(token).WaitAsync(settings.Timeout.Value, token);
                 }
                 connect.Stop();
                 connectMs = (long)connect.Elapsed.TotalMilliseconds;
@@ -57,8 +57,8 @@ internal static class DatabaseTester
             {
                 await using var command = connection.CreateCommand();
                 command.CommandText = "SELECT 1";
-                command.CommandTimeout = Math.Max(1, (int)Math.Ceiling(settings.Timeout.TotalSeconds));
-                var value = await command.ExecuteScalarAsync(token).WaitAsync(settings.Timeout, token);
+                command.CommandTimeout = (int)Math.Ceiling(settings.Timeout.Value.TotalSeconds);
+                var value = await command.ExecuteScalarAsync(token).WaitAsync(settings.Timeout.Value, token);
                 query.Stop();
                 total.Stop();
                 queryMs = (long)query.Elapsed.TotalMilliseconds;

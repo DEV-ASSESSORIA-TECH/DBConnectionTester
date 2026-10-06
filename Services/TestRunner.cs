@@ -30,7 +30,7 @@ public sealed class TestRunner : ITestRunner
 
         try
         {
-            for (long number = 1; settings.Continuous || number <= settings.TestCount; number++)
+            for (long number = 1; settings.Continuous || number <= settings.TestCount.Value; number++)
             {
                 token.ThrowIfCancellationRequested();
                 var cycle = await cycleExecutor.ExecuteAsync(settings, number, token);
@@ -38,10 +38,10 @@ public sealed class TestRunner : ITestRunner
                 metrics.Add(settings, cycle);
                 progress?.Report(metrics.CreateProgress(cycle));
 
-                if (!settings.Continuous && number >= settings.TestCount)
+                if (!settings.Continuous && number >= settings.TestCount.Value)
                     break;
-                if (settings.Interval > TimeSpan.Zero)
-                    await Task.Delay(settings.Interval, token);
+                if (settings.Interval.Value > TimeSpan.Zero)
+                    await Task.Delay(settings.Interval.Value, token);
             }
         }
         catch (OperationCanceledException)

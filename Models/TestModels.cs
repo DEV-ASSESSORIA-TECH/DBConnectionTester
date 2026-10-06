@@ -1,28 +1,71 @@
 namespace DBConnectionTester.Models;
 
-public sealed record TestSettings(
-    DatabaseType DatabaseType,
-    string Host,
-    int Port,
-    string User,
-    string Password,
-    string Database,
-    string SqliteFile,
-    SqlServerAuthentication SqlServerAuthentication,
-    string OdbcDriver,
-    long TestCount,
-    bool Continuous,
-    TimeSpan Interval,
-    TimeSpan Timeout,
-    bool Dns,
-    bool Ping,
-    bool Tcp,
-    bool DatabaseTest,
-    string CsvPath,
-    string TxtPath)
+public sealed record TestSettings
 {
+    internal TestSettings(
+        DatabaseType databaseType,
+        string host,
+        NetworkPort? port,
+        string user,
+        string password,
+        string database,
+        string sqliteFile,
+        SqlServerAuthentication sqlServerAuthentication,
+        string odbcDriver,
+        RunCount testCount,
+        bool continuous,
+        TestInterval interval,
+        StageTimeout timeout,
+        bool dns,
+        bool ping,
+        bool tcp,
+        bool databaseTest,
+        string csvPath,
+        string txtPath)
+    {
+        DatabaseType = databaseType;
+        Host = host;
+        Port = port;
+        User = user;
+        Password = password;
+        Database = database;
+        SqliteFile = sqliteFile;
+        SqlServerAuthentication = sqlServerAuthentication;
+        OdbcDriver = odbcDriver;
+        TestCount = testCount;
+        Continuous = continuous;
+        Interval = interval;
+        Timeout = timeout;
+        Dns = dns;
+        Ping = ping;
+        Tcp = tcp;
+        DatabaseTest = databaseTest;
+        CsvPath = csvPath;
+        TxtPath = txtPath;
+    }
+
+    public DatabaseType DatabaseType { get; internal init; }
+    public string Host { get; internal init; }
+    public NetworkPort? Port { get; internal init; }
+    public string User { get; internal init; }
+    public string Password { get; internal init; }
+    public string Database { get; internal init; }
+    public string SqliteFile { get; internal init; }
+    public SqlServerAuthentication SqlServerAuthentication { get; internal init; }
+    public string OdbcDriver { get; internal init; }
+    public RunCount TestCount { get; internal init; }
+    public bool Continuous { get; internal init; }
+    public TestInterval Interval { get; internal init; }
+    public StageTimeout Timeout { get; internal init; }
+    public bool Dns { get; internal init; }
+    public bool Ping { get; internal init; }
+    public bool Tcp { get; internal init; }
+    public bool DatabaseTest { get; internal init; }
+    public string CsvPath { get; internal init; }
+    public string TxtPath { get; internal init; }
+
     public DatabaseProfile Profile => DatabaseProfiles.Get(DatabaseType);
-    public string Target => DatabaseType == DatabaseType.Sqlite ? SqliteFile : $"{Host}:{Port}";
+    public string Target => DatabaseType == DatabaseType.Sqlite ? SqliteFile : $"{Host}:{Port!.Value}";
 }
 
 public enum StepStatus

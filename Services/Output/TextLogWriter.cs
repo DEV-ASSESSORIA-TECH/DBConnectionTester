@@ -78,8 +78,8 @@ public sealed class TextLogWriter : IAsyncDisposable
         await writer.WriteLineAsync($"Destino: {settings.Target}");
         if (settings.DatabaseType != DatabaseType.TcpOnly)
             await writer.WriteLineAsync($"Banco informado: {(string.IsNullOrWhiteSpace(settings.Database) ? "(nenhum)" : settings.Database)}");
-        await writer.WriteLineAsync($"Modo: {(settings.Continuous ? "CONTÍNUO - até encerramento manual" : $"LIMITADO - {settings.TestCount} testes")}");
-        await writer.WriteLineAsync($"Intervalo: {settings.Interval.TotalSeconds:0.0}s | Timeout: {settings.Timeout.TotalSeconds:0.0}s");
+        await writer.WriteLineAsync($"Modo: {(settings.Continuous ? "CONTÍNUO - até encerramento manual" : $"LIMITADO - {settings.TestCount.Value} testes")}");
+        await writer.WriteLineAsync($"Intervalo: {settings.Interval.Value.TotalSeconds:0.0}s | Timeout: {settings.Timeout.Value.TotalSeconds:0.0}s");
         await writer.WriteLineAsync($"Camadas: DNS={settings.Dns} | Ping={settings.Ping} | TCP={settings.Tcp} | Banco={settings.DatabaseTest}");
         await writer.WriteLineAsync(new string('-', 120));
     }

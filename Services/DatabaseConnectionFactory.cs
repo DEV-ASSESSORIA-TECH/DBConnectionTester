@@ -12,7 +12,7 @@ public static class DatabaseConnectionFactory
 {
     public static DbConnection Create(TestSettings settings)
     {
-        var timeout = Math.Max(1, (int)Math.Ceiling(settings.Timeout.TotalSeconds));
+        var timeout = (int)Math.Ceiling(settings.Timeout.Value.TotalSeconds);
 
         return settings.DatabaseType switch
         {
@@ -36,7 +36,7 @@ public static class DatabaseConnectionFactory
         var builder = new MySqlConnectionStringBuilder
         {
             Server = settings.Host,
-            Port = (uint)settings.Port,
+            Port = (uint)settings.Port!.Value,
             UserID = settings.User,
             Password = settings.Password,
             Pooling = false,
@@ -53,7 +53,7 @@ public static class DatabaseConnectionFactory
         var builder = new NpgsqlConnectionStringBuilder
         {
             Host = settings.Host,
-            Port = settings.Port,
+            Port = settings.Port!.Value,
             Username = settings.User,
             Password = settings.Password,
             Pooling = false,
@@ -69,7 +69,7 @@ public static class DatabaseConnectionFactory
     {
         var builder = new SqlConnectionStringBuilder
         {
-            DataSource = $"tcp:{settings.Host},{settings.Port}",
+            DataSource = $"tcp:{settings.Host},{settings.Port!.Value}",
             IntegratedSecurity = settings.SqlServerAuthentication == SqlServerAuthentication.Windows,
             Pooling = false,
             ConnectTimeout = timeout,
@@ -90,7 +90,7 @@ public static class DatabaseConnectionFactory
         var builder = new OdbcConnectionStringBuilder { Driver = settings.OdbcDriver };
         builder["UID"] = settings.User;
         builder["PWD"] = settings.Password;
-        builder["HOST"] = $"{settings.Host}:{settings.Port}";
+        builder["HOST"] = $"{settings.Host}:{settings.Port!.Value}";
         builder["Connection Timeout"] = timeout;
         if (!string.IsNullOrWhiteSpace(settings.Database))
             builder["DBN"] = settings.Database;

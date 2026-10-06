@@ -34,8 +34,8 @@ public sealed class TestRunnerTests
         {
             var settings = Settings(directory) with
             {
-                Port = port,
-                Timeout = TimeSpan.FromSeconds(1)
+                Port = NetworkPort.Create(port),
+                Timeout = StageTimeout.Create(TimeSpan.FromSeconds(1))
             };
 
             await new TestRunner().RunAsync(settings, progress, CancellationToken.None);
@@ -104,7 +104,7 @@ public sealed class TestRunnerTests
         using var cancellation = new CancellationTokenSource();
         var output = new CancellingOutput(cancellation);
         var runner = new TestRunner(new SuccessfulCycleExecutor(), new FixedOutputFactory(output));
-        var settings = Settings(Path.GetTempPath()) with { TestCount = 2 };
+        var settings = Settings(Path.GetTempPath()) with { TestCount = RunCount.Create(2) };
 
         var summary = await runner.RunAsync(settings, progress: null, cancellation.Token);
 
@@ -117,17 +117,17 @@ public sealed class TestRunnerTests
     private static TestSettings Settings(string directory) => new(
         DatabaseType.MySqlMariaDb,
         "127.0.0.1",
-        3306,
+        NetworkPort.Create(3306),
         "user",
         "password",
         "database",
         "",
         SqlServerAuthentication.SqlLogin,
         "SQL Anywhere 17",
-        1,
+        RunCount.Create(1),
         false,
-        TimeSpan.Zero,
-        TimeSpan.FromSeconds(1),
+        TestInterval.Create(TimeSpan.Zero),
+        StageTimeout.Create(TimeSpan.FromSeconds(1)),
         true,
         false,
         false,

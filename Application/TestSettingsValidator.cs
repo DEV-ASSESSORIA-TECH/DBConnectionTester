@@ -51,10 +51,25 @@ public sealed class TestSettingsValidator
 
         if (profile.UsesNetwork && string.IsNullOrWhiteSpace(host))
             return TestSettingsValidationResult.Failure("Informe o servidor ou host.");
+        NetworkPort? port = null;
+        if (profile.UsesNetwork && !NetworkPort.TryCreate(input.Port, out port))
+            return TestSettingsValidationResult.Failure(
+                $"A porta deve estar entre {NetworkPort.Minimum} e {NetworkPort.Maximum}.");
+        if (!RunCount.TryCreate(input.TestCount, out var testCount))
+            return TestSettingsValidationResult.Failure(
+                $"A quantidade de testes deve estar entre {RunCount.Minimum:N0} e {RunCount.Maximum:N0}.");
+        if (!TestInterval.TryCreate(input.Interval, out var interval))
+            return TestSettingsValidationResult.Failure("O intervalo deve estar entre 0 segundos e 1 hora.");
+        if (!StageTimeout.TryCreate(input.Timeout, out var timeout))
+            return TestSettingsValidationResult.Failure("O timeout deve estar entre 1 e 120 segundos.");
         if (profile.UsesFile && !File.Exists(sqliteFile))
             return TestSettingsValidationResult.Failure("Selecione um arquivo SQLite existente.");
         if (profile.UsesOdbcDriver && string.IsNullOrWhiteSpace(input.OdbcDriver))
             return TestSettingsValidationResult.Failure("Informe o nome do driver ODBC do SQL Anywhere.");
+        var credentialsRequired = profile.UsesCredentials &&
+            (!profile.UsesSqlServerAuthentication || input.SqlServerAuthentication == SqlServerAuthentication.SqlLogin);
+        if (credentialsRequired && string.IsNullOrWhiteSpace(input.User))
+            return TestSettingsValidationResult.Failure("Informe o usuário do banco de dados.");
         if (!dns && !ping && !tcp && !databaseTest)
             return TestSettingsValidationResult.Failure("Selecione pelo menos uma camada de teste.");
 
@@ -73,17 +88,17 @@ public sealed class TestSettingsValidator
         return TestSettingsValidationResult.Success(new TestSettings(
             profile.Type,
             host,
-            input.Port,
+            port,
             input.User,
             input.Password,
             input.Database.Trim(),
             sqliteFile,
             input.SqlServerAuthentication,
             input.OdbcDriver.Trim(),
-            input.TestCount,
+            testCount,
             input.Continuous,
-            input.Interval,
-            input.Timeout,
+            interval,
+            timeout,
             dns,
             ping,
             tcp,

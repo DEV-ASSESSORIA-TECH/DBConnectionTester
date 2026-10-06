@@ -19,13 +19,13 @@ public sealed class TestCycleExecutor : ITestCycleExecutor
     {
         var startedAt = DateTimeOffset.Now;
         var dns = settings.Dns
-            ? await NetworkTester.TestDnsAsync(settings.Host, settings.Timeout, token)
+            ? await NetworkTester.TestDnsAsync(settings.Host, settings.Timeout.Value, token)
             : DnsResult.Skipped();
         var ping = settings.Ping
-            ? await NetworkTester.TestPingAsync(settings.Host, settings.Timeout, token)
+            ? await NetworkTester.TestPingAsync(settings.Host, settings.Timeout.Value, token)
             : StepResult.Skipped();
         var tcp = settings.Tcp
-            ? await NetworkTester.TestTcpAsync(settings.Host, settings.Port, settings.Timeout, token)
+            ? await NetworkTester.TestTcpAsync(settings.Host, settings.Port!.Value, settings.Timeout.Value, token)
             : TcpResult.Skipped();
         var database = settings.DatabaseTest
             ? await DatabaseTester.TestAsync(settings, token)
