@@ -1,0 +1,108 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  PROJECT: DBConnectionTester.csproj
+  SOLUTION: DBConnectionTester.sln
+  RUNTIME: win-x64
+
+jobs:
+  publish:
+    name: Publish Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Read and validate version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw VERSION).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "VERSION must use semantic version format, for example 1.0.0."
+          }
+          if ("${{ github.ref_type }}" -eq "tag" -and "${{ github.ref_name }}" -ne "v$version") {
+            throw "Tag ${{ github.ref_name }} does not match VERSION v$version."
+          }
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Restore
+        run: dotnet restore $env:SOLUTION
+
+      - name: Test
+        run: dotnet test $env:SOLUTION -c Release --no-restore --verbosity minimal
+
+      - name: Publish framework-dependent
+        shell: pwsh
+        run: |
+          dotnet publish $env:PROJECT -c Release -r $env:RUNTIME --self-contained false `
+            -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false `
+            -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true `
+            -o publish/framework-dependent
+
+      - name: Publish self-contained
+        shell: pwsh
+        run: |
+          dotnet publish $env:PROJECT -c Release -r $env:RUNTIME --self-contained true `
+            -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false `
+            -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true `
+            -o publish/self-contained
+
+      - name: Create ZIP packages
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          Compress-Archive -Path "publish/framework-dependent/*" `
+            -DestinationPath "artifacts/DBConnectionTester-v$env:VERSION-win-x64-framework-dependent.zip"
+          Compress-Archive -Path "publish/self-contained/*" `
+            -DestinationPath "artifacts/DBConnectionTester-v$env:VERSION-win-x64-self-contained.zip"
+
+      - name: Upload framework-dependent package
+        uses: actions/upload-artifact@v7
+        with:
+          name: DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-framework-dependent
+          path: artifacts/*-framework-dependent.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload self-contained package
+        uses: actions/upload-artifact@v7
+        with:
+          name: DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained
+          path: artifacts/*-self-contained.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create or update GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ github.ref_name }}" 2>$null
+          $releaseExists = $LASTEXITCODE -eq 0
+          if ($releaseExists) {
+            gh release upload "${{ github.ref_name }}" artifacts/*.zip --clobber
+          } else {
+            gh release create "${{ github.ref_name }}" artifacts/*.zip `
+              --title "DB Connection Tester v$env:VERSION" `
+              --generate-notes
+          }
