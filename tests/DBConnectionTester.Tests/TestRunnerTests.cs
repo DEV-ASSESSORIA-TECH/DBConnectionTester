@@ -126,6 +126,22 @@ public sealed class TestRunnerTests
         Assert.Equal(1, output.CompletedMetrics);
     }
 
+    [Fact]
+    public async Task SummaryFailureDoesNotMaskExecutionFailure()
+    {
+        var output = new FailingSummaryOutput();
+        var runner = new TestRunner(new FailingCycleExecutor(), new FixedOutputFactory(output));
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() =>
+            runner.RunAsync(Settings(Path.GetTempPath()), progress: null, CancellationToken.None));
+
+        Assert.Collection(
+            exception.InnerExceptions,
+            error => Assert.IsType<InvalidOperationException>(error),
+            error => Assert.IsType<IOException>(error));
+        Assert.True(output.Disposed);
+    }
+
     private static TestSettings Settings(string directory) => new(
         DatabaseType.MySqlMariaDb,
         "127.0.0.1",
@@ -176,6 +192,28 @@ public sealed class TestRunnerTests
     private sealed class FixedOutputFactory(IRunOutput output) : IRunOutputFactory
     {
         public Task<IRunOutput> CreateAsync(TestSettings settings) => Task.FromResult(output);
+    }
+
+    private sealed class FailingCycleExecutor : ITestCycleExecutor
+    {
+        public Task<TestCycleResult> ExecuteAsync(TestSettings settings, long number, CancellationToken token) =>
+            throw new InvalidOperationException("execution failure");
+    }
+
+    private sealed class FailingSummaryOutput : IRunOutput
+    {
+        public bool Disposed { get; private set; }
+
+        public Task WriteCycleAsync(TestCycleResult cycle, CancellationToken token) => Task.CompletedTask;
+
+        public Task CompleteAsync(RunSummary summary, RunMetrics metrics) =>
+            throw new IOException("summary failure");
+
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class CancellingOutput(CancellationTokenSource cancellation) : IRunOutput

@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services.Output;
 
@@ -24,9 +25,10 @@ public sealed class TestRunner : ITestRunner
         IProgress<TestProgress>? progress,
         CancellationToken token)
     {
-        await using var output = await outputFactory.CreateAsync(settings);
+        var output = await outputFactory.CreateAsync(settings);
         var metrics = new RunMetrics();
         var stopped = false;
+        Exception? failure = null;
 
         try
         {
@@ -44,15 +46,40 @@ public sealed class TestRunner : ITestRunner
                     await Task.Delay(settings.Interval.Value, token);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             stopped = true;
         }
-        finally
+        catch (Exception exception)
         {
-            await output.CompleteAsync(new RunSummary(metrics.Completed, stopped), metrics);
+            failure = exception;
         }
 
-        return new RunSummary(metrics.Completed, stopped);
+        var summary = new RunSummary(metrics.Completed, stopped);
+        try
+        {
+            await output.CompleteAsync(summary, metrics);
+        }
+        catch (Exception exception)
+        {
+            failure = Combine(failure, exception, "A execução e a finalização do relatório falharam.");
+        }
+
+        try
+        {
+            await output.DisposeAsync();
+        }
+        catch (Exception exception)
+        {
+            failure = Combine(failure, exception, "A execução e o fechamento dos arquivos falharam.");
+        }
+
+        if (failure is not null)
+            ExceptionDispatchInfo.Capture(failure).Throw();
+
+        return summary;
     }
+
+    private static Exception Combine(Exception? current, Exception next, string message) =>
+        current is null ? next : new AggregateException(message, current, next);
 }
