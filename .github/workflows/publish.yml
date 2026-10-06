@@ -12,6 +12,7 @@ permissions:
 env:
   PROJECT: DBConnectionTester.csproj
   SOLUTION: DBConnectionTester.sln
+  TEST_PROJECT: tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj
   RUNTIME: win-x64
 
 jobs:
@@ -46,7 +47,7 @@ jobs:
         run: dotnet restore $env:SOLUTION
 
       - name: Test
-        run: dotnet test $env:SOLUTION -c Release --no-restore --verbosity minimal
+        run: dotnet test $env:TEST_PROJECT -c Release --no-restore --verbosity minimal
 
       - name: Publish framework-dependent
         shell: pwsh
@@ -64,6 +65,16 @@ jobs:
             -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true `
             -o publish/self-contained
 
+      - name: Publish standalone self-contained executable
+        shell: pwsh
+        run: |
+          dotnet publish $env:PROJECT -c Release -r $env:RUNTIME --self-contained true `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:DebugType=None -p:DebugSymbols=false `
+            -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true `
+            -o publish/standalone
+
       - name: Create ZIP packages
         shell: pwsh
         run: |
@@ -72,6 +83,8 @@ jobs:
             -DestinationPath "artifacts/DBConnectionTester-v$env:VERSION-win-x64-framework-dependent.zip"
           Compress-Archive -Path "publish/self-contained/*" `
             -DestinationPath "artifacts/DBConnectionTester-v$env:VERSION-win-x64-self-contained.zip"
+          Copy-Item "publish/standalone/DBConnectionTester.exe" `
+            "artifacts/DBConnectionTester-v$env:VERSION-win-x64-self-contained.exe"
 
       - name: Upload framework-dependent package
         uses: actions/upload-artifact@v7
@@ -91,6 +104,15 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload standalone self-contained executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained-exe
+          path: artifacts/*-self-contained.exe
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Create or update GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
@@ -100,9 +122,9 @@ jobs:
           gh release view "${{ github.ref_name }}" 2>$null
           $releaseExists = $LASTEXITCODE -eq 0
           if ($releaseExists) {
-            gh release upload "${{ github.ref_name }}" artifacts/*.zip --clobber
+            gh release upload "${{ github.ref_name }}" artifacts/* --clobber
           } else {
-            gh release create "${{ github.ref_name }}" artifacts/*.zip `
+            gh release create "${{ github.ref_name }}" artifacts/* `
               --title "DB Connection Tester v$env:VERSION" `
               --generate-notes
           }

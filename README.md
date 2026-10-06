@@ -2,7 +2,7 @@
 
 Aplicativo Windows leve para testar, de forma repetida, cada camada envolvida no acesso a bancos de dados: DNS, Ping/ICMP, TCP, conexão ADO.NET e uma consulta `SELECT 1`.
 
-**Versão atual:** `1.0.0`
+**Versão atual:** `1.0.3`
 
 ![Tela principal do DB Connection Tester](docs/images/app-overview.png)
 
@@ -34,12 +34,13 @@ Cada ciclo abre uma nova conexão sem pooling, para que a medição represente c
 
 ## Downloads
 
-Cada release oferece dois pacotes para Windows x64:
+Cada release oferece três opções para Windows x64:
 
 - **Framework-dependent:** menor; requer o [.NET Desktop Runtime 8](https://dotnet.microsoft.com/download/dotnet/8.0).
-- **Self-contained:** maior; inclui o runtime e não requer instalação do .NET.
+- **Self-contained (ZIP):** maior; inclui o runtime e não requer instalação do .NET.
+- **Self-contained (EXE):** executável único com o runtime embutido; basta baixar e executar.
 
-Os dois ZIPs mantêm o executável e suas DLLs como arquivos separados. Releases são criadas automaticamente ao publicar uma tag compatível com o arquivo [VERSION](VERSION), por exemplo `v1.0.0`.
+Os dois ZIPs mantêm o executável e suas DLLs como arquivos separados. O EXE avulso é a opção pronta para uso, sem extração e sem instalação prévia do .NET. Releases são criadas automaticamente ao publicar uma tag compatível com o arquivo [VERSION](VERSION), por exemplo `v1.0.3`.
 
 ## Compilar e testar
 
@@ -48,9 +49,25 @@ Requisitos: Windows e .NET 8 SDK.
 ```powershell
 dotnet restore DBConnectionTester.sln
 dotnet build DBConnectionTester.sln --configuration Release
-dotnet test DBConnectionTester.sln --configuration Release
+dotnet test tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj --configuration Release
 dotnet run --project DBConnectionTester.csproj
 ```
+
+### Gerar os executáveis
+
+Framework-dependent (requer o .NET Desktop Runtime 8 no computador de destino):
+
+```powershell
+dotnet publish DBConnectionTester.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o publish/framework-dependent-exe
+```
+
+Self-contained (executável único com o runtime do .NET embutido):
+
+```powershell
+dotnet publish DBConnectionTester.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o publish/self-contained-exe
+```
+
+O executável gerado fica na pasta indicada por `-o` em cada comando.
 
 Os testes automatizados não dependem de servidores reais. A conectividade de cada provider deve ser validada contra uma instância disponível no ambiente de destino.
 
