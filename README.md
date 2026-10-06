@@ -1,58 +1,49 @@
 # DB Connection Tester
 
-Aplicativo Windows leve para medir, de forma repetida, as camadas envolvidas no acesso a bancos de dados: resolução DNS, Ping/ICMP, abertura TCP, conexão ADO.NET e uma consulta `SELECT 1`.
+Aplicativo Windows leve para testar, de forma repetida, cada camada envolvida no acesso a bancos de dados: DNS, Ping/ICMP, TCP, conexão ADO.NET e uma consulta `SELECT 1`.
 
-Consulte a [documentação do diagnóstico inteligente](docs/diagnostics/README.md) para códigos internos, sugestões, mapeamentos de providers e formato das saídas.
+**Versão atual:** `1.0.0`
 
-## Bancos e providers
+![Tela principal do DB Connection Tester](docs/images/app-overview.png)
 
-| Tipo | Provider .NET | Porta padrão | Campos específicos |
-|---|---|---:|---|
-| MySQL / MariaDB | `MySqlConnector` | 3306 | Host, usuário, senha e banco opcional |
-| PostgreSQL | `Npgsql` | 5432 | Host, usuário, senha e banco opcional |
-| SQL Server | `Microsoft.Data.SqlClient` | 1433 | Autenticação Windows ou usuário/senha |
-| SAP SQL Anywhere | `System.Data.Odbc` | 2638 | Host, credenciais, banco opcional e nome do driver ODBC |
-| SQLite | `Microsoft.Data.Sqlite` | — | Arquivo `.db`, `.sqlite` ou `.sqlite3` existente |
-| Somente TCP | — | Editável | Host e porta, sem conexão de banco |
+## O que ele faz
 
-Cada ciclo cria uma nova conexão. O pooling é desativado nos providers que oferecem essa configuração para que o tempo medido represente abertura e autenticação, em vez de reutilização de uma conexão anterior. SQLite é aberto em modo somente leitura e nunca é criado pelo programa.
+- Executa uma quantidade definida de ciclos ou permanece em modo contínuo.
+- Permite ligar e desligar DNS, Ping, TCP e banco de forma independente.
+- Exibe o resultado de cada camada, os 100 ciclos mais recentes e uma tendência compacta.
+- Calcula taxa de sucesso, média, mínimo, máximo, mediana, p95 e sequências de falhas.
+- Classifica falhas com código de diagnóstico, sugestão de correção e código original do provider.
+- Exporta toda a execução para CSV e TXT com gravação contínua.
+- Pode iniciar minimizado na bandeja e ser interrompido com segurança.
+- Mantém credenciais somente em memória; senha e connection string não são gravadas.
 
-Para SQL Anywhere, instale o cliente/driver ODBC do SAP SQL Anywhere na mesma arquitetura do executável. O campo **Driver ODBC** usa `SQL Anywhere 17` como padrão e pode ser alterado para o nome registrado na máquina. Se o driver não estiver instalado, a falha será registrada em `DB_Error`.
+Mais detalhes sobre códigos, sugestões e mapeamentos estão na [documentação do diagnóstico inteligente](docs/diagnostics/README.md).
 
-## Funcionalidades
+## Bancos suportados
 
-- Quantidade fixa de ciclos ou execução contínua sem limite.
-- Teste único para validar rapidamente todas as camadas selecionadas.
-- Execução assíncrona, intervalo configurável e timeout por etapa.
-- Seleção independente de DNS, Ping, TCP e teste de banco quando aplicável.
-- Resultado visual por etapa e grade com os 100 ciclos mais recentes.
-- Painel compacto de tendência por etapa, com taxa de sucesso, mediana, p95, máximo e falhas recentes.
-- Minimização para a bandeja, reabertura do painel e status no ícone.
-- Abertura do CSV, TXT e pasta de saída.
-- Parada manual e encerramento limpo, inclusive no desligamento do Windows.
-- CSV e TXT com `AutoFlush`, reduzindo perda de ciclos já concluídos.
-- Credenciais mantidas apenas na memória; usuário, senha e connection string não são gravados.
-- Nenhum item de Startup, serviço ou tarefa agendada é criado.
+| Tipo | Provider .NET | Porta padrão |
+|---|---|---:|
+| MySQL / MariaDB | `MySqlConnector` | 3306 |
+| PostgreSQL | `Npgsql` | 5432 |
+| SQL Server | `Microsoft.Data.SqlClient` | 1433 |
+| SAP SQL Anywhere | `System.Data.Odbc` | 2638 |
+| SQLite | `Microsoft.Data.Sqlite` | — |
+| Somente TCP | — | Editável |
 
-Ao selecionar SQLite, os campos de rede são substituídos pelo seletor de arquivo e DNS/Ping/TCP ficam desativados. Em **Somente TCP**, o teste de banco e os campos de credenciais ficam desativados.
+Cada ciclo abre uma nova conexão sem pooling, para que a medição represente conexão e autenticação reais. SQLite é aberto em modo somente leitura. SQL Anywhere requer que o driver ODBC correspondente esteja instalado na mesma arquitetura do aplicativo.
 
-## Saídas
+## Downloads
 
-O CSV é UTF-8 com BOM e separado por ponto e vírgula. As colunas de banco são genéricas:
+Cada release oferece dois pacotes para Windows x64:
 
-`DB_Type`, `DB_Connect_Status`, `DB_Connect_ms`, `DB_Query_Status`, `DB_Query_ms`, `DB_Total_ms` e `DB_Error`.
+- **Framework-dependent:** menor; requer o [.NET Desktop Runtime 8](https://dotnet.microsoft.com/download/dotnet/8.0).
+- **Self-contained:** maior; inclui o runtime e não requer instalação do .NET.
 
-Etapas não aplicáveis são registradas como `N/A`, com tempo zero. O TXT contém o detalhe de cada ciclo e um resumo com taxa de sucesso, média, mínimo, máximo, mediana, p95, sequências de falhas e tempo desde a última falha.
-
-## Requisitos
-
-- Windows.
-- .NET 8 SDK para compilar.
-- .NET Desktop Runtime 8 para executar uma publicação dependente do framework.
-- Internet no primeiro restore dos pacotes NuGet.
-- Driver ODBC do SAP SQL Anywhere apenas para testar esse banco.
+Os dois ZIPs mantêm o executável e suas DLLs como arquivos separados. Releases são criadas automaticamente ao publicar uma tag compatível com o arquivo [VERSION](VERSION), por exemplo `v1.0.0`.
 
 ## Compilar e testar
+
+Requisitos: Windows e .NET 8 SDK.
 
 ```powershell
 dotnet restore DBConnectionTester.sln
@@ -61,20 +52,16 @@ dotnet test DBConnectionTester.sln --configuration Release
 dotnet run --project DBConnectionTester.csproj
 ```
 
-Os testes automatizados validam perfis, portas, providers e connection strings sem depender de servidores reais. A conectividade com cada banco deve ser validada contra uma instância disponível no ambiente de destino.
+Os testes automatizados não dependem de servidores reais. A conectividade de cada provider deve ser validada contra uma instância disponível no ambiente de destino.
 
-## Publicar
+## Saídas
 
-Framework-dependent, menor e dependente do .NET Desktop Runtime 8:
+O CSV usa UTF-8 com BOM e separador por ponto e vírgula. O TXT registra cada ciclo e o resumo estatístico. Etapas desabilitadas são registradas como `N/A`, e os diagnósticos preservam código interno, sugestão, SQLSTATE e código nativo quando disponíveis.
 
-```powershell
-dotnet publish DBConnectionTester.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
-```
+## Desenvolvedor
 
-Self-contained, maior e sem exigir runtime instalado:
+Desenvolvido por [Guilherme Garcia](https://github.com/GUILHERME-GARCIATECH).
 
-```powershell
-dotnet publish DBConnectionTester.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
-```
+## Licença
 
-O resultado fica em `bin\Release\net8.0-windows\win-x64\publish\`.
+Distribuído sob a [Licença MIT](LICENSE).
