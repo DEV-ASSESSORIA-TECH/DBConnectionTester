@@ -151,9 +151,7 @@ public sealed partial class MainForm
                 MessageBoxIcon.Question);
             if (result != DialogResult.Yes)
                 return;
-            exitRequested = true;
-            ApplyRunUiState(RunUiState.Stopping);
-            runCoordinator.Stop();
+            BeginExitAfterRun();
             return;
         }
 
@@ -164,18 +162,29 @@ public sealed partial class MainForm
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
+        if (!runCoordinator.IsRunning)
+            return;
+
+        e.Cancel = true;
+        if (exitRequested)
+            return;
+
         if (e.CloseReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing)
         {
-            exitRequested = true;
-            runCoordinator.Stop();
-            trayIcon.Visible = false;
+            BeginExitAfterRun();
             return;
         }
-        if (runCoordinator.IsRunning && !exitRequested)
-        {
-            e.Cancel = true;
-            HideToTray("Teste continua em execução.");
-        }
+
+        HideToTray("Teste continua em execução.");
+    }
+
+    private void BeginExitAfterRun()
+    {
+        exitRequested = true;
+        ApplyRunUiState(RunUiState.Stopping);
+        lblStatus.Text = "Encerrando teste, finalizando os arquivos e saindo...";
+        trayStatus.Text = "Finalizando arquivos...";
+        runCoordinator.Stop();
     }
 
     private void ApplyRunUiState(RunUiState state, TestSettings? settings = null)
