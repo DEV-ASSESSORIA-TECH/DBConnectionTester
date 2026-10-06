@@ -91,9 +91,11 @@ public sealed class CsvResultWriter : IAsyncDisposable
         values.Add(Escape(issue?.TechnicalMessage));
     }
 
-    private static string Escape(string? value)
+    internal static string Escape(string? value)
     {
         value ??= "";
+        if (value.Length > 0 && value[0] is '=' or '+' or '-' or '@' or '\t' or '\r' or '\n')
+            value = "'" + value;
         return value.Contains(';') || value.Contains('"') || value.Contains('\n') || value.Contains('\r')
             ? '"' + value.Replace("\"", "\"\"") + '"'
             : value;

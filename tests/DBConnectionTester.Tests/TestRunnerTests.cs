@@ -21,6 +21,18 @@ public sealed class TestRunnerTests
         Assert.DoesNotContain("MySQL", CsvResultWriter.Header, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("=1+1", "'=1+1")]
+    [InlineData("+cmd", "'+cmd")]
+    [InlineData("-2+3", "'-2+3")]
+    [InlineData("@SUM(A1:A2)", "'@SUM(A1:A2)")]
+    [InlineData("\t=1+1", "'\t=1+1")]
+    [InlineData("safe text", "safe text")]
+    public void CsvNeutralizesSpreadsheetFormulas(string input, string expected)
+    {
+        Assert.Equal(expected, CsvResultWriter.Escape(input));
+    }
+
     [Fact]
     public async Task ConnectionFailureDoesNotAlsoCountAsQueryFailure()
     {
