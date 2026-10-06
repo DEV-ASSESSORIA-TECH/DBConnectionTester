@@ -98,6 +98,22 @@ public sealed class TestRunnerTests
         }
     }
 
+    [Fact]
+    public async Task CancellationDuringOutputStillPersistsCompletedCycle()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var output = new CancellingOutput(cancellation);
+        var runner = new TestRunner(new SuccessfulCycleExecutor(), new FixedOutputFactory(output));
+        var settings = Settings(Path.GetTempPath()) with { TestCount = 2 };
+
+        var summary = await runner.RunAsync(settings, progress: null, cancellation.Token);
+
+        Assert.True(summary.Stopped);
+        Assert.Equal(1, summary.Completed);
+        Assert.True(output.CycleWritten);
+        Assert.Equal(1, output.CompletedMetrics);
+    }
+
     private static TestSettings Settings(string directory) => new(
         DatabaseType.MySqlMariaDb,
         "127.0.0.1",
@@ -131,5 +147,44 @@ public sealed class TestRunnerTests
         public TestProgress? Last { get; private set; }
 
         public void Report(TestProgress value) => Last = value;
+    }
+
+    private sealed class SuccessfulCycleExecutor : ITestCycleExecutor
+    {
+        public Task<TestCycleResult> ExecuteAsync(TestSettings settings, long number, CancellationToken token) =>
+            Task.FromResult(new TestCycleResult(
+                number,
+                DateTimeOffset.UtcNow,
+                DnsResult.Skipped(),
+                StepResult.Skipped(),
+                TcpResult.Skipped(),
+                DatabaseResult.Skipped()));
+    }
+
+    private sealed class FixedOutputFactory(IRunOutput output) : IRunOutputFactory
+    {
+        public Task<IRunOutput> CreateAsync(TestSettings settings) => Task.FromResult(output);
+    }
+
+    private sealed class CancellingOutput(CancellationTokenSource cancellation) : IRunOutput
+    {
+        public bool CycleWritten { get; private set; }
+        public long CompletedMetrics { get; private set; }
+
+        public Task WriteCycleAsync(TestCycleResult cycle, CancellationToken token)
+        {
+            cancellation.Cancel();
+            token.ThrowIfCancellationRequested();
+            CycleWritten = true;
+            return Task.CompletedTask;
+        }
+
+        public Task CompleteAsync(RunSummary summary, RunMetrics metrics)
+        {
+            CompletedMetrics = metrics.Completed;
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

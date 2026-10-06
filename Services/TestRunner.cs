@@ -34,8 +34,8 @@ public sealed class TestRunner : ITestRunner
             {
                 token.ThrowIfCancellationRequested();
                 var cycle = await cycleExecutor.ExecuteAsync(settings, number, token);
+                await output.WriteCycleAsync(cycle, CancellationToken.None);
                 metrics.Add(settings, cycle);
-                await output.WriteCycleAsync(cycle, token);
                 progress?.Report(metrics.CreateProgress(cycle));
 
                 if (!settings.Continuous && number >= settings.TestCount)
