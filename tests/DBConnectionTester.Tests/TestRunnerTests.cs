@@ -15,6 +15,9 @@ public sealed class TestRunnerTests
         Assert.Contains("DB_Connect_Status", CsvResultWriter.Header);
         Assert.Contains("DB_Query_Status", CsvResultWriter.Header);
         Assert.Contains("DB_Error", CsvResultWriter.Header);
+        Assert.Contains("DB_Connect_Diagnostic_Code", CsvResultWriter.Header);
+        Assert.Contains("DB_Query_Provider_Code", CsvResultWriter.Header);
+        Assert.Contains("DNS_Suggestion_Code", CsvResultWriter.Header);
         Assert.DoesNotContain("MySQL", CsvResultWriter.Header, StringComparison.OrdinalIgnoreCase);
     }
 

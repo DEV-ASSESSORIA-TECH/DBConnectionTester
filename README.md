@@ -2,6 +2,8 @@
 
 Aplicativo Windows leve para medir, de forma repetida, as camadas envolvidas no acesso a bancos de dados: resolução DNS, Ping/ICMP, abertura TCP, conexão ADO.NET e uma consulta `SELECT 1`.
 
+Consulte a [documentação do diagnóstico inteligente](docs/diagnostics/README.md) para códigos internos, sugestões, mapeamentos de providers e formato das saídas.
+
 ## Bancos e providers
 
 | Tipo | Provider .NET | Porta padrão | Campos específicos |
