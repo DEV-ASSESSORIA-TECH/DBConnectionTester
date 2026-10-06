@@ -42,22 +42,25 @@ public static class StepStatusExtensions
     };
 }
 
-public sealed record DnsResult(StepStatus Status, string ResolvedIp, long ElapsedMs, string Error)
+public sealed record DnsResult(StepStatus Status, string ResolvedIp, long ElapsedMs, DiagnosticIssue? Diagnostic)
 {
     public bool Ok => Status == StepStatus.Success;
-    public static DnsResult Skipped() => new(StepStatus.Skipped, "", 0, "");
+    public string Error => Diagnostic?.Summary ?? "";
+    public static DnsResult Skipped() => new(StepStatus.Skipped, "", 0, null);
 }
 
-public sealed record StepResult(StepStatus Status, long ElapsedMs, string Extra, string Error)
+public sealed record StepResult(StepStatus Status, long ElapsedMs, string Extra, DiagnosticIssue? Diagnostic)
 {
     public bool Ok => Status == StepStatus.Success;
-    public static StepResult Skipped() => new(StepStatus.Skipped, 0, "", "");
+    public string Error => Diagnostic?.Summary ?? "";
+    public static StepResult Skipped() => new(StepStatus.Skipped, 0, "", null);
 }
 
-public sealed record TcpResult(StepStatus Status, long ElapsedMs, string LocalIp, string RemoteIp, string Error)
+public sealed record TcpResult(StepStatus Status, long ElapsedMs, string LocalIp, string RemoteIp, DiagnosticIssue? Diagnostic)
 {
     public bool Ok => Status == StepStatus.Success;
-    public static TcpResult Skipped() => new(StepStatus.Skipped, 0, "", "", "");
+    public string Error => Diagnostic?.Summary ?? "";
+    public static TcpResult Skipped() => new(StepStatus.Skipped, 0, "", "", null);
 }
 
 public sealed record DatabaseResult(
@@ -66,11 +69,13 @@ public sealed record DatabaseResult(
     StepStatus QueryStatus,
     long QueryMs,
     long TotalMs,
-    string Error)
+    DiagnosticIssue? ConnectDiagnostic,
+    DiagnosticIssue? QueryDiagnostic)
 {
     public bool ConnectOk => ConnectStatus == StepStatus.Success;
     public bool QueryOk => QueryStatus == StepStatus.Success;
-    public static DatabaseResult Skipped() => new(StepStatus.Skipped, 0, StepStatus.Skipped, 0, 0, "");
+    public string Error => ConnectDiagnostic?.Summary ?? QueryDiagnostic?.Summary ?? "";
+    public static DatabaseResult Skipped() => new(StepStatus.Skipped, 0, StepStatus.Skipped, 0, 0, null, null);
 }
 
 public sealed record TestCycleResult(

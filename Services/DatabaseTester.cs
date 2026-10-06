@@ -28,7 +28,8 @@ internal static class DatabaseTester
                 total.Stop();
                 connectMs = (long)connect.Elapsed.TotalMilliseconds;
                 return new DatabaseResult(StepStatus.Failed, connectMs, StepStatus.Skipped, 0,
-                    (long)total.Elapsed.TotalMilliseconds, "CONNECT: " + ErrorFormatter.Short(exception));
+                    (long)total.Elapsed.TotalMilliseconds,
+                    DiagnosticClassifier.Database(exception, DiagnosticLayer.DatabaseConnect, settings), null);
             }
 
             var query = Stopwatch.StartNew();
@@ -43,7 +44,8 @@ internal static class DatabaseTester
                 queryMs = (long)query.Elapsed.TotalMilliseconds;
                 var ok = Convert.ToInt32(value, CultureInfo.InvariantCulture) == 1;
                 return new DatabaseResult(StepStatus.Success, connectMs, ok ? StepStatus.Success : StepStatus.Failed, queryMs,
-                    (long)total.Elapsed.TotalMilliseconds, ok ? "" : "SELECT 1 retornou valor inesperado");
+                    (long)total.Elapsed.TotalMilliseconds, null,
+                    ok ? null : DiagnosticClassifier.UnexpectedQueryResult(value));
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -51,14 +53,16 @@ internal static class DatabaseTester
                 total.Stop();
                 queryMs = (long)query.Elapsed.TotalMilliseconds;
                 return new DatabaseResult(StepStatus.Success, connectMs, StepStatus.Failed, queryMs,
-                    (long)total.Elapsed.TotalMilliseconds, "QUERY: " + ErrorFormatter.Short(exception));
+                    (long)total.Elapsed.TotalMilliseconds, null,
+                    DiagnosticClassifier.Database(exception, DiagnosticLayer.DatabaseQuery, settings));
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             total.Stop();
             return new DatabaseResult(StepStatus.Failed, connectMs, StepStatus.Skipped, queryMs,
-                (long)total.Elapsed.TotalMilliseconds, ErrorFormatter.Short(exception));
+                (long)total.Elapsed.TotalMilliseconds,
+                DiagnosticClassifier.Database(exception, DiagnosticLayer.DatabaseConnect, settings), null);
         }
     }
 }
