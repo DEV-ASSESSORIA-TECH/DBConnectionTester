@@ -19,7 +19,7 @@ public static class DatabaseConnectionFactory
             DatabaseType.MySqlMariaDb => CreateMySql(settings, timeout),
             DatabaseType.PostgreSql => CreatePostgreSql(settings, timeout),
             DatabaseType.SqlServer => CreateSqlServer(settings, timeout),
-            DatabaseType.SapSqlAnywhere => CreateSqlAnywhere(settings),
+            DatabaseType.SapSqlAnywhere => CreateSqlAnywhere(settings, timeout),
             DatabaseType.Sqlite => CreateSqlite(settings, timeout),
             _ => throw new InvalidOperationException("O tipo selecionado não oferece conexão de banco de dados.")
         };
@@ -85,12 +85,13 @@ public static class DatabaseConnectionFactory
         return new SqlConnection(builder.ConnectionString);
     }
 
-    private static OdbcConnection CreateSqlAnywhere(TestSettings settings)
+    private static OdbcConnection CreateSqlAnywhere(TestSettings settings, int timeout)
     {
         var builder = new OdbcConnectionStringBuilder { Driver = settings.OdbcDriver };
         builder["UID"] = settings.User;
         builder["PWD"] = settings.Password;
         builder["HOST"] = $"{settings.Host}:{settings.Port}";
+        builder["Connection Timeout"] = timeout;
         if (!string.IsNullOrWhiteSpace(settings.Database))
             builder["DBN"] = settings.Database;
         return new OdbcConnection(builder.ConnectionString);

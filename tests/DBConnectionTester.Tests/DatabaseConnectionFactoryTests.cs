@@ -60,6 +60,7 @@ public sealed class DatabaseConnectionFactoryTests
         Assert.Equal("p;ass", postgres.Password);
         Assert.Contains("pwd={p;ass}", sqlAnywhere.ConnectionString, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Driver={SQL Anywhere }} 17}", sqlAnywhere.ConnectionString, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("5", sqlAnywhere["Connection Timeout"]);
     }
 
     [Fact]

@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Data.Common;
+using System.Data.Odbc;
 using System.Globalization;
 using DBConnectionTester.Models;
 
@@ -11,14 +13,32 @@ internal static class DatabaseTester
         long connectMs = 0;
         long queryMs = 0;
         var total = Stopwatch.StartNew();
+        DbConnection? connection = null;
+        Task? deferredOdbcOpen = null;
 
         try
         {
-            await using var connection = DatabaseConnectionFactory.Create(settings);
+            connection = DatabaseConnectionFactory.Create(settings);
             var connect = Stopwatch.StartNew();
             try
             {
-                await connection.OpenAsync(token).WaitAsync(settings.Timeout, token);
+                if (connection is OdbcConnection)
+                {
+                    var openTask = Task.Run(connection.Open, CancellationToken.None);
+                    try
+                    {
+                        await openTask.WaitAsync(settings.Timeout, token);
+                    }
+                    catch
+                    {
+                        deferredOdbcOpen = openTask;
+                        throw;
+                    }
+                }
+                else
+                {
+                    await connection.OpenAsync(token).WaitAsync(settings.Timeout, token);
+                }
                 connect.Stop();
                 connectMs = (long)connect.Elapsed.TotalMilliseconds;
             }
@@ -63,6 +83,32 @@ internal static class DatabaseTester
             return new DatabaseResult(StepStatus.Failed, connectMs, StepStatus.Skipped, queryMs,
                 (long)total.Elapsed.TotalMilliseconds,
                 DiagnosticClassifier.Database(exception, DiagnosticLayer.DatabaseConnect, settings), null);
+        }
+        finally
+        {
+            if (connection is not null)
+            {
+                if (deferredOdbcOpen is null)
+                    await connection.DisposeAsync();
+                else
+                    _ = DisposeAfterOpenCompletesAsync(connection, deferredOdbcOpen);
+            }
+        }
+    }
+
+    private static async Task DisposeAfterOpenCompletesAsync(DbConnection connection, Task openTask)
+    {
+        try
+        {
+            await openTask.ConfigureAwait(false);
+        }
+        catch
+        {
+            // The connection result was already classified as a timeout or cancellation.
+        }
+        finally
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
         }
     }
 }
