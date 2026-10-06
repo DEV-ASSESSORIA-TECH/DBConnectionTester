@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.ComponentModel;
 using DBConnectionTester.Models;
 
 namespace DBConnectionTester.UI;
@@ -229,6 +230,7 @@ internal sealed class MetricTile : Panel
         Controls.Add(captionLabel);
     }
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public string Value
     {
         get => valueLabel.Text;
