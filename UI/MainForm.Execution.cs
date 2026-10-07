@@ -205,6 +205,8 @@ public sealed partial class MainForm
         btnStart.Enabled = !active;
         btnStop.Enabled = active && !stopping;
         trayStop.Enabled = active && !stopping;
+        profilesPage.SetEditingEnabled(!active);
+        settingsPage.SetOperationsEnabled(!active);
 
         var hasOutput = !string.IsNullOrWhiteSpace(currentCsvPath);
         btnOpenCsv.Enabled = hasOutput;

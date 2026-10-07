@@ -49,8 +49,8 @@ public sealed partial class MainForm : Form
     private HomePage homePage = null!;
     private UserControl executionPage = null!;
     private UserControl historyPage = null!;
-    private UserControl profilesPage = null!;
-    private UserControl settingsPage = null!;
+    private ProfilesPage profilesPage = null!;
+    private SettingsPage settingsPage = null!;
 
     private readonly NotifyIcon trayIcon = new();
     private readonly ToolStripMenuItem trayStatus = new("Pronto") { Enabled = false };
@@ -69,9 +69,9 @@ public sealed partial class MainForm : Form
     private RowBinding odbcDriverRow = null!;
     private RowBinding sqliteFileRow = null!;
 
-    private readonly RunCoordinator runCoordinator;
+    private RunCoordinator runCoordinator;
     private readonly SqliteApplicationStore applicationStore;
-    private readonly ApplicationSettings applicationSettings;
+    private ApplicationSettings applicationSettings;
     private readonly TestSettingsValidator settingsValidator = new();
     private RunUiState runUiState = RunUiState.Idle;
     private bool exitRequested;
@@ -84,9 +84,7 @@ public sealed partial class MainForm : Form
     {
         this.applicationStore = applicationStore;
         this.applicationSettings = applicationSettings;
-        runCoordinator = new RunCoordinator(new TestRunner(
-            new TestCycleExecutor(),
-            new RunOutputFactory(applicationStore, applicationSettings)));
+        runCoordinator = CreateRunCoordinator(applicationSettings);
         Text = "DB Connection Tester";
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -100,6 +98,7 @@ public sealed partial class MainForm : Form
         ApplyDatabaseType(resetPort: true);
         ApplyRunUiState(RunUiState.Idle);
         ThemeManager.Apply(this, applicationSettings.Theme);
+        Shown += async (_, _) => await RefreshProfilesAsync();
     }
 
     private DatabaseProfile SelectedProfile => cmbDatabaseType.SelectedItem as DatabaseProfile
@@ -109,6 +108,10 @@ public sealed partial class MainForm : Form
         cmbSqlServerAuth.SelectedItem is SqlServerAuthentication authentication
             ? authentication
             : SqlServerAuthentication.Windows;
+
+    private RunCoordinator CreateRunCoordinator(ApplicationSettings settings) => new(new TestRunner(
+        new TestCycleExecutor(),
+        new RunOutputFactory(applicationStore, settings)));
 }
 
 internal enum RunUiState

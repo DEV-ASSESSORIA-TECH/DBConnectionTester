@@ -18,6 +18,13 @@ internal static class Program
                 await new SharedMachineStorageSetup().PrepareAsync();
                 return 0;
             }
+            if (args.Length == 1 && args[0].Equals(
+                    SharedMachineStorageSetup.DirectoryCommandLineSwitch,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                await new SharedMachineStorageSetup().PrepareDirectoryAsync();
+                return 0;
+            }
 
             var resolver = new StorageResolver(
                 StorageLocations.CreateDefault(),

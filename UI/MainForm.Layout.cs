@@ -1,4 +1,5 @@
 using DBConnectionTester.Models;
+using DBConnectionTester.Services.Storage;
 
 namespace DBConnectionTester.UI;
 
@@ -17,10 +18,15 @@ public sealed partial class MainForm
         homePage = new HomePage(applicationStore.Descriptor);
         executionPage = BuildExecutionPage();
         historyPage = CreatePlaceholderPage("Histórico", "As execuções salvas aparecerão aqui.");
-        profilesPage = CreatePlaceholderPage("Perfis", "Gerencie configurações de conexão reutilizáveis.");
-        settingsPage = CreatePlaceholderPage("Configurações", "Tema, armazenamento e saída legada.");
+        var repository = new PersistentSettingsRepository(applicationStore);
+        profilesPage = new ProfilesPage(repository);
+        settingsPage = new SettingsPage(applicationStore, applicationSettings, repository, new RegistryStoragePreferenceStore());
         homePage.NewRunRequested += (_, _) => ShowPage("Nova execução", executionPage);
         homePage.HistoryRequested += (_, _) => ShowPage("Histórico", historyPage);
+        profilesPage.UseRequested += ApplyProfile;
+        settingsPage.SettingsSaved += ApplyApplicationSettings;
+        settingsPage.StorageSelected += descriptor =>
+            globalStatus.Text = $"Próxima inicialização: {descriptor.Scope} · {descriptor.DatabasePath}";
 
         var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176));
@@ -124,6 +130,53 @@ public sealed partial class MainForm
         page.Controls.Add(text);
         page.Controls.Add(heading);
         return page;
+    }
+
+    private async Task RefreshProfilesAsync()
+    {
+        try
+        {
+            await profilesPage.RefreshAsync();
+        }
+        catch (ApplicationStoreException exception)
+        {
+            MessageBox.Show(this, exception.Message, "Perfis", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void ApplyProfile(SavedConnectionProfile profile)
+    {
+        cmbDatabaseType.SelectedItem = DatabaseProfiles.All.First(item => item.Type == profile.DatabaseType);
+        txtHost.Text = profile.Host;
+        if (profile.Port is int value)
+            numPort.Value = value;
+        txtUser.Text = profile.UserName;
+        txtPassword.Clear();
+        txtDatabase.Text = profile.DatabaseName;
+        txtSqliteFile.Text = profile.SqliteFile;
+        cmbSqlServerAuth.SelectedItem = profile.SqlServerAuthentication;
+        txtOdbcDriver.Text = profile.OdbcDriver;
+        numTests.Value = profile.ExecutionDefaults.TestCount;
+        chkContinuous.Checked = profile.ExecutionDefaults.Continuous;
+        numInterval.Value = (decimal)profile.ExecutionDefaults.IntervalSeconds;
+        numTimeout.Value = profile.ExecutionDefaults.TimeoutSeconds;
+        chkDns.Checked = profile.ExecutionDefaults.Dns;
+        chkPing.Checked = profile.ExecutionDefaults.Ping;
+        chkTcp.Checked = profile.ExecutionDefaults.Tcp;
+        chkDatabase.Checked = profile.ExecutionDefaults.DatabaseTest;
+        chkBackground.Checked = profile.ExecutionDefaults.StartInBackground;
+        ApplyDatabaseType(resetPort: false);
+        ShowPage("Nova execução", executionPage);
+        txtPassword.Focus();
+    }
+
+    private void ApplyApplicationSettings(ApplicationSettings settings)
+    {
+        applicationSettings = settings;
+        runCoordinator.Dispose();
+        runCoordinator = CreateRunCoordinator(settings);
+        ThemeManager.Apply(this, settings.Theme);
+        lblStatus.Text = "Configurações salvas.";
     }
 
     private GroupBox BuildConnectionGroup()

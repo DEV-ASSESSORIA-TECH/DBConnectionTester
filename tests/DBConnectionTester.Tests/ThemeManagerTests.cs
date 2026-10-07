@@ -1,3 +1,4 @@
+using System.Drawing;
 using DBConnectionTester.Models;
 using DBConnectionTester.UI;
 

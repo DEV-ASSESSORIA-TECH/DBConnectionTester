@@ -30,6 +30,7 @@ public sealed class WindowsSharedDirectorySecurity : ISharedDirectorySecurity
 public sealed class SharedMachineStorageSetup
 {
     public const string CommandLineSwitch = "--prepare-shared-store";
+    public const string DirectoryCommandLineSwitch = "--prepare-shared-directory";
     private readonly string sharedDatabasePath;
     private readonly ISharedDirectorySecurity security;
 
@@ -46,13 +47,19 @@ public sealed class SharedMachineStorageSetup
 
     public async Task<SqliteApplicationStore> PrepareAsync(CancellationToken token = default)
     {
+        await PrepareDirectoryAsync(token);
+        return await SqliteApplicationStore.OpenOrCreateAsync(
+            sharedDatabasePath, StorageScope.SharedMachine, token: token);
+    }
+
+    public async Task<string> PrepareDirectoryAsync(CancellationToken token = default)
+    {
         var directory = Path.GetDirectoryName(sharedDatabasePath)
             ?? throw new ApplicationStoreException("O caminho compartilhado é inválido.");
         Directory.CreateDirectory(directory);
         security.GrantModifyToLocalUsers(directory);
         await VerifyWriteAccessAsync(directory, token);
-        return await SqliteApplicationStore.OpenOrCreateAsync(
-            sharedDatabasePath, StorageScope.SharedMachine, token: token);
+        return directory;
     }
 
     private static async Task VerifyWriteAccessAsync(string directory, CancellationToken token)
@@ -72,7 +79,13 @@ public sealed class SharedMachineStorageSetup
 
 public sealed class SharedMachineStorageElevator
 {
-    public async Task PrepareAsync(CancellationToken token = default)
+    public Task PrepareAsync(CancellationToken token = default) =>
+        RunElevatedAsync(SharedMachineStorageSetup.CommandLineSwitch, token);
+
+    public Task PrepareDirectoryAsync(CancellationToken token = default) =>
+        RunElevatedAsync(SharedMachineStorageSetup.DirectoryCommandLineSwitch, token);
+
+    private static async Task RunElevatedAsync(string commandLineSwitch, CancellationToken token)
     {
         var executable = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(executable) || !File.Exists(executable))
@@ -80,7 +93,7 @@ public sealed class SharedMachineStorageElevator
         using var process = Process.Start(new ProcessStartInfo
         {
             FileName = executable,
-            Arguments = SharedMachineStorageSetup.CommandLineSwitch,
+            Arguments = commandLineSwitch,
             UseShellExecute = true,
             Verb = "runas",
             WorkingDirectory = AppContext.BaseDirectory
