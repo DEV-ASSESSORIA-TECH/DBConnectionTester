@@ -86,7 +86,7 @@ public sealed partial class MainForm : Form
         this.applicationStore = applicationStore;
         this.applicationSettings = applicationSettings;
         runCoordinator = CreateRunCoordinator(applicationSettings);
-        Text = "DB Connection Tester";
+        Text = $"DB Connection Tester {ApplicationInfo.Version}";
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
         MinimumSize = new Size(980, 720);

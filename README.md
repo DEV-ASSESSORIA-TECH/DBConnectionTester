@@ -2,7 +2,7 @@
 
 Aplicativo Windows portátil para testar repetidamente cada camada envolvida no acesso a bancos de dados: DNS, Ping/ICMP, TCP, conexão ADO.NET e `SELECT 1`.
 
-**Versão atual:** `1.0.3`
+**Versão atual:** `2.0.0`
 
 ![Arquitetura de armazenamento da versão 2.0](docs/images/storage-architecture.svg)
 

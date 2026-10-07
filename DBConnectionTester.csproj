@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>DBConnectionTester</RootNamespace>
     <AssemblyName>DBConnectionTester</AssemblyName>
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/VERSION').Trim())</Version>
   </PropertyGroup>
 
   <ItemGroup>
