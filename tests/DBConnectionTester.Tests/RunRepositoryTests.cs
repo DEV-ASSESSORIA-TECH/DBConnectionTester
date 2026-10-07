@@ -1,11 +1,31 @@
 using DBConnectionTester.Models;
 using DBConnectionTester.Services.Storage;
+using DBConnectionTester.Services.Output;
 using Microsoft.Data.Sqlite;
 
 namespace DBConnectionTester.Tests;
 
 public sealed class RunRepositoryTests
 {
+    [Fact]
+    public async Task DatabaseOutputLinksRunToSelectedProfile()
+    {
+        using var fixture = await RunFixture.CreateAsync();
+        var profiles = new PersistentSettingsRepository(fixture.Store);
+        var saved = await profiles.SaveAsync(new ConnectionProfileDraft(
+            null, "Produção", DatabaseType.MySqlMariaDb, "server", 3306, "user", "db", "",
+            SqlServerAuthentication.SqlLogin, "", ProfileExecutionDefaults.Default));
+        var settings = Settings("temporary-password") with { ProfileId = saved.ProfileId };
+
+        await using var output = await DatabaseRunOutput.CreateAsync(fixture.Store, settings);
+
+        await using var connection = await fixture.Store.OpenConnectionAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT profile_id FROM runs WHERE run_id = $id;";
+        command.Parameters.AddWithValue("$id", output.RunId.ToString("D"));
+        Assert.Equal(saved.ProfileId.ToString("D"), await command.ExecuteScalarAsync());
+    }
+
     [Fact]
     public async Task PersistsCycleAndCompletionWithoutPassword()
     {

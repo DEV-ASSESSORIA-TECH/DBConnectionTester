@@ -29,7 +29,7 @@ public sealed class DatabaseRunOutput : IRunOutput
         {
             var repository = new RunRepository(store);
             var runId = Guid.NewGuid();
-            await repository.BeginAsync(runId, settings);
+            await repository.BeginAsync(runId, settings, settings.ProfileId);
             return new DatabaseRunOutput(runId, repository, lease);
         }
         catch

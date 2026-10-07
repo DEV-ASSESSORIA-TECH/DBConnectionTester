@@ -122,6 +122,13 @@ public sealed partial class MainForm
             item.Value.Font = new Font(item.Value.Font, item.Key == title ? FontStyle.Bold : FontStyle.Regular);
     }
 
+    internal void NavigateTo(string title)
+    {
+        if (!navigationButtons.TryGetValue(title, out var button))
+            throw new ArgumentOutOfRangeException(nameof(title));
+        button.PerformClick();
+    }
+
     private static UserControl CreatePlaceholderPage(string title, string description)
     {
         var page = new UserControl { Dock = DockStyle.Fill, Padding = new Padding(28) };
@@ -177,6 +184,7 @@ public sealed partial class MainForm
         chkTcp.Checked = profile.ExecutionDefaults.Tcp;
         chkDatabase.Checked = profile.ExecutionDefaults.DatabaseTest;
         chkBackground.Checked = profile.ExecutionDefaults.StartInBackground;
+        selectedProfileId = profile.ProfileId;
         ApplyDatabaseType(resetPort: false);
         ShowPage("Nova execução", executionPage);
         txtPassword.Focus();
@@ -349,7 +357,11 @@ public sealed partial class MainForm
 
     private void WireEvents()
     {
-        cmbDatabaseType.SelectedIndexChanged += (_, _) => ApplyDatabaseType(resetPort: true);
+        cmbDatabaseType.SelectedIndexChanged += (_, _) =>
+        {
+            selectedProfileId = null;
+            ApplyDatabaseType(resetPort: true);
+        };
         cmbSqlServerAuth.SelectedIndexChanged += (_, _) => ApplyCredentialVisibility();
         chkContinuous.CheckedChanged += (_, _) => numTests.Enabled = configurationEnabled && !chkContinuous.Checked;
         btnBrowseSqlite.Click += (_, _) => BrowseSqliteFile();

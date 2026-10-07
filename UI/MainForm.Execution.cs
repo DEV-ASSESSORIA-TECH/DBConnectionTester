@@ -1,5 +1,6 @@
 using DBConnectionTester.Application;
 using DBConnectionTester.Models;
+using DBConnectionTester.Services.Storage;
 
 namespace DBConnectionTester.UI;
 
@@ -29,6 +30,7 @@ public sealed partial class MainForm
         ApplyRunUiState(RunUiState.Running, settings);
         UpdateTrayStatus(settings, new TestProgress(0, 0, 0, 0, 0, 0));
         lblStatus.Text = singleRun ? "Executando teste único..." : "Preparando execução...";
+        homePage.UpdateRunStatus(lblStatus.Text);
 
         if (!singleRun && chkBackground.Checked)
             HideToTray("Teste iniciado em segundo plano.");
@@ -38,7 +40,7 @@ public sealed partial class MainForm
             var uiProgress = new Progress<TestProgress>(value => UpdateProgress(settings, value, singleRun));
             var summary = await runCoordinator.StartAsync(settings, uiProgress);
             completedTests = summary.Completed;
-            CompleteRun(settings, summary);
+            await CompleteRunAsync(settings, summary);
         }
         catch (Exception exception)
         {
@@ -46,6 +48,8 @@ public sealed partial class MainForm
             lblStatus.Text = $"Erro: {exception.Message}";
             ShowPanel();
             MessageBox.Show(this, exception.ToString(), "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            homePage.UpdateRunStatus("A última execução falhou. Consulte o histórico para obter detalhes.");
+            await RefreshHistoryAsync();
         }
         finally
         {
@@ -79,7 +83,7 @@ public sealed partial class MainForm
             chkDatabase.Checked);
 
         var result = settingsValidator.Validate(input);
-        return result.IsValid ? result.Settings : ValidationError(result.ErrorMessage);
+        return result.IsValid ? result.Settings! with { ProfileId = selectedProfileId } : ValidationError(result.ErrorMessage);
     }
 
     private TestSettings? ValidationError(string message)
@@ -108,25 +112,41 @@ public sealed partial class MainForm
         lblStatus.Text = $"{prefix} | DNS: {value.DnsFailures} | Ping: {value.PingFailures} | " +
                          $"TCP: {value.TcpFailures} | DB conexão: {value.DatabaseConnectFailures} | " +
                          $"DB consulta: {value.DatabaseQueryFailures}";
+        homePage.UpdateRunStatus(lblStatus.Text);
         UpdateTrayStatus(settings, value);
     }
 
-    private void CompleteRun(TestSettings settings, RunSummary summary)
+    private async Task CompleteRunAsync(TestSettings settings, RunSummary summary)
     {
         currentCsvPath = summary.CsvPath ?? "";
         currentTxtPath = summary.TxtPath ?? "";
         ApplyRunUiState(RunUiState.Completed);
+        IReadOnlyList<PersistedRunWarning> warnings = [];
+        try
+        {
+            var persisted = await new RunHistoryRepository(applicationStore).GetDetailsAsync(summary.RunId);
+            warnings = persisted?.Warnings ?? [];
+        }
+        catch (Exception exception) when (exception is ApplicationStoreException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            // A execução já foi concluída; uma falha de atualização da UI não altera seu resultado persistido.
+        }
         if (summary.Stopped)
         {
             lblStatus.Text = $"Teste interrompido. {summary.Completed:N0} verificações gravadas.";
+            homePage.UpdateRunStatus(lblStatus.Text);
             trayStatus.Text = $"Interrompido - {summary.Completed:N0} testes";
             SafeTrayText($"DB Connection Tester - parado - {summary.Completed:N0}");
+            await RefreshHistoryAsync();
             return;
         }
 
         lblStatus.Text = string.IsNullOrWhiteSpace(summary.CsvPath)
             ? $"Concluído. {summary.Completed:N0} verificações salvas no histórico."
             : $"Concluído. Histórico salvo | CSV: {Path.GetFileName(summary.CsvPath)} | TXT: {Path.GetFileName(summary.TxtPath)}";
+        if (warnings.Count > 0)
+            lblStatus.Text += $" | {warnings.Count} aviso(s) de saída";
+        homePage.UpdateRunStatus(lblStatus.Text);
         progressBar.Value = 100;
         trayStatus.Text = $"Concluído - {summary.Completed:N0} testes";
         SafeTrayText($"DB Connection Tester - concluído - {summary.Completed:N0}");
@@ -135,6 +155,16 @@ public sealed partial class MainForm
         trayIcon.BalloonTipText = $"Teste concluído. {summary.Completed:N0} verificações executadas.";
         trayIcon.BalloonTipIcon = ToolTipIcon.Info;
         trayIcon.ShowBalloonTip(3000);
+        await RefreshHistoryAsync();
+        if (warnings.Count > 0)
+        {
+            MessageBox.Show(this,
+                "A execução foi salva no SQLite, mas houve falha parcial:\n\n" +
+                string.Join(Environment.NewLine, warnings.Select(item => $"[{item.Code}] {item.Message}")),
+                "Execução concluída com avisos",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
     }
 
     private void RequestStop()
@@ -144,6 +174,7 @@ public sealed partial class MainForm
 
         ApplyRunUiState(RunUiState.Stopping);
         lblStatus.Text = "Encerrando teste e finalizando o log...";
+        homePage.UpdateRunStatus(lblStatus.Text);
         trayStatus.Text = "Encerrando teste...";
         runCoordinator.Stop();
     }

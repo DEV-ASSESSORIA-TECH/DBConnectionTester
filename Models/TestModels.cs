@@ -57,6 +57,7 @@ public sealed record TestSettings
     public bool Ping { get; internal init; }
     public bool Tcp { get; internal init; }
     public bool DatabaseTest { get; internal init; }
+    public Guid? ProfileId { get; internal init; }
 
     public DatabaseProfile Profile => DatabaseProfiles.Get(DatabaseType);
     public string Target => DatabaseType == DatabaseType.Sqlite ? SqliteFile : $"{Host}:{Port!.Value}";

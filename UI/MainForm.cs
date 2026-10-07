@@ -79,6 +79,7 @@ public sealed partial class MainForm : Form
     private long completedTests;
     private string currentCsvPath = "";
     private string currentTxtPath = "";
+    private Guid? selectedProfileId;
 
     public MainForm(SqliteApplicationStore applicationStore, ApplicationSettings applicationSettings)
     {
@@ -116,6 +117,8 @@ public sealed partial class MainForm : Form
     private RunCoordinator CreateRunCoordinator(ApplicationSettings settings) => new(new TestRunner(
         new TestCycleExecutor(),
         new RunOutputFactory(applicationStore, settings)));
+
+    internal ApplicationTheme ConfiguredTheme => settingsPage.SelectedTheme;
 }
 
 internal enum RunUiState

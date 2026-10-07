@@ -39,8 +39,10 @@ public sealed class SettingsPage : UserControl
         Dock = DockStyle.Fill;
         AutoScroll = true;
         Padding = new Padding(24);
-        theme.DataSource = Enum.GetValues<ApplicationTheme>();
-        targetScope.DataSource = new[] { StorageScope.LocalUser, StorageScope.Portable, StorageScope.SharedMachine, StorageScope.Custom };
+        theme.Items.AddRange(Enum.GetValues<ApplicationTheme>().Cast<object>().ToArray());
+        targetScope.Items.AddRange(new object[]
+            { StorageScope.LocalUser, StorageScope.Portable, StorageScope.SharedMachine, StorageScope.Custom });
+        targetScope.SelectedIndex = 0;
 
         var root = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
         root.Controls.Add(new Label { Text = "Configurações", AutoSize = true, Font = new Font(Font.FontFamily, 20, FontStyle.Bold), Margin = new Padding(3, 3, 3, 16) });
@@ -62,6 +64,9 @@ public sealed class SettingsPage : UserControl
 
     public event Action<ApplicationSettings>? SettingsSaved;
     public event Action<StoreDescriptor>? StorageSelected;
+    internal ApplicationTheme SelectedTheme => theme.SelectedItem is ApplicationTheme selected
+        ? selected
+        : ApplicationTheme.System;
 
     public void SetOperationsEnabled(bool enabled)
     {
@@ -231,7 +236,7 @@ public sealed class SettingsPage : UserControl
 
     private void LoadSettings(ApplicationSettings settings)
     {
-        theme.SelectedItem = settings.Theme;
+        theme.SelectedIndex = Array.IndexOf(Enum.GetValues<ApplicationTheme>(), settings.Theme);
         legacyEnabled.Checked = settings.LegacyOutputEnabled;
         legacyDirectory.Text = settings.LegacyOutputDirectory;
     }
