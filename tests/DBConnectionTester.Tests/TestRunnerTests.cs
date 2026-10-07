@@ -3,6 +3,8 @@ using System.Net.Sockets;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services;
 using DBConnectionTester.Services.Output;
+using DBConnectionTester.Services.Storage;
+using DBConnectionTester.Application;
 
 namespace DBConnectionTester.Tests;
 
@@ -44,13 +46,19 @@ public sealed class TestRunnerTests
 
         try
         {
-            var settings = Settings(directory) with
+            var settings = Settings() with
             {
                 Port = NetworkPort.Create(port),
                 Timeout = StageTimeout.Create(TimeSpan.FromSeconds(1))
             };
+            var store = await SqliteApplicationStore.OpenOrCreateAsync(
+                Path.Combine(directory, "data.db"),
+                StorageScope.Custom);
+            var runner = new TestRunner(
+                new TestCycleExecutor(),
+                new RunOutputFactory(store, new ApplicationSettings(ApplicationTheme.System, true, directory)));
 
-            await new TestRunner().RunAsync(settings, progress, CancellationToken.None);
+            var summary = await runner.RunAsync(settings, progress, CancellationToken.None);
 
             Assert.NotNull(progress.Last);
             Assert.Equal(1, progress.Last.DatabaseConnectFailures);
@@ -58,7 +66,7 @@ public sealed class TestRunnerTests
             Assert.Equal(1, progress.Last.DatabaseFailures);
             Assert.NotNull(progress.Last.LatestCycle);
             Assert.Equal(1, progress.Last.LatestCycle.Number);
-            var log = await File.ReadAllTextAsync(settings.TxtPath);
+            var log = await File.ReadAllTextAsync(summary.TxtPath!);
             Assert.Contains("Mediana=", log);
             Assert.Contains("P95=", log);
             Assert.Contains("Maior sequência=", log);
@@ -73,15 +81,16 @@ public sealed class TestRunnerTests
     public async Task ExistingCsvIsNeverOverwritten()
     {
         var directory = CreateTemporaryDirectory();
-        var settings = Settings(directory);
-        await File.WriteAllTextAsync(settings.CsvPath, "conteúdo anterior");
+        var settings = Settings();
+        var paths = new OutputPaths(Path.Combine(directory, "result.csv"), Path.Combine(directory, "result.txt"));
+        await File.WriteAllTextAsync(paths.CsvPath, "conteúdo anterior");
 
         try
         {
             await Assert.ThrowsAsync<IOException>(() =>
-                new TestRunner().RunAsync(settings, progress: null, CancellationToken.None));
+                RunOutputSession.CreateAsync(settings, paths));
 
-            Assert.Equal("conteúdo anterior", await File.ReadAllTextAsync(settings.CsvPath));
+            Assert.Equal("conteúdo anterior", await File.ReadAllTextAsync(paths.CsvPath));
         }
         finally
         {
@@ -93,16 +102,17 @@ public sealed class TestRunnerTests
     public async Task ExistingLogIsPreservedAndPartialCsvIsRemoved()
     {
         var directory = CreateTemporaryDirectory();
-        var settings = Settings(directory);
-        await File.WriteAllTextAsync(settings.TxtPath, "log anterior");
+        var settings = Settings();
+        var paths = new OutputPaths(Path.Combine(directory, "result.csv"), Path.Combine(directory, "result.txt"));
+        await File.WriteAllTextAsync(paths.TxtPath, "log anterior");
 
         try
         {
             await Assert.ThrowsAsync<IOException>(() =>
-                new TestRunner().RunAsync(settings, progress: null, CancellationToken.None));
+                RunOutputSession.CreateAsync(settings, paths));
 
-            Assert.Equal("log anterior", await File.ReadAllTextAsync(settings.TxtPath));
-            Assert.False(File.Exists(settings.CsvPath));
+            Assert.Equal("log anterior", await File.ReadAllTextAsync(paths.TxtPath));
+            Assert.False(File.Exists(paths.CsvPath));
         }
         finally
         {
@@ -116,7 +126,7 @@ public sealed class TestRunnerTests
         using var cancellation = new CancellationTokenSource();
         var output = new CancellingOutput(cancellation);
         var runner = new TestRunner(new SuccessfulCycleExecutor(), new FixedOutputFactory(output));
-        var settings = Settings(Path.GetTempPath()) with { TestCount = RunCount.Create(2) };
+        var settings = Settings() with { TestCount = RunCount.Create(2) };
 
         var summary = await runner.RunAsync(settings, progress: null, cancellation.Token);
 
@@ -133,7 +143,7 @@ public sealed class TestRunnerTests
         var runner = new TestRunner(new FailingCycleExecutor(), new FixedOutputFactory(output));
 
         var exception = await Assert.ThrowsAsync<AggregateException>(() =>
-            runner.RunAsync(Settings(Path.GetTempPath()), progress: null, CancellationToken.None));
+            runner.RunAsync(Settings(), progress: null, CancellationToken.None));
 
         Assert.Collection(
             exception.InnerExceptions,
@@ -142,7 +152,96 @@ public sealed class TestRunnerTests
         Assert.True(output.Disposed);
     }
 
-    private static TestSettings Settings(string directory) => new(
+    [Fact]
+    public async Task DatabaseOutputPersistsStoppedRunAndCompletedCycle()
+    {
+        var directory = CreateTemporaryDirectory();
+        using var cancellation = new CancellationTokenSource();
+        try
+        {
+            var store = await SqliteApplicationStore.OpenOrCreateAsync(
+                Path.Combine(directory, "data.db"),
+                StorageScope.Custom);
+            var runner = new TestRunner(
+                new CancellingCycleExecutor(cancellation),
+                new RunOutputFactory(store, ApplicationSettings.Default));
+
+            var summary = await runner.RunAsync(
+                Settings() with { TestCount = RunCount.Create(2) },
+                progress: null,
+                cancellation.Token);
+
+            Assert.True(summary.Stopped);
+            Assert.Equal(1, summary.Completed);
+            await using var connection = await store.OpenConnectionAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT status || ':' || completed_cycles FROM runs WHERE run_id = $id;";
+            command.Parameters.AddWithValue("$id", summary.RunId.ToString("D"));
+            Assert.Equal("Stopped:1", await command.ExecuteScalarAsync());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DatabaseOutputPersistsExecutionFailureBeforeRethrowing()
+    {
+        var directory = CreateTemporaryDirectory();
+        try
+        {
+            var store = await SqliteApplicationStore.OpenOrCreateAsync(
+                Path.Combine(directory, "data.db"),
+                StorageScope.Custom);
+            var runner = new TestRunner(
+                new FailingCycleExecutor(),
+                new RunOutputFactory(store, ApplicationSettings.Default));
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                runner.RunAsync(Settings(), progress: null, CancellationToken.None));
+
+            await using var connection = await store.OpenConnectionAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT status || ':' || termination_reason FROM runs LIMIT 1;";
+            Assert.Equal("Failed:ExecutionFailed", await command.ExecuteScalarAsync());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task UnavailableLegacyOutputAddsWarningButDatabaseRunCompletes()
+    {
+        var directory = CreateTemporaryDirectory();
+        try
+        {
+            var store = await SqliteApplicationStore.OpenOrCreateAsync(
+                Path.Combine(directory, "data.db"),
+                StorageScope.Custom);
+            var runner = new TestRunner(
+                new SuccessfulCycleExecutor(),
+                new RunOutputFactory(store, new ApplicationSettings(ApplicationTheme.System, true, "\0")));
+
+            var summary = await runner.RunAsync(Settings(), progress: null, CancellationToken.None);
+
+            Assert.False(summary.Failed);
+            Assert.Null(summary.CsvPath);
+            await using var connection = await store.OpenConnectionAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM run_warnings WHERE run_id = $id;";
+            command.Parameters.AddWithValue("$id", summary.RunId.ToString("D"));
+            Assert.Equal(1L, await command.ExecuteScalarAsync());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static TestSettings Settings() => new(
         DatabaseType.MySqlMariaDb,
         "127.0.0.1",
         NetworkPort.Create(3306),
@@ -159,9 +258,7 @@ public sealed class TestRunnerTests
         true,
         false,
         false,
-        true,
-        Path.Combine(directory, "result.csv"),
-        Path.Combine(directory, "result.txt"));
+        true);
 
     private static string CreateTemporaryDirectory()
     {
@@ -189,6 +286,21 @@ public sealed class TestRunnerTests
                 DatabaseResult.Skipped()));
     }
 
+    private sealed class CancellingCycleExecutor(CancellationTokenSource cancellation) : ITestCycleExecutor
+    {
+        public Task<TestCycleResult> ExecuteAsync(TestSettings settings, long number, CancellationToken token)
+        {
+            cancellation.Cancel();
+            return Task.FromResult(new TestCycleResult(
+                number,
+                DateTimeOffset.UtcNow,
+                DnsResult.Skipped(),
+                StepResult.Skipped(),
+                TcpResult.Skipped(),
+                DatabaseResult.Skipped()));
+        }
+    }
+
     private sealed class FixedOutputFactory(IRunOutput output) : IRunOutputFactory
     {
         public Task<IRunOutput> CreateAsync(TestSettings settings) => Task.FromResult(output);
@@ -203,6 +315,8 @@ public sealed class TestRunnerTests
     private sealed class FailingSummaryOutput : IRunOutput
     {
         public bool Disposed { get; private set; }
+        public Guid RunId { get; } = Guid.NewGuid();
+        public OutputPaths? LegacyPaths => null;
 
         public Task WriteCycleAsync(TestCycleResult cycle, CancellationToken token) => Task.CompletedTask;
 
@@ -220,6 +334,8 @@ public sealed class TestRunnerTests
     {
         public bool CycleWritten { get; private set; }
         public long CompletedMetrics { get; private set; }
+        public Guid RunId { get; } = Guid.NewGuid();
+        public OutputPaths? LegacyPaths => null;
 
         public Task WriteCycleAsync(TestCycleResult cycle, CancellationToken token)
         {

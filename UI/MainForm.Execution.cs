@@ -21,8 +21,8 @@ public sealed partial class MainForm
                 Interval = TestInterval.Create(TimeSpan.Zero)
             };
 
-        currentCsvPath = settings.CsvPath;
-        currentTxtPath = settings.TxtPath;
+        currentCsvPath = "";
+        currentTxtPath = "";
         exitRequested = false;
         completedTests = 0;
         resultsControl.ResetResults();
@@ -76,8 +76,7 @@ public sealed partial class MainForm
             chkDns.Checked,
             chkPing.Checked,
             chkTcp.Checked,
-            chkDatabase.Checked,
-            txtOutput.Text);
+            chkDatabase.Checked);
 
         var result = settingsValidator.Validate(input);
         return result.IsValid ? result.Settings : ValidationError(result.ErrorMessage);
@@ -114,6 +113,8 @@ public sealed partial class MainForm
 
     private void CompleteRun(TestSettings settings, RunSummary summary)
     {
+        currentCsvPath = summary.CsvPath ?? "";
+        currentTxtPath = summary.TxtPath ?? "";
         ApplyRunUiState(RunUiState.Completed);
         if (summary.Stopped)
         {
@@ -123,7 +124,9 @@ public sealed partial class MainForm
             return;
         }
 
-        lblStatus.Text = $"Concluído. CSV: {Path.GetFileName(settings.CsvPath)} | TXT: {Path.GetFileName(settings.TxtPath)}";
+        lblStatus.Text = string.IsNullOrWhiteSpace(summary.CsvPath)
+            ? $"Concluído. {summary.Completed:N0} verificações salvas no histórico."
+            : $"Concluído. Histórico salvo | CSV: {Path.GetFileName(summary.CsvPath)} | TXT: {Path.GetFileName(summary.TxtPath)}";
         progressBar.Value = 100;
         trayStatus.Text = $"Concluído - {summary.Completed:N0} testes";
         SafeTrayText($"DB Connection Tester - concluído - {summary.Completed:N0}");
@@ -229,7 +232,7 @@ public sealed partial class MainForm
                  {
                      cmbDatabaseType, txtHost, numPort, cmbSqlServerAuth, txtUser, txtPassword, txtDatabase,
                      txtOdbcDriver, txtSqliteFile, btnBrowseSqlite, numInterval, numTimeout, chkContinuous,
-                     chkDns, chkBackground, txtOutput, btnBrowseOutput
+                     chkDns, chkPing, chkTcp, chkDatabase, chkBackground
                  })
             control.Enabled = enabled;
         numTests.Enabled = enabled && !chkContinuous.Checked;

@@ -19,10 +19,9 @@ public sealed partial class MainForm
             Dock = DockStyle.Fill,
             Padding = new Padding(12),
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 4,
             AutoScroll = true
         };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -42,17 +41,16 @@ public sealed partial class MainForm
         settingsArea.Controls.Add(BuildExecutionGroup(), 1, 0);
 
         root.Controls.Add(settingsArea, 0, 0);
-        root.Controls.Add(BuildOutputGroup(), 0, 1);
-        root.Controls.Add(BuildControlArea(), 0, 2);
-        root.Controls.Add(resultsControl, 0, 3);
+        root.Controls.Add(BuildControlArea(), 0, 1);
+        root.Controls.Add(resultsControl, 0, 2);
         root.Controls.Add(new Label
         {
             AutoSize = true,
             ForeColor = SystemColors.GrayText,
             Margin = new Padding(6, 8, 6, 0),
             Text = "Credenciais ficam somente na memória e não são gravadas nos relatórios. " +
-                   "A grade mantém os 100 ciclos mais recentes; CSV e TXT preservam toda a execução."
-        }, 0, 4);
+                   "A grade mantém os 100 ciclos mais recentes; o histórico completo é salvo no banco local."
+        }, 0, 3);
 
         Controls.Add(root);
     }
@@ -108,14 +106,6 @@ public sealed partial class MainForm
         AddRow(table, row, "Comportamento:", chkBackground);
 
         return CreateGroup("Execução", table);
-    }
-
-    private GroupBox BuildOutputGroup()
-    {
-        var table = CreateSettingsTable(labelWidth: 145);
-        txtOutput.Dock = DockStyle.Fill;
-        AddRowWithButton(table, 0, "Arquivo CSV:", txtOutput, btnBrowseOutput);
-        return CreateGroup("Saída", table);
     }
 
     private Control BuildControlArea()
@@ -227,7 +217,6 @@ public sealed partial class MainForm
         cmbSqlServerAuth.SelectedIndexChanged += (_, _) => ApplyCredentialVisibility();
         chkContinuous.CheckedChanged += (_, _) => numTests.Enabled = configurationEnabled && !chkContinuous.Checked;
         btnBrowseSqlite.Click += (_, _) => BrowseSqliteFile();
-        btnBrowseOutput.Click += (_, _) => BrowseOutputFile();
         btnOpenFolder.Click += (_, _) => OpenOutputFolder();
         btnOpenCsv.Click += (_, _) => OpenFile(currentCsvPath);
         btnOpenLog.Click += (_, _) => OpenFile(currentTxtPath);

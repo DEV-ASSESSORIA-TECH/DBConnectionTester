@@ -14,9 +14,9 @@ public sealed class TextLogWriter : IAsyncDisposable
         this.writer = writer;
     }
 
-    public static async Task<TextLogWriter> CreateAsync(TestSettings settings)
+    public static async Task<TextLogWriter> CreateAsync(TestSettings settings, string path)
     {
-        var stream = new FileStream(settings.TxtPath, new FileStreamOptions
+        var stream = new FileStream(path, new FileStreamOptions
         {
             Mode = FileMode.CreateNew,
             Access = FileAccess.Write,
@@ -51,7 +51,14 @@ public sealed class TextLogWriter : IAsyncDisposable
     {
         await writer.WriteLineAsync(new string('-', 120));
         await writer.WriteLineAsync($"Fim: {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}");
-        await writer.WriteLineAsync($"Motivo do encerramento: {(summary.Stopped ? "Interrompido manualmente / encerramento do aplicativo" : "Quantidade planejada concluída")}");
+        var termination = summary.TerminationReason switch
+        {
+            RunTerminationReason.PlannedCountCompleted => "Quantidade planejada concluída",
+            RunTerminationReason.StoppedByUser => "Interrompido manualmente / encerramento do aplicativo",
+            RunTerminationReason.ExecutionFailed => $"Falha durante a execução: {summary.FailureMessage}",
+            _ => "Processo interrompido inesperadamente"
+        };
+        await writer.WriteLineAsync($"Motivo do encerramento: {termination}");
         await writer.WriteLineAsync($"Testes concluídos: {metrics.Completed}");
         var statistics = metrics.CreateStatistics();
         if (settings.Dns)

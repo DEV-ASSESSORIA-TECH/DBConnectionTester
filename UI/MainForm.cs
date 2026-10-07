@@ -1,6 +1,7 @@
 using DBConnectionTester.Application;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services;
+using DBConnectionTester.Services.Output;
 using DBConnectionTester.Services.Storage;
 
 namespace DBConnectionTester.UI;
@@ -26,8 +27,6 @@ public sealed partial class MainForm : Form
     private readonly CheckBox chkTcp = new() { Text = "TCP", Checked = true, AutoSize = true };
     private readonly CheckBox chkDatabase = new() { Text = "Banco + SELECT 1", Checked = true, AutoSize = true };
     private readonly CheckBox chkBackground = new() { Text = "Minimizar para a bandeja ao iniciar", AutoSize = true };
-    private readonly TextBox txtOutput = new();
-    private readonly Button btnBrowseOutput = new() { Text = "Escolher..." };
     private readonly Button btnTestOnce = new() { Text = "Testar uma vez", AutoSize = true };
     private readonly Button btnStart = new() { Text = "Iniciar teste", AutoSize = true };
     private readonly Button btnStop = new() { Text = "Parar", AutoSize = true, Enabled = false };
@@ -55,9 +54,10 @@ public sealed partial class MainForm : Form
     private RowBinding odbcDriverRow = null!;
     private RowBinding sqliteFileRow = null!;
 
-    private readonly RunCoordinator runCoordinator = new(new TestRunner());
+    private readonly RunCoordinator runCoordinator;
     private readonly SqliteApplicationStore applicationStore;
-    private readonly TestSettingsValidator settingsValidator = new(new OutputPathPolicy());
+    private readonly ApplicationSettings applicationSettings;
+    private readonly TestSettingsValidator settingsValidator = new();
     private RunUiState runUiState = RunUiState.Idle;
     private bool exitRequested;
     private bool configurationEnabled = true;
@@ -65,18 +65,18 @@ public sealed partial class MainForm : Form
     private string currentCsvPath = "";
     private string currentTxtPath = "";
 
-    public MainForm(SqliteApplicationStore applicationStore)
+    public MainForm(SqliteApplicationStore applicationStore, ApplicationSettings applicationSettings)
     {
         this.applicationStore = applicationStore;
+        this.applicationSettings = applicationSettings;
+        runCoordinator = new RunCoordinator(new TestRunner(
+            new TestCycleExecutor(),
+            new RunOutputFactory(applicationStore, applicationSettings)));
         Text = "DB Connection Tester";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(980, 720);
         Size = new Size(1120, 900);
         MaximizeBox = true;
-
-        txtOutput.Text = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            $"connection_test_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
 
         BuildUi();
         ConfigureTray();

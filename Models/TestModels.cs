@@ -19,9 +19,7 @@ public sealed record TestSettings
         bool dns,
         bool ping,
         bool tcp,
-        bool databaseTest,
-        string csvPath,
-        string txtPath)
+        bool databaseTest)
     {
         DatabaseType = databaseType;
         Host = host;
@@ -40,8 +38,6 @@ public sealed record TestSettings
         Ping = ping;
         Tcp = tcp;
         DatabaseTest = databaseTest;
-        CsvPath = csvPath;
-        TxtPath = txtPath;
     }
 
     public DatabaseType DatabaseType { get; internal init; }
@@ -61,8 +57,6 @@ public sealed record TestSettings
     public bool Ping { get; internal init; }
     public bool Tcp { get; internal init; }
     public bool DatabaseTest { get; internal init; }
-    public string CsvPath { get; internal init; }
-    public string TxtPath { get; internal init; }
 
     public DatabaseProfile Profile => DatabaseProfiles.Get(DatabaseType);
     public string Target => DatabaseType == DatabaseType.Sqlite ? SqliteFile : $"{Host}:{Port!.Value}";
@@ -142,4 +136,14 @@ public sealed record TestProgress(
     public int DatabaseFailures => DatabaseConnectFailures + DatabaseQueryFailures;
 }
 
-public sealed record RunSummary(long Completed, bool Stopped);
+public sealed record RunSummary(
+    Guid RunId,
+    long Completed,
+    RunTerminationReason TerminationReason,
+    string? FailureMessage,
+    string? CsvPath = null,
+    string? TxtPath = null)
+{
+    public bool Stopped => TerminationReason == RunTerminationReason.StoppedByUser;
+    public bool Failed => TerminationReason == RunTerminationReason.ExecutionFailed;
+}

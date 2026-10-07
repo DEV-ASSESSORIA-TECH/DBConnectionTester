@@ -85,9 +85,7 @@ public sealed class RunRepositoryTests
         true,
         true,
         true,
-        true,
-        "unused.csv",
-        "unused.txt");
+        true);
 
     private static TestCycleResult SuccessfulCycle() => new(
         1,

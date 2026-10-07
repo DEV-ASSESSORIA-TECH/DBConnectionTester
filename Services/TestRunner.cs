@@ -9,11 +9,6 @@ public sealed class TestRunner : ITestRunner
     private readonly ITestCycleExecutor cycleExecutor;
     private readonly IRunOutputFactory outputFactory;
 
-    public TestRunner()
-        : this(new TestCycleExecutor(), new RunOutputFactory())
-    {
-    }
-
     public TestRunner(ITestCycleExecutor cycleExecutor, IRunOutputFactory outputFactory)
     {
         this.cycleExecutor = cycleExecutor;
@@ -27,7 +22,7 @@ public sealed class TestRunner : ITestRunner
     {
         var output = await outputFactory.CreateAsync(settings);
         var metrics = new RunMetrics();
-        var stopped = false;
+        var terminationReason = RunTerminationReason.PlannedCountCompleted;
         Exception? failure = null;
 
         try
@@ -48,14 +43,21 @@ public sealed class TestRunner : ITestRunner
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            stopped = true;
+            terminationReason = RunTerminationReason.StoppedByUser;
         }
         catch (Exception exception)
         {
             failure = exception;
+            terminationReason = RunTerminationReason.ExecutionFailed;
         }
 
-        var summary = new RunSummary(metrics.Completed, stopped);
+        var summary = new RunSummary(
+            output.RunId,
+            metrics.Completed,
+            terminationReason,
+            failure?.Message,
+            output.LegacyPaths?.CsvPath,
+            output.LegacyPaths?.TxtPath);
         try
         {
             await output.CompleteAsync(summary, metrics);

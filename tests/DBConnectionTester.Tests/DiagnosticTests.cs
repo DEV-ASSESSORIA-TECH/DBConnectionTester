@@ -101,7 +101,5 @@ public sealed class DiagnosticTests
         true,
         true,
         true,
-        true,
-        "result.csv",
-        "result.txt");
+        true);
 }

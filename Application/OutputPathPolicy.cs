@@ -4,21 +4,15 @@ public sealed record OutputPaths(string CsvPath, string TxtPath);
 
 public sealed class OutputPathPolicy
 {
-    public OutputPaths Prepare(string requestedPath)
+    public OutputPaths PrepareLegacy(string directory, Guid runId, DateTimeOffset startedAt)
     {
-        if (string.IsNullOrWhiteSpace(requestedPath))
-            throw new ArgumentException("Informe o arquivo CSV de saída.", nameof(requestedPath));
+        if (string.IsNullOrWhiteSpace(directory))
+            throw new ArgumentException("Informe a pasta para a saída CSV/TXT contínua.", nameof(directory));
 
-        var csvPath = requestedPath.Trim();
-        if (!csvPath.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-            csvPath += ".csv";
-
-        csvPath = Path.GetFullPath(csvPath);
-        var directory = Path.GetDirectoryName(csvPath)
-            ?? throw new IOException("Não foi possível determinar a pasta de saída.");
+        directory = Path.GetFullPath(directory.Trim());
         Directory.CreateDirectory(directory);
-
-        csvPath = FindAvailablePath(csvPath);
+        var baseName = $"connection_test_{startedAt:yyyyMMdd_HHmmss}_{runId:N}"[..48];
+        var csvPath = FindAvailablePath(Path.Combine(directory, baseName + ".csv"));
         return new OutputPaths(csvPath, Path.ChangeExtension(csvPath, ".txt"));
     }
 

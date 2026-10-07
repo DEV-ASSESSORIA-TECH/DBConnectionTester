@@ -25,9 +25,7 @@ public sealed class TestCycleExecutorTests
             false,
             false,
             false,
-            false,
-            "result.csv",
-            "result.txt");
+            false);
 
         var cycle = await new TestCycleExecutor().ExecuteAsync(settings, 1, CancellationToken.None);
 

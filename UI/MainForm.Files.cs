@@ -17,18 +17,6 @@ public sealed partial class MainForm
             txtSqliteFile.Text = dialog.FileName;
     }
 
-    private void BrowseOutputFile()
-    {
-        using var dialog = new SaveFileDialog
-        {
-            Filter = "CSV (*.csv)|*.csv|Todos os arquivos (*.*)|*.*",
-            FileName = Path.GetFileName(txtOutput.Text),
-            InitialDirectory = GetExistingDirectory(txtOutput.Text)
-        };
-        if (dialog.ShowDialog(this) == DialogResult.OK)
-            txtOutput.Text = dialog.FileName;
-    }
-
     private void HideToTray(string? balloonText = null)
     {
         trayIcon.Visible = true;
@@ -54,8 +42,11 @@ public sealed partial class MainForm
 
     private void OpenOutputFolder()
     {
-        var path = !string.IsNullOrWhiteSpace(currentCsvPath) ? currentCsvPath : txtOutput.Text.Trim();
-        var directory = Path.GetDirectoryName(path);
+        var directory = !string.IsNullOrWhiteSpace(currentCsvPath)
+            ? Path.GetDirectoryName(currentCsvPath)
+            : applicationSettings.LegacyOutputEnabled
+                ? applicationSettings.LegacyOutputDirectory
+                : Path.GetDirectoryName(applicationStore.Descriptor.DatabasePath);
         if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
             Process.Start(new ProcessStartInfo("explorer.exe", directory) { UseShellExecute = true });
     }

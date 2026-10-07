@@ -9,9 +9,9 @@ public sealed class ApplicationServicesTests
     [Fact]
     public void ValidatorRejectsMissingNetworkHost()
     {
-        var validator = new TestSettingsValidator(new OutputPathPolicy());
+        var validator = new TestSettingsValidator();
 
-        var result = validator.Validate(Input(Path.GetTempPath()) with { Host = "" });
+        var result = validator.Validate(Input() with { Host = "" });
 
         Assert.False(result.IsValid);
         Assert.Contains("host", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
@@ -20,10 +20,9 @@ public sealed class ApplicationServicesTests
     [Fact]
     public void DnsCanBeTheOnlySelectedLayer()
     {
-        var outputPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".csv");
-        var validator = new TestSettingsValidator(new OutputPathPolicy());
+        var validator = new TestSettingsValidator();
 
-        var result = validator.Validate(Input(outputPath) with
+        var result = validator.Validate(Input() with
         {
             Ping = false,
             Tcp = false,
@@ -38,9 +37,8 @@ public sealed class ApplicationServicesTests
     [Fact]
     public void ValidatorRejectsInvalidExecutionAndNetworkValues()
     {
-        var validator = new TestSettingsValidator(new OutputPathPolicy());
-        var outputPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".csv");
-        var valid = Input(outputPath);
+        var validator = new TestSettingsValidator();
+        var valid = Input();
         var invalidInputs = new[]
         {
             valid with { Port = 0 },
@@ -59,16 +57,15 @@ public sealed class ApplicationServicesTests
     [Fact]
     public void ValidatorRequiresCredentialsOnlyWhenAuthenticationUsesThem()
     {
-        var validator = new TestSettingsValidator(new OutputPathPolicy());
-        var outputPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".csv");
+        var validator = new TestSettingsValidator();
 
-        var sqlLogin = validator.Validate(Input(outputPath) with
+        var sqlLogin = validator.Validate(Input() with
         {
             DatabaseType = DatabaseType.SqlServer,
             SqlServerAuthentication = SqlServerAuthentication.SqlLogin,
             User = " "
         });
-        var windowsAuthentication = validator.Validate(Input(outputPath) with
+        var windowsAuthentication = validator.Validate(Input() with
         {
             DatabaseType = DatabaseType.SqlServer,
             SqlServerAuthentication = SqlServerAuthentication.Windows,
@@ -82,9 +79,7 @@ public sealed class ApplicationServicesTests
     [Fact]
     public void ValidatorProducesTypedDomainValues()
     {
-        var outputPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".csv");
-
-        var result = new TestSettingsValidator(new OutputPathPolicy()).Validate(Input(outputPath));
+        var result = new TestSettingsValidator().Validate(Input());
 
         Assert.True(result.IsValid);
         Assert.Equal(3306, result.Settings!.Port!.Value);
@@ -94,20 +89,22 @@ public sealed class ApplicationServicesTests
     }
 
     [Fact]
-    public async Task OutputPolicyPreservesExistingRun()
+    public async Task OutputPolicyCreatesUniqueLegacyPairWithoutOverwriting()
     {
         var directory = CreateTemporaryDirectory();
-        var originalPath = Path.Combine(directory, "result.csv");
-        await File.WriteAllTextAsync(originalPath, "anterior");
+        var policy = new OutputPathPolicy();
+        var runId = Guid.NewGuid();
+        var startedAt = new DateTimeOffset(2026, 10, 7, 12, 30, 0, TimeSpan.Zero);
 
         try
         {
-            var result = new TestSettingsValidator(new OutputPathPolicy()).Validate(Input(originalPath));
+            var first = policy.PrepareLegacy(directory, runId, startedAt);
+            await File.WriteAllTextAsync(first.CsvPath, "anterior");
+            var second = policy.PrepareLegacy(directory, runId, startedAt);
 
-            Assert.True(result.IsValid);
-            Assert.NotEqual(originalPath, result.Settings!.CsvPath);
-            Assert.Equal("anterior", await File.ReadAllTextAsync(originalPath));
-            Assert.EndsWith(".txt", result.Settings.TxtPath, StringComparison.OrdinalIgnoreCase);
+            Assert.NotEqual(first.CsvPath, second.CsvPath);
+            Assert.Equal("anterior", await File.ReadAllTextAsync(first.CsvPath));
+            Assert.EndsWith(".txt", second.TxtPath, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -133,7 +130,7 @@ public sealed class ApplicationServicesTests
         Assert.False(coordinator.IsRunning);
     }
 
-    private static TestSettingsInput Input(string outputPath) => new(
+    private static TestSettingsInput Input() => new(
         DatabaseType.MySqlMariaDb,
         "127.0.0.1",
         3306,
@@ -150,8 +147,7 @@ public sealed class ApplicationServicesTests
         true,
         false,
         false,
-        true,
-        outputPath);
+        true);
 
     private static TestSettings Settings() => new(
         DatabaseType.MySqlMariaDb,
@@ -170,9 +166,7 @@ public sealed class ApplicationServicesTests
         true,
         false,
         false,
-        true,
-        "result.csv",
-        "result.txt");
+        true);
 
     private static string CreateTemporaryDirectory()
     {
@@ -194,11 +188,11 @@ public sealed class ApplicationServicesTests
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, token);
-                return new RunSummary(0, false);
+                return new RunSummary(Guid.NewGuid(), 0, RunTerminationReason.PlannedCountCompleted, null);
             }
             catch (OperationCanceledException)
             {
-                return new RunSummary(0, true);
+                return new RunSummary(Guid.NewGuid(), 0, RunTerminationReason.StoppedByUser, null);
             }
         }
     }

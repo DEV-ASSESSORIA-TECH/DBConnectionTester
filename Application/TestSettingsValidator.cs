@@ -19,8 +19,7 @@ public sealed record TestSettingsInput(
     bool Dns,
     bool Ping,
     bool Tcp,
-    bool DatabaseTest,
-    string RequestedCsvPath);
+    bool DatabaseTest);
 
 public sealed record TestSettingsValidationResult(TestSettings? Settings, string ErrorMessage)
 {
@@ -32,13 +31,6 @@ public sealed record TestSettingsValidationResult(TestSettings? Settings, string
 
 public sealed class TestSettingsValidator
 {
-    private readonly OutputPathPolicy outputPathPolicy;
-
-    public TestSettingsValidator(OutputPathPolicy outputPathPolicy)
-    {
-        this.outputPathPolicy = outputPathPolicy;
-    }
-
     public TestSettingsValidationResult Validate(TestSettingsInput input)
     {
         var profile = DatabaseProfiles.Get(input.DatabaseType);
@@ -73,18 +65,6 @@ public sealed class TestSettingsValidator
         if (!dns && !ping && !tcp && !databaseTest)
             return TestSettingsValidationResult.Failure("Selecione pelo menos uma camada de teste.");
 
-        OutputPaths output;
-        try
-        {
-            output = outputPathPolicy.Prepare(input.RequestedCsvPath);
-        }
-        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or
-                                          PathTooLongException or UnauthorizedAccessException or IOException)
-        {
-            return TestSettingsValidationResult.Failure(
-                $"Não foi possível preparar o arquivo de saída: {exception.Message}");
-        }
-
         return TestSettingsValidationResult.Success(new TestSettings(
             profile.Type,
             host,
@@ -102,8 +82,6 @@ public sealed class TestSettingsValidator
             dns,
             ping,
             tcp,
-            databaseTest,
-            output.CsvPath,
-            output.TxtPath));
+            databaseTest));
     }
 }

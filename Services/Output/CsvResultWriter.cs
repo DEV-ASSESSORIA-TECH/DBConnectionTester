@@ -22,9 +22,9 @@ public sealed class CsvResultWriter : IAsyncDisposable
         this.writer = writer;
     }
 
-    public static async Task<CsvResultWriter> CreateAsync(TestSettings settings)
+    public static async Task<CsvResultWriter> CreateAsync(TestSettings settings, string path)
     {
-        var stream = CreateFile(settings.CsvPath);
+        var stream = CreateFile(path);
         var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true)) { AutoFlush = true };
         try
         {

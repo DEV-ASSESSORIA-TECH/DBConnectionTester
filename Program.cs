@@ -26,7 +26,18 @@ internal static class Program
 
             if (store is null)
                 throw new ApplicationStoreException("Nenhum armazenamento foi selecionado.");
-            System.Windows.Forms.Application.Run(new MainForm(store));
+            var runRepository = new RunRepository(store);
+            try
+            {
+                using var recoveryLease = RunWriteLease.Acquire(store);
+                await runRepository.RecoverInterruptedAsync();
+            }
+            catch (RunAlreadyActiveException)
+            {
+                // Outra instância está executando testes; esta ainda pode consultar o armazenamento.
+            }
+            var settings = await new PersistentSettingsRepository(store).GetAsync();
+            System.Windows.Forms.Application.Run(new MainForm(store, settings));
         }
         catch (Exception exception) when (exception is ApplicationStoreException or ArgumentException or
                                           UnauthorizedAccessException or IOException)

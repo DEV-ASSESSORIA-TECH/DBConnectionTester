@@ -146,7 +146,5 @@ public sealed class RunMetricsTests
         true,
         true,
         true,
-        true,
-        "result.csv",
-        "result.txt");
+        true);
 }

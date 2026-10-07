@@ -1,8 +1,9 @@
+using DBConnectionTester.Application;
 using DBConnectionTester.Models;
 
 namespace DBConnectionTester.Services.Output;
 
-public sealed class RunOutputSession : IRunOutput
+public sealed class RunOutputSession : IAsyncDisposable
 {
     private readonly CsvResultWriter csv;
     private readonly TextLogWriter log;
@@ -13,18 +14,18 @@ public sealed class RunOutputSession : IRunOutput
         this.log = log;
     }
 
-    public static async Task<RunOutputSession> CreateAsync(TestSettings settings)
+    public static async Task<RunOutputSession> CreateAsync(TestSettings settings, OutputPaths paths)
     {
-        var csv = await CsvResultWriter.CreateAsync(settings);
+        var csv = await CsvResultWriter.CreateAsync(settings, paths.CsvPath);
         try
         {
-            var log = await TextLogWriter.CreateAsync(settings);
+            var log = await TextLogWriter.CreateAsync(settings, paths.TxtPath);
             return new RunOutputSession(csv, log);
         }
         catch
         {
             await csv.DisposeAsync();
-            TryDeleteNewFile(settings.CsvPath);
+            TryDeleteNewFile(paths.CsvPath);
             throw;
         }
     }

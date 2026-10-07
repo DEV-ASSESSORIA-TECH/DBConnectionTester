@@ -117,7 +117,5 @@ public sealed class DatabaseConnectionFactoryTests
         true,
         true,
         true,
-        type != DatabaseType.TcpOnly,
-        "result.csv",
-        "result.txt");
+        type != DatabaseType.TcpOnly);
 }
