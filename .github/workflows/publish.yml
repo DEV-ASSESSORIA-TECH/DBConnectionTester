@@ -1,23 +1,22 @@
-name: Publish
+name: CI and release
 
 on:
-  workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 env:
-  PROJECT: DBConnectionTester.csproj
   SOLUTION: DBConnectionTester.sln
   TEST_PROJECT: tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj
-  RUNTIME: win-x64
 
 jobs:
-  publish:
-    name: Publish Windows x64
+  validate:
+    name: Validate Windows x64
     runs-on: windows-latest
 
     steps:
@@ -35,7 +34,7 @@ jobs:
         run: |
           $version = (Get-Content -Raw VERSION).Trim()
           if ($version -notmatch '^\d+\.\d+\.\d+$') {
-            throw "VERSION must use semantic version format, for example 1.0.0."
+            throw "VERSION must use semantic version format, for example 2.0.0."
           }
           if ("${{ github.ref_type }}" -eq "tag" -and "${{ github.ref_name }}" -ne "v$version") {
             throw "Tag ${{ github.ref_name }} does not match VERSION v$version."
@@ -44,53 +43,31 @@ jobs:
           "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Restore
-        run: dotnet restore $env:SOLUTION
+        shell: pwsh
+        run: |
+          dotnet restore $env:TEST_PROJECT
+          dotnet restore DBConnectionTester.csproj -r win-x64
+
+      - name: Check vulnerable packages
+        run: dotnet list $env:TEST_PROJECT package --vulnerable --include-transitive --no-restore
+
+      - name: Build
+        run: dotnet build $env:SOLUTION -c Release --no-restore --warnaserror
 
       - name: Test
-        run: dotnet test $env:TEST_PROJECT -c Release --no-restore --verbosity minimal
+        run: dotnet test $env:TEST_PROJECT -c Release --no-build --no-restore --verbosity minimal
 
-      - name: Publish framework-dependent
+      - name: Publish and validate release packages
         shell: pwsh
-        run: |
-          dotnet publish $env:PROJECT -c Release -r $env:RUNTIME --self-contained false `
-            -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false `
-            -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true `
-            -o publish/framework-dependent
-
-      - name: Publish self-contained
-        shell: pwsh
-        run: |
-          dotnet publish $env:PROJECT -c Release -r $env:RUNTIME --self-contained true `
-            -p:PublishSingleFile=false -p:DebugType=None -p:DebugSymbols=false `
-            -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true `
-            -o publish/self-contained
-
-      - name: Publish standalone self-contained executable
-        shell: pwsh
-        run: |
-          dotnet publish $env:PROJECT -c Release -r $env:RUNTIME --self-contained true `
-            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:EnableCompressionInSingleFile=true `
-            -p:DebugType=None -p:DebugSymbols=false `
-            -p:Version=$env:VERSION -p:ContinuousIntegrationBuild=true `
-            -o publish/standalone
-
-      - name: Create ZIP packages
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
-          Compress-Archive -Path "publish/framework-dependent/*" `
-            -DestinationPath "artifacts/DBConnectionTester-v$env:VERSION-win-x64-framework-dependent.zip"
-          Compress-Archive -Path "publish/self-contained/*" `
-            -DestinationPath "artifacts/DBConnectionTester-v$env:VERSION-win-x64-self-contained.zip"
-          Copy-Item "publish/standalone/DBConnectionTester.exe" `
-            "artifacts/DBConnectionTester-v$env:VERSION-win-x64-self-contained.exe"
+        run: ./build/Publish-Release.ps1 -NoRestore
 
       - name: Upload framework-dependent package
         uses: actions/upload-artifact@v7
         with:
           name: DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-framework-dependent
-          path: artifacts/*-framework-dependent.zip
+          path: |
+            artifacts/*-framework-dependent.zip
+            artifacts/*-framework-dependent.zip.sha256
           archive: false
           if-no-files-found: error
           retention-days: 14
@@ -99,22 +76,50 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained
-          path: artifacts/*-self-contained.zip
+          path: |
+            artifacts/*-self-contained.zip
+            artifacts/*-self-contained.zip.sha256
           archive: false
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload standalone self-contained executable
+      - name: Upload standalone executable
         uses: actions/upload-artifact@v7
         with:
           name: DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained-exe
-          path: artifacts/*-self-contained.exe
+          path: |
+            artifacts/*-self-contained.exe
+            artifacts/*-self-contained.exe.sha256
           archive: false
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload checksum manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: DBConnectionTester-v${{ steps.version.outputs.value }}-checksums
+          path: artifacts/SHA256SUMS.txt
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: validate
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download validated artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: DBConnectionTester-v*
+          path: artifacts
+          merge-multiple: true
+
       - name: Create or update GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -125,6 +130,6 @@ jobs:
             gh release upload "${{ github.ref_name }}" artifacts/* --clobber
           } else {
             gh release create "${{ github.ref_name }}" artifacts/* `
-              --title "DB Connection Tester v$env:VERSION" `
+              --title "DB Connection Tester ${{ github.ref_name }}" `
               --generate-notes
           }
