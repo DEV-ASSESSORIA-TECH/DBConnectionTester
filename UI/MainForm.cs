@@ -48,7 +48,7 @@ public sealed partial class MainForm : Form
     private readonly Dictionary<string, Button> navigationButtons = new(StringComparer.Ordinal);
     private HomePage homePage = null!;
     private UserControl executionPage = null!;
-    private UserControl historyPage = null!;
+    private HistoryPage historyPage = null!;
     private ProfilesPage profilesPage = null!;
     private SettingsPage settingsPage = null!;
 
@@ -98,7 +98,11 @@ public sealed partial class MainForm : Form
         ApplyDatabaseType(resetPort: true);
         ApplyRunUiState(RunUiState.Idle);
         ThemeManager.Apply(this, applicationSettings.Theme);
-        Shown += async (_, _) => await RefreshProfilesAsync();
+        Shown += async (_, _) =>
+        {
+            await RefreshProfilesAsync();
+            await RefreshHistoryAsync();
+        };
     }
 
     private DatabaseProfile SelectedProfile => cmbDatabaseType.SelectedItem as DatabaseProfile

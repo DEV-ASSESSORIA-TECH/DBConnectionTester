@@ -17,8 +17,8 @@ public sealed partial class MainForm
 
         homePage = new HomePage(applicationStore.Descriptor);
         executionPage = BuildExecutionPage();
-        historyPage = CreatePlaceholderPage("Histórico", "As execuções salvas aparecerão aqui.");
         var repository = new PersistentSettingsRepository(applicationStore);
+        historyPage = new HistoryPage(new RunHistoryRepository(applicationStore), repository);
         profilesPage = new ProfilesPage(repository);
         settingsPage = new SettingsPage(applicationStore, applicationSettings, repository, new RegistryStoragePreferenceStore());
         homePage.NewRunRequested += (_, _) => ShowPage("Nova execução", executionPage);
@@ -141,6 +141,18 @@ public sealed partial class MainForm
         catch (ApplicationStoreException exception)
         {
             MessageBox.Show(this, exception.Message, "Perfis", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private async Task RefreshHistoryAsync()
+    {
+        try
+        {
+            await historyPage.RefreshAsync();
+        }
+        catch (ApplicationStoreException exception)
+        {
+            MessageBox.Show(this, exception.Message, "Histórico", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
