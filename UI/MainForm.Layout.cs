@@ -14,6 +14,40 @@ public sealed partial class MainForm
                 ? "Autenticação do Windows"
                 : "Usuário e senha do SQL Server";
 
+        homePage = new HomePage(applicationStore.Descriptor);
+        executionPage = BuildExecutionPage();
+        historyPage = CreatePlaceholderPage("Histórico", "As execuções salvas aparecerão aqui.");
+        profilesPage = CreatePlaceholderPage("Perfis", "Gerencie configurações de conexão reutilizáveis.");
+        settingsPage = CreatePlaceholderPage("Configurações", "Tema, armazenamento e saída legada.");
+        homePage.NewRunRequested += (_, _) => ShowPage("Nova execução", executionPage);
+        homePage.HistoryRequested += (_, _) => ShowPage("Histórico", historyPage);
+
+        var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
+        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176));
+        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        foreach (var (title, page) in new[]
+                 {
+                     ("Início", (UserControl)homePage), ("Nova execução", executionPage),
+                     ("Histórico", historyPage), ("Perfis", profilesPage), ("Configurações", settingsPage)
+                 })
+            navigation.Controls.Add(CreateNavigationButton(title, page));
+        pageHost.Controls.AddRange(new Control[] { settingsPage, profilesPage, historyPage, executionPage, homePage });
+        var statusPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 7, 10, 0) };
+        globalStatus.Text = $"{applicationStore.Descriptor.Scope} · {applicationStore.Descriptor.DatabasePath}";
+        statusPanel.Controls.Add(globalStatus);
+        shell.Controls.Add(navigation, 0, 0);
+        shell.SetRowSpan(navigation, 2);
+        shell.Controls.Add(pageHost, 1, 0);
+        shell.Controls.Add(statusPanel, 1, 1);
+        Controls.Add(shell);
+        ShowPage("Início", homePage);
+    }
+
+    private UserControl BuildExecutionPage()
+    {
+        var page = new UserControl { Dock = DockStyle.Fill, AutoScroll = true };
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -52,7 +86,44 @@ public sealed partial class MainForm
                    "A grade mantém os 100 ciclos mais recentes; o histórico completo é salvo no banco local."
         }, 0, 3);
 
-        Controls.Add(root);
+        page.Controls.Add(root);
+        return page;
+    }
+
+    private Button CreateNavigationButton(string title, UserControl page)
+    {
+        var button = new Button
+        {
+            Text = title,
+            Width = 150,
+            Height = 42,
+            FlatStyle = FlatStyle.Flat,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(2)
+        };
+        button.FlatAppearance.BorderSize = 0;
+        button.Click += (_, _) => ShowPage(title, page);
+        navigationButtons.Add(title, button);
+        return button;
+    }
+
+    private void ShowPage(string title, UserControl page)
+    {
+        foreach (Control candidate in pageHost.Controls)
+            candidate.Visible = ReferenceEquals(candidate, page);
+        page.BringToFront();
+        foreach (var item in navigationButtons)
+            item.Value.Font = new Font(item.Value.Font, item.Key == title ? FontStyle.Bold : FontStyle.Regular);
+    }
+
+    private static UserControl CreatePlaceholderPage(string title, string description)
+    {
+        var page = new UserControl { Dock = DockStyle.Fill, Padding = new Padding(28) };
+        var heading = new Label { Text = title, AutoSize = true, Font = new Font(page.Font.FontFamily, 20, FontStyle.Bold) };
+        var text = new Label { Text = description, AutoSize = true, Top = 50 };
+        page.Controls.Add(text);
+        page.Controls.Add(heading);
+        return page;
     }
 
     private GroupBox BuildConnectionGroup()

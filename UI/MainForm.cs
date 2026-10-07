@@ -36,6 +36,21 @@ public sealed partial class MainForm : Form
     private readonly Label lblStatus = new() { AutoSize = true, Text = "Pronto." };
     private readonly ProgressBar progressBar = new() { Minimum = 0, Maximum = 100, Value = 0, Dock = DockStyle.Fill };
     private readonly ResultsControl resultsControl = new();
+    private readonly Panel pageHost = new() { Dock = DockStyle.Fill };
+    private readonly FlowLayoutPanel navigation = new()
+    {
+        Dock = DockStyle.Fill,
+        FlowDirection = FlowDirection.TopDown,
+        WrapContents = false,
+        Padding = new Padding(8)
+    };
+    private readonly Label globalStatus = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Dictionary<string, Button> navigationButtons = new(StringComparer.Ordinal);
+    private HomePage homePage = null!;
+    private UserControl executionPage = null!;
+    private UserControl historyPage = null!;
+    private UserControl profilesPage = null!;
+    private UserControl settingsPage = null!;
 
     private readonly NotifyIcon trayIcon = new();
     private readonly ToolStripMenuItem trayStatus = new("Pronto") { Enabled = false };
@@ -74,6 +89,7 @@ public sealed partial class MainForm : Form
             new RunOutputFactory(applicationStore, applicationSettings)));
         Text = "DB Connection Tester";
         StartPosition = FormStartPosition.CenterScreen;
+        AutoScaleMode = AutoScaleMode.Dpi;
         MinimumSize = new Size(980, 720);
         Size = new Size(1120, 900);
         MaximizeBox = true;
@@ -83,6 +99,7 @@ public sealed partial class MainForm : Form
         WireEvents();
         ApplyDatabaseType(resetPort: true);
         ApplyRunUiState(RunUiState.Idle);
+        ThemeManager.Apply(this, applicationSettings.Theme);
     }
 
     private DatabaseProfile SelectedProfile => cmbDatabaseType.SelectedItem as DatabaseProfile
