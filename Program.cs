@@ -6,11 +6,19 @@ namespace DBConnectionTester;
 internal static class Program
 {
     [STAThread]
-    private static async Task Main(string[] args)
+    private static async Task<int> Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
         try
         {
+            if (args.Length == 1 && args[0].Equals(
+                    SharedMachineStorageSetup.CommandLineSwitch,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                await new SharedMachineStorageSetup().PrepareAsync();
+                return 0;
+            }
+
             var resolver = new StorageResolver(
                 StorageLocations.CreateDefault(),
                 new RegistryStoragePreferenceStore());
@@ -20,7 +28,7 @@ internal static class Program
             {
                 using var selection = new StorageSelectionForm(resolution.Candidates);
                 if (selection.ShowDialog() != DialogResult.OK || selection.SelectedStore is null)
-                    return;
+                    return 0;
                 store = await resolver.ActivateAsync(selection.SelectedStore, resolution.Candidates);
             }
 
@@ -38,6 +46,7 @@ internal static class Program
             }
             var settings = await new PersistentSettingsRepository(store).GetAsync();
             System.Windows.Forms.Application.Run(new MainForm(store, settings));
+            return 0;
         }
         catch (Exception exception) when (exception is ApplicationStoreException or ArgumentException or
                                           UnauthorizedAccessException or IOException)
@@ -47,6 +56,7 @@ internal static class Program
                 "Falha ao abrir o armazenamento",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+            return 1;
         }
     }
 }

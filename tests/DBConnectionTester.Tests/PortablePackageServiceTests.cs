@@ -31,12 +31,16 @@ public sealed class PortablePackageServiceTests
     {
         using var fixture = await PackageFixture.CreateAsync(withExecutable: true);
         var package = fixture.PathFor("with-exe.zip");
+        var destination = fixture.PathFor("with-exe-restored");
 
         var result = await fixture.Service.CreateAsync(package, includeExecutable: true);
+        var restored = await fixture.Service.RestoreAsync(package, destination);
 
         using var archive = ZipFile.OpenRead(package);
         Assert.True(result.IncludesExecutable);
         Assert.NotNull(archive.GetEntry("DBConnectionTester.exe"));
+        Assert.Equal(Path.Combine(destination, "DBConnectionTester.exe"), restored.ExecutablePath);
+        Assert.Equal("test executable", await File.ReadAllTextAsync(restored.ExecutablePath!));
     }
 
     [Fact]
