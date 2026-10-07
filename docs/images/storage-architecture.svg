@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="440" viewBox="0 0 1120 440" role="img" aria-labelledby="title description">
+  <title id="title">Arquitetura de armazenamento do DB Connection Tester 2.0</title>
+  <desc id="description">O aplicativo descobre bancos local, compartilhado, portátil ou personalizado e concentra configurações, perfis e histórico no SQLite.</desc>
+  <rect width="1120" height="440" fill="#f4f6f8"/>
+  <g font-family="Segoe UI, Arial, sans-serif" fill="#20242a">
+    <rect x="30" y="145" width="210" height="145" rx="12" fill="#ffffff" stroke="#2467c2" stroke-width="3"/>
+    <text x="135" y="190" text-anchor="middle" font-size="23" font-weight="700">Aplicativo</text>
+    <text x="135" y="225" text-anchor="middle" font-size="16">Descoberta e seleção</text>
+    <text x="135" y="252" text-anchor="middle" font-size="16">WinForms · .NET 10</text>
+    <path d="M240 217 H345" stroke="#2467c2" stroke-width="4" marker-end="url(#arrow)"/>
+    <rect x="350" y="55" width="300" height="325" rx="12" fill="#ffffff" stroke="#2467c2" stroke-width="3"/>
+    <text x="500" y="98" text-anchor="middle" font-size="23" font-weight="700">SQLite data.db</text>
+    <g font-size="16">
+      <text x="385" y="145">• identidade e esquema</text>
+      <text x="385" y="180">• configurações</text>
+      <text x="385" y="215">• perfis sem senha</text>
+      <text x="385" y="250">• execuções e ciclos</text>
+      <text x="385" y="285">• diagnósticos e avisos</text>
+      <text x="385" y="320">• resumos estatísticos</text>
+    </g>
+    <path d="M650 217 H755" stroke="#2467c2" stroke-width="4" marker-end="url(#arrow)"/>
+    <rect x="760" y="55" width="330" height="325" rx="12" fill="#ffffff" stroke="#2467c2" stroke-width="3"/>
+    <text x="925" y="98" text-anchor="middle" font-size="23" font-weight="700">Local do banco</text>
+    <g font-size="16">
+      <text x="795" y="145">LocalAppData</text>
+      <text x="795" y="180">ProgramData compartilhado</text>
+      <text x="795" y="215">Data ao lado do EXE</text>
+      <text x="795" y="250">Diretório personalizado</text>
+      <text x="795" y="305" font-weight="700">Saídas derivadas</text>
+      <text x="795" y="337">CSV · TXT · JSON · ZIP</text>
+    </g>
+  </g>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2467c2"/></marker></defs>
+</svg>

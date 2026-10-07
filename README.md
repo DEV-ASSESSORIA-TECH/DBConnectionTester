@@ -1,23 +1,23 @@
 # DB Connection Tester
 
-Aplicativo Windows leve para testar, de forma repetida, cada camada envolvida no acesso a bancos de dados: DNS, Ping/ICMP, TCP, conexão ADO.NET e uma consulta `SELECT 1`.
+Aplicativo Windows portátil para testar repetidamente cada camada envolvida no acesso a bancos de dados: DNS, Ping/ICMP, TCP, conexão ADO.NET e `SELECT 1`.
 
 **Versão atual:** `1.0.3`
 
-![Tela principal do DB Connection Tester](docs/images/app-overview.png)
+![Arquitetura de armazenamento da versão 2.0](docs/images/storage-architecture.svg)
 
-## O que ele faz
+## Principais recursos
 
-- Executa uma quantidade definida de ciclos ou permanece em modo contínuo.
-- Permite ligar e desligar DNS, Ping, TCP e banco de forma independente.
-- Exibe o resultado de cada camada, os 100 ciclos mais recentes e uma tendência compacta.
-- Calcula taxa de sucesso, média, mínimo, máximo, mediana, p95 e sequências de falhas.
-- Classifica falhas com código de diagnóstico, sugestão de correção e código original do provider.
-- Exporta toda a execução para CSV e TXT com gravação contínua.
-- Pode iniciar minimizado na bandeja e ser interrompido com segurança.
-- Mantém credenciais somente em memória; senha e connection string não são gravadas.
-
-Mais detalhes sobre códigos, sugestões e mapeamentos estão na [documentação do diagnóstico inteligente](docs/diagnostics/README.md).
+- Histórico SQLite persistente com execuções, ciclos, diagnósticos, avisos e estatísticas.
+- Perfis reutilizáveis sem senha ou connection string persistida.
+- Interface WinForms navegável com temas Sistema, Claro e Escuro.
+- Filtros, paginação, detalhes e gráficos de latência no histórico.
+- Exportação posterior de qualquer execução em CSV, TXT, JSON ou ZIP.
+- CSV/TXT contínuos opcionais, desligados por padrão para compatibilidade com a versão 1.x.
+- Armazenamento Local, Compartilhado, Portátil ou Personalizado.
+- Pacote portátil com backup consistente, manifesto e checksums SHA-256.
+- Recuperação de execuções interrompidas e bloqueio de uma única execução escritora por banco.
+- Execução em primeiro plano ou na bandeja do Windows.
 
 ## Bancos suportados
 
@@ -30,50 +30,91 @@ Mais detalhes sobre códigos, sugestões e mapeamentos estão na [documentação
 | SQLite | `Microsoft.Data.Sqlite` | — |
 | Somente TCP | — | Editável |
 
-Cada ciclo abre uma nova conexão sem pooling, para que a medição represente conexão e autenticação reais. SQLite é aberto em modo somente leitura. SQL Anywhere requer que o driver ODBC correspondente esteja instalado na mesma arquitetura do aplicativo.
+Cada ciclo abre uma nova conexão sem pooling para medir conexão e autenticação reais. SQLite é aberto em modo somente leitura. SQL Anywhere requer um driver ODBC da mesma arquitetura do aplicativo.
+
+## Armazenamento
+
+O aplicativo procura bancos compatíveis nos locais conhecidos e usa o banco para armazenar sua própria identidade e configuração:
+
+| Modo | Caminho padrão |
+|---|---|
+| Local | `%LOCALAPPDATA%\DBConnectionTester\data.db` |
+| Compartilhado | `%PROGRAMDATA%\DBConnectionTester\data.db` |
+| Portátil | `<pasta-do-exe>\Data\data.db` |
+| Personalizado | Pasta selecionada ou `--data-dir <pasta>` |
+
+Uma escolha explícita sempre vence. Sem escolha, a preferência válida do usuário é reutilizada; uma mídia portátil ainda não observada ou vários bancos sem preferência abrem o seletor. Se nenhum banco existir, o modo Local é criado. Bancos inválidos ou com esquema futuro nunca são sobrescritos.
+
+Consulte [Arquitetura de armazenamento](docs/storage.md) para regras de descoberta, troca, concorrência e ProgramData.
+
+## Perfis, histórico e exportação
+
+Perfis guardam apenas parâmetros não secretos. A senha é informada na tela de execução e permanece somente na memória. Cada execução recebe um snapshot sanitizado, portanto continua íntegra mesmo após alteração ou exclusão do perfil.
+
+O Histórico permite filtrar por período, perfil, destino, estado e diagnóstico. CSV, TXT, JSON e ZIP são gerados a partir do banco, sem depender dos arquivos contínuos. O [esquema JSON v1](docs/export-json-schema.md) é estável e documentado.
+
+![Fluxo de persistência e apresentação de uma execução](docs/images/execution-data-flow.svg)
+
+## Portabilidade
+
+Em **Configurações**, é possível:
+
+- clonar o armazenamento atual para outro modo;
+- criar um armazenamento vazio;
+- selecionar um `data.db` existente;
+- criar um pacote portátil com ou sem o EXE single-file;
+- restaurar um pacote para uma pasta vazia.
+
+Nenhuma operação mescla bancos, substitui destinos ocupados ou apaga o banco anterior. Veja [Pacotes portáteis](docs/portable-packages.md).
+
+## Segurança
+
+- Senhas e connection strings não são gravadas no banco, relatórios, JSON, ZIP ou logs.
+- CSV neutraliza valores que poderiam ser interpretados como fórmulas.
+- Pacotes validam caminhos internos e SHA-256 antes da restauração.
+- A preparação compartilhada eleva somente um processo auxiliar do próprio EXE e somente para `%PROGRAMDATA%\DBConnectionTester`.
+- O aplicativo principal não permanece elevado.
+
+Leia [Segurança e privacidade](docs/security.md) e a [documentação dos diagnósticos](docs/diagnostics/README.md).
 
 ## Downloads
 
-Cada release oferece três opções para Windows x64:
+Cada release oferece três artefatos Windows x64:
 
-- **Framework-dependent:** menor; requer o [.NET Desktop Runtime 8](https://dotnet.microsoft.com/download/dotnet/8.0).
-- **Self-contained (ZIP):** maior; inclui o runtime e não requer instalação do .NET.
-- **Self-contained (EXE):** executável único com o runtime embutido; basta baixar e executar.
+- **Framework-dependent ZIP:** requer o [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
+- **Self-contained ZIP:** inclui o runtime e mantém os arquivos separados.
+- **Self-contained EXE:** arquivo único pronto para executar.
 
-Os dois ZIPs mantêm o executável e suas DLLs como arquivos separados. O EXE avulso é a opção pronta para uso, sem extração e sem instalação prévia do .NET. Releases são criadas automaticamente ao publicar uma tag compatível com o arquivo [VERSION](VERSION), por exemplo `v1.0.3`.
+Cada artefato possui checksum SHA-256. O EXE único é validado pela CI para permanecer abaixo de 120 MiB.
 
 ## Compilar e testar
 
-Requisitos: Windows e .NET 8 SDK.
+Requisitos: Windows x64 e .NET 10 SDK.
 
 ```powershell
-dotnet restore DBConnectionTester.sln
-dotnet build DBConnectionTester.sln --configuration Release
-dotnet test tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj --configuration Release
+dotnet restore tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj
+dotnet build DBConnectionTester.sln -c Release --no-restore
+dotnet test tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj -c Release --no-build
 dotnet run --project DBConnectionTester.csproj
 ```
 
-### Gerar os executáveis
-
-Framework-dependent (requer o .NET Desktop Runtime 8 no computador de destino):
+Gerar e validar os três artefatos:
 
 ```powershell
-dotnet publish DBConnectionTester.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o publish/framework-dependent-exe
+./build/Publish-Release.ps1
 ```
 
-Self-contained (executável único com o runtime do .NET embutido):
+Os arquivos são gravados em `artifacts/`. A automação de release é executada em push e pull request; uma tag compatível com [VERSION](VERSION) também publica a GitHub Release.
 
-```powershell
-dotnet publish DBConnectionTester.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o publish/self-contained-exe
-```
+## Documentação
 
-O executável gerado fica na pasta indicada por `-o` em cada comando.
-
-Os testes automatizados não dependem de servidores reais. A conectividade de cada provider deve ser validada contra uma instância disponível no ambiente de destino.
-
-## Saídas
-
-O CSV usa UTF-8 com BOM e separador por ponto e vírgula. O TXT registra cada ciclo e o resumo estatístico. Etapas desabilitadas são registradas como `N/A`, e os diagnósticos preservam código interno, sugestão, SQLSTATE e código nativo quando disponíveis.
+- [Arquitetura de armazenamento](docs/storage.md)
+- [Formato JSON exportado](docs/export-json-schema.md)
+- [Pacotes portáteis](docs/portable-packages.md)
+- [Segurança e privacidade](docs/security.md)
+- [Solução de problemas](docs/troubleshooting.md)
+- [Códigos de diagnóstico](docs/diagnostics/README.md)
+- [Histórico de versões](CHANGELOG.md)
 
 ## Desenvolvedor
 

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/schemas/run-export-v1.schema.json",
+  "title": "DB Connection Tester run export v1",
+  "type": "object",
+  "required": ["formatVersion", "run", "settings", "stageSummaries", "warnings", "cycles"],
+  "properties": {
+    "formatVersion": { "const": 1 },
+    "run": {
+      "type": "object",
+      "required": ["runId", "status", "startedAt", "applicationVersion", "machineName", "databaseType", "target", "completedCycles"],
+      "properties": {
+        "runId": { "type": "string", "format": "uuid" },
+        "profileId": { "type": ["string", "null"], "format": "uuid" },
+        "profileName": { "type": ["string", "null"] },
+        "status": { "enum": ["Running", "Completed", "Stopped", "Failed", "Interrupted"] },
+        "terminationReason": { "type": ["string", "null"], "enum": ["PlannedCountCompleted", "StoppedByUser", "ExecutionFailed", "ProcessInterrupted", null] },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "finishedAt": { "type": ["string", "null"], "format": "date-time" },
+        "applicationVersion": { "type": "string" },
+        "machineName": { "type": "string" },
+        "databaseType": { "type": "string" },
+        "target": { "type": "string" },
+        "completedCycles": { "type": "integer", "minimum": 0 },
+        "failureMessage": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "settings": { "type": "object", "not": { "required": ["password"] } },
+    "stageSummaries": { "type": "array", "items": { "type": "object" } },
+    "warnings": { "type": "array", "items": { "type": "object" } },
+    "cycles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["number", "startedAt", "databaseTotalMs", "stages"],
+        "properties": {
+          "number": { "type": "integer", "minimum": 1 },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "databaseTotalMs": { "type": "integer", "minimum": 0 },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["stage", "status", "elapsedMs", "extra"],
+              "properties": {
+                "stage": { "enum": ["Dns", "Ping", "Tcp", "DatabaseConnect", "DatabaseQuery"] },
+                "status": { "enum": ["Success", "Failed", "Skipped"] },
+                "elapsedMs": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

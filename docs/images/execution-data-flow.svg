@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="300" viewBox="0 0 1120 300" role="img" aria-labelledby="title description">
+  <title id="title">Fluxo de persistência de uma execução</title>
+  <desc id="description">O ciclo é testado, gravado no SQLite e só então mostrado na interface; saídas legadas são opcionais.</desc>
+  <rect width="1120" height="300" fill="#1e2024"/>
+  <g font-family="Segoe UI, Arial, sans-serif" text-anchor="middle">
+    <g fill="#30343a" stroke="#77a9ef" stroke-width="2">
+      <rect x="35" y="95" width="190" height="105" rx="10"/>
+      <rect x="305" y="95" width="190" height="105" rx="10"/>
+      <rect x="575" y="95" width="190" height="105" rx="10"/>
+      <rect x="845" y="45" width="235" height="90" rx="10"/>
+      <rect x="845" y="165" width="235" height="90" rx="10"/>
+    </g>
+    <g fill="#f2f4f7" font-size="19" font-weight="600">
+      <text x="130" y="142">Executar ciclo</text><text x="130" y="170" font-size="15" font-weight="400">DNS · Ping · TCP · DB</text>
+      <text x="400" y="142">Transação SQLite</text><text x="400" y="170" font-size="15" font-weight="400">ciclo + cinco etapas</text>
+      <text x="670" y="142">Atualizar UI</text><text x="670" y="170" font-size="15" font-weight="400">somente após commit</text>
+      <text x="962" y="83">Histórico e exportação</text><text x="962" y="110" font-size="15" font-weight="400">leitura paginada</text>
+      <text x="962" y="203">CSV/TXT contínuos</text><text x="962" y="230" font-size="15" font-weight="400">opcionais · aviso em falha</text>
+    </g>
+    <g stroke="#77a9ef" stroke-width="4" fill="none" marker-end="url(#arrow)">
+      <path d="M225 147 H295"/><path d="M495 147 H565"/><path d="M765 130 L835 95"/><path d="M765 165 L835 205"/>
+    </g>
+  </g>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#77a9ef"/></marker></defs>
+</svg>
