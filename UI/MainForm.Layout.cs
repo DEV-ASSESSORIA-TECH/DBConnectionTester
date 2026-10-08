@@ -16,7 +16,7 @@ public sealed partial class MainForm
                 ? "Autenticação do Windows"
                 : "Usuário e senha do SQL Server";
 
-        homePage = new HomePage(applicationStore.Descriptor);
+        homePage = new HomePage(new RunHistoryRepository(applicationStore));
         executionPage = BuildExecutionPage();
         var repository = new PersistentSettingsRepository(applicationStore);
         historyPage = new HistoryPage(new RunHistoryRepository(applicationStore), repository);
@@ -24,6 +24,7 @@ public sealed partial class MainForm
         settingsPage = new SettingsPage(applicationStore, applicationSettings, repository, new RegistryStoragePreferenceStore());
         homePage.NewRunRequested += (_, _) => ShowPage("Nova execução", executionPage);
         homePage.HistoryRequested += (_, _) => ShowPage("Histórico", historyPage);
+        homePage.ProfilesRequested += (_, _) => ShowPage("Perfis", profilesPage);
         profilesPage.UseRequested += ApplyProfile;
         profilesPage.ProfilesChanged += SetExecutionProfiles;
         settingsPage.SettingsSaved += ApplyApplicationSettings;
@@ -274,7 +275,7 @@ public sealed partial class MainForm
     {
         try
         {
-            await historyPage.RefreshAsync();
+            await Task.WhenAll(historyPage.RefreshAsync(), homePage.RefreshAsync());
         }
         catch (ApplicationStoreException exception)
         {

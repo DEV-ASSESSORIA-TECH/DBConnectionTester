@@ -1,71 +1,160 @@
 using DBConnectionTester.Models;
+using DBConnectionTester.Services.Storage;
 
 namespace DBConnectionTester.UI;
 
 public sealed class HomePage : UserControl
 {
-    private readonly Label storeValue = new() { AutoSize = true };
-    private readonly Label scopeValue = new() { AutoSize = true };
-    private readonly Label statusValue = new() { AutoSize = true, Text = "Pronto para iniciar." };
+    private readonly IRecentRunHistoryRepository history;
+    private readonly LatestUiRequest recentRequests = new();
+    private readonly Label statusValue = new() { AutoSize = true, Dock = DockStyle.Top, Text = "Nenhum teste em andamento." };
+    private readonly Label statusDetail = new() { AutoSize = true, Dock = DockStyle.Top, Text = "O andamento da execução aparece aqui durante o teste." };
+    private readonly Label recentFeedback = new() { AutoSize = true, Dock = DockStyle.Top, Text = "Carregando últimas execuções…" };
+    private readonly DataGridView recentRuns = new();
+    private readonly Button retry = new() { Text = "Tentar novamente", AutoSize = true, Visible = false };
 
-    public HomePage(StoreDescriptor store)
+    public HomePage(IRecentRunHistoryRepository history)
     {
+        this.history = history;
         Dock = DockStyle.Fill;
         AutoScroll = true;
-        Padding = new Padding(28);
-
-        var title = new Label
+        Padding = new Padding(24);
+        var content = VerticalTable();
+        content.Controls.Add(new Label
         {
-            Text = "DB Connection Tester",
-            AutoSize = true,
-            Font = new Font(Font.FontFamily, 22, FontStyle.Bold),
-            Margin = new Padding(0, 0, 0, 6)
-        };
-        var subtitle = new Label
+            Text = "Início", AutoSize = true, Dock = DockStyle.Top,
+            Font = new Font(Font.FontFamily, 22, FontStyle.Bold), Margin = new Padding(3, 0, 3, 6)
+        });
+        content.Controls.Add(new Label
         {
-            Text = "Diagnóstico de conectividade com histórico persistente e portátil.",
-            AutoSize = true,
-            Margin = new Padding(0, 0, 0, 24)
-        };
-        var start = new Button { Text = "Nova execução", AutoSize = true, Padding = new Padding(12, 6, 12, 6) };
+            Text = "Inicie um teste ou consulte suas últimas execuções.", AutoSize = true,
+            Dock = DockStyle.Top, Margin = new Padding(3, 0, 3, 18)
+        });
+        var start = ActionButton("Nova execução");
+        start.Font = new Font(Font, FontStyle.Bold);
         start.Click += (_, _) => NewRunRequested?.Invoke(this, EventArgs.Empty);
-        var history = new Button { Text = "Abrir histórico", AutoSize = true, Padding = new Padding(12, 6, 12, 6) };
-        history.Click += (_, _) => HistoryRequested?.Invoke(this, EventArgs.Empty);
-
-        var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 20) };
-        actions.Controls.Add(start);
-        actions.Controls.Add(history);
-        var info = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(14) };
-        info.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        info.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        AddInfo(info, 0, "Armazenamento:", storeValue);
-        AddInfo(info, 1, "Escopo:", scopeValue);
-        AddInfo(info, 2, "Estado:", statusValue);
-
-        var content = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
-        content.Controls.Add(title);
-        content.Controls.Add(subtitle);
+        var profiles = ActionButton("Usar um perfil");
+        profiles.Click += (_, _) => ProfilesRequested?.Invoke(this, EventArgs.Empty);
+        var openHistory = ActionButton("Abrir histórico");
+        openHistory.Click += (_, _) => HistoryRequested?.Invoke(this, EventArgs.Empty);
+        var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Top, WrapContents = true, Margin = new Padding(0, 0, 0, 16) };
+        actions.Controls.AddRange(new Control[] { start, profiles, openHistory });
         content.Controls.Add(actions);
-        content.Controls.Add(info);
+
+        var state = VerticalTable();
+        statusValue.Font = new Font(Font, FontStyle.Bold);
+        statusValue.Margin = new Padding(3, 6, 3, 6);
+        state.Controls.Add(statusValue);
+        state.Controls.Add(statusDetail);
+        content.Controls.Add(Group("Execução atual", state));
+
+        ConfigureRecentGrid();
+        var recent = VerticalTable();
+        recent.Controls.Add(recentFeedback);
+        recent.Controls.Add(recentRuns);
+        var allHistory = ActionButton("Ver histórico completo");
+        allHistory.Click += (_, _) => HistoryRequested?.Invoke(this, EventArgs.Empty);
+        retry.Click += async (_, _) => await RefreshAsync();
+        var recentActions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Top, FlowDirection = FlowDirection.RightToLeft, WrapContents = true };
+        recentActions.Controls.AddRange(new Control[] { allHistory, retry });
+        recent.Controls.Add(recentActions);
+        content.Controls.Add(Group("Últimas execuções", recent));
         Controls.Add(content);
-        UpdateStore(store);
     }
 
     public event EventHandler? NewRunRequested;
+    public event EventHandler? ProfilesRequested;
     public event EventHandler? HistoryRequested;
 
-    public void UpdateStore(StoreDescriptor store)
+    public void UpdateRunStatus(string status) => statusValue.Text = status;
+    public void UpdateRunProgress(string progress) => statusDetail.Text = progress;
+
+    public async Task RefreshAsync(CancellationToken token = default)
     {
-        storeValue.Text = store.DatabasePath;
-        scopeValue.Text = store.Scope.ToString();
+        if (IsDisposed) return;
+        using var request = recentRequests.Start(token);
+        recentFeedback.Text = "Carregando últimas execuções…";
+        recentFeedback.Visible = true;
+        retry.Visible = false;
+        try
+        {
+            var items = await Task.Run(() => history.GetRecentAsync(request.Token), request.Token);
+            if (!request.IsCurrent || IsDisposed) return;
+            recentRuns.Rows.Clear();
+            foreach (var item in items.Take(3))
+                recentRuns.Rows.Add(item.StartedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"),
+                    item.ProfileName ?? "Configuração manual", item.Target, HistoryPage.StatusText(item.Status));
+            recentRuns.ClearSelection();
+            recentRuns.CurrentCell = null;
+            recentRuns.Visible = items.Count > 0;
+            recentFeedback.Text = "Nenhuma execução no histórico. Comece em Nova execução ou escolha um perfil.";
+            recentFeedback.Visible = items.Count == 0;
+        }
+        catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
+        catch (Exception error) when (error is ApplicationStoreException or Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            if (!request.IsCurrent || IsDisposed) return;
+            recentFeedback.Text = recentRuns.Rows.Count > 0
+                ? "Não foi possível atualizar as últimas execuções. Os registros exibidos podem estar desatualizados."
+                : "Não foi possível carregar as últimas execuções. Tente novamente ou consulte o Histórico.";
+            retry.Visible = true;
+        }
     }
 
-    public void UpdateRunStatus(string status) => statusValue.Text = status;
-
-    private static void AddInfo(TableLayoutPanel table, int row, string caption, Control value)
+    private void ConfigureRecentGrid()
     {
-        table.Controls.Add(new Label { Text = caption, AutoSize = true, Font = new Font(table.Font, FontStyle.Bold), Margin = new Padding(3, 6, 14, 6) }, 0, row);
-        value.Margin = new Padding(3, 6, 3, 6);
-        table.Controls.Add(value, 1, row);
+        recentRuns.AccessibleName = "Últimas três execuções";
+        recentRuns.Dock = DockStyle.Top;
+        recentRuns.Visible = false;
+        recentRuns.ReadOnly = true;
+        recentRuns.AllowUserToAddRows = recentRuns.AllowUserToDeleteRows = false;
+        recentRuns.AllowUserToResizeRows = false;
+        recentRuns.MultiSelect = false;
+        recentRuns.RowHeadersVisible = false;
+        recentRuns.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        recentRuns.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        recentRuns.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        foreach (var (name, caption, weight, minimum) in new[]
+        { ("Started", "Início", 23f, 125), ("Profile", "Perfil", 25f, 110), ("Target", "Destino", 34f, 140), ("State", "Estado", 18f, 90) })
+            recentRuns.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = name, HeaderText = caption, FillWeight = weight, MinimumWidth = minimum,
+                SortMode = DataGridViewColumnSortMode.NotSortable
+            });
+        void FitGrid()
+        {
+            var rowHeight = recentRuns.Font.Height + 10 * recentRuns.DeviceDpi / 96;
+            recentRuns.RowTemplate.Height = rowHeight;
+            foreach (DataGridViewRow row in recentRuns.Rows) row.Height = rowHeight;
+            recentRuns.ColumnHeadersHeight = rowHeight + 2;
+            recentRuns.Height = recentRuns.ColumnHeadersHeight + 3 * rowHeight + 4 * recentRuns.DeviceDpi / 96;
+        }
+        recentRuns.FontChanged += (_, _) => FitGrid();
+        recentRuns.DpiChangedAfterParent += (_, _) => FitGrid();
+        FitGrid();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) recentRequests.Dispose();
+        base.Dispose(disposing);
+    }
+
+    private static Button ActionButton(string text) => new() { Text = text, AutoSize = true, Padding = new Padding(8, 4, 8, 4) };
+    private static TableLayoutPanel VerticalTable()
+    {
+        var table = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1 };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        return table;
+    }
+    private static GroupBox Group(string title, Control content)
+    {
+        var group = new GroupBox
+        {
+            Text = title, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(10, 8, 10, 14), Margin = new Padding(3, 0, 3, 16)
+        };
+        group.Controls.Add(content);
+        return group;
     }
 }

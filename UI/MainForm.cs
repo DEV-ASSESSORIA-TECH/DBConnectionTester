@@ -107,8 +107,7 @@ public sealed partial class MainForm : Form
         ThemeManager.Apply(this, applicationSettings.Theme);
         Shown += async (_, _) =>
         {
-            await RefreshProfilesAsync();
-            await RefreshHistoryAsync();
+            await Task.WhenAll(RefreshProfilesAsync(), RefreshHistoryAsync());
         };
     }
 

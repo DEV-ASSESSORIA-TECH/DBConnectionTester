@@ -28,6 +28,16 @@ public sealed class ExecutionLayoutTests
                 {
                     try
                     {
+                        var home = Field<HomePage>(form, "homePage");
+                        foreach (var (buttonText, targetPage) in new[]
+                        { ("Nova execução", "executionPage"), ("Usar um perfil", "profilesPage"), ("Abrir histórico", "historyPage"), ("Ver histórico completo", "historyPage") })
+                        {
+                            form.NavigateTo("Início");
+                            // Startup loads are asynchronous; let profile navigation settle.
+                            await Task.Delay(80);
+                            Descendants(home).OfType<Button>().Single(button => button.Text == buttonText).PerformClick();
+                            Assert.True(Field<UserControl>(form, targetPage).Visible);
+                        }
                         form.NavigateTo("Nova execução");
                         var bar = Field<ProgressBar>(form, "progressBar");
                         var results = Field<ResultsControl>(form, "resultsControl");
@@ -55,6 +65,7 @@ public sealed class ExecutionLayoutTests
                         Assert.True(bar.Visible);
                         Assert.Equal(50, bar.Value);
                         Assert.Contains("50 de 100", Field<Label>(form, "lblRunProgress").Text);
+                        Assert.Contains(Descendants(home).OfType<Label>(), label => label.Text.Contains("50 de 100"));
                         foreach (var size in new[] { new Size(800, 600), new Size(1100, 860), new Size(1180, 600), new Size(1680, 950), new Size(1100, 860) })
                         {
                             form.ClientSize = size;

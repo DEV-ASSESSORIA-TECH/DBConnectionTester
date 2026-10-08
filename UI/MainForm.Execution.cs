@@ -232,6 +232,7 @@ public sealed partial class MainForm
         exitRequested = true;
         ApplyRunUiState(RunUiState.Stopping);
         lblStatus.Text = "Encerrando teste, finalizando os arquivos e saindo...";
+        homePage.UpdateRunStatus(lblStatus.Text);
         trayStatus.Text = "Finalizando arquivos...";
         runCoordinator.Stop();
     }
@@ -284,6 +285,7 @@ public sealed partial class MainForm
         lblRunProgress.Text = progressSettings.Continuous
             ? $"{completedTests:N0} ciclos concluídos · {duration} decorridos"
             : $"{completedTests:N0} de {progressSettings.TestCount.Value:N0} ciclos · {duration} decorridos";
+        homePage.UpdateRunProgress(lblRunProgress.Text);
     }
 
     private void SetConfigurationEnabled(bool enabled)

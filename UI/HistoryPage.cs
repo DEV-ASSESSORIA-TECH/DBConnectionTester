@@ -558,7 +558,7 @@ public sealed class HistoryPage : UserControl
     private static Label LabelFor(string text) => new() { Text = text + ":", AutoSize = true, Margin = new Padding(8, 7, 2, 0) };
     private static string FormatMs(double? value) => value is null ? "N/A" : $"{value:0.0} ms";
     private static string CycleCountText(long count) => $"{count:N0} {(count == 1 ? "ciclo" : "ciclos")}";
-    private static string StatusText(PersistedRunStatus value) => value switch
+    internal static string StatusText(PersistedRunStatus value) => value switch
     {
         PersistedRunStatus.Running => "Em execução",
         PersistedRunStatus.Completed => "Concluída",
