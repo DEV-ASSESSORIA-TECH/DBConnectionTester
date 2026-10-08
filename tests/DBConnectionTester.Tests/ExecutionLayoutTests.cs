@@ -77,7 +77,11 @@ public sealed class ExecutionLayoutTests
                         Assert.Contains("50 ciclos concluídos", counter.Text);
                         Assert.DoesNotContain("%", counter.Text);
                         var before = counter.Text;
-                        await Task.Delay(1200);
+                        // Wait for an actual UI timer tick rather than assuming its first tick
+                        // falls after the elapsed counter crosses a whole second.
+                        var deadline = Environment.TickCount64 + 5000;
+                        while (counter.Text == before && Environment.TickCount64 < deadline)
+                            await Task.Delay(25);
                         Assert.NotEqual(before, counter.Text);
                         var continuousViewport = Descendants(form).OfType<Panel>().Single(c => c.Name == "ExecutionConfigurationViewport");
                         var background = Field<CheckBox>(form, "chkBackground");
