@@ -484,6 +484,7 @@ public sealed class HistoryPage : UserControl
         exportInProgress = true;
         lastExportPath = null;
         openExportFolder.Visible = false;
+        UiStyle.SetState(exportFeedback, UiState.Busy);
         exportFeedback.Text = selectedDetails is { } selected
             ? $"Exportando execução de {selected.Run.StartedAt.ToLocalTime():g} · {selected.Run.Target}…"
             : "Exportando…";
@@ -495,6 +496,7 @@ public sealed class HistoryPage : UserControl
             var result = await Task.Run(action);
             if (IsDisposed) return;
             lastExportPath = result.Files[0];
+            UiStyle.SetState(exportFeedback, UiState.Success);
             exportFeedback.Text = $"Exportação concluída: {Path.GetFileName(lastExportPath)}";
             exportHints.SetToolTip(exportFeedback, lastExportPath);
             exportHints.SetToolTip(openExportFolder, Path.GetDirectoryName(lastExportPath));
@@ -504,6 +506,7 @@ public sealed class HistoryPage : UserControl
         {
             if (!IsDisposed)
             {
+                UiStyle.SetState(exportFeedback, UiState.Error);
                 exportFeedback.Text = "Falha na exportação: " + exception.Message;
                 exportHints.SetToolTip(exportFeedback, exception.Message);
             }
@@ -524,6 +527,7 @@ public sealed class HistoryPage : UserControl
         }
         catch (Exception exception) when (exception is Win32Exception or IOException or UnauthorizedAccessException)
         {
+            UiStyle.SetState(exportFeedback, UiState.Error);
             exportFeedback.Text = "Não foi possível abrir a pasta: " + exception.Message;
         }
     }

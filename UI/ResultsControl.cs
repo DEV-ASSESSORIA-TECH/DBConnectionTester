@@ -2,7 +2,7 @@ using DBConnectionTester.Models;
 
 namespace DBConnectionTester.UI;
 
-public sealed class ResultsControl : UserControl
+public sealed class ResultsControl : UserControl, IThemePaletteAware
 {
     private const int MaximumVisibleCycles = 100;
 
@@ -11,6 +11,26 @@ public sealed class ResultsControl : UserControl
     private readonly StatisticsDashboardControl statisticsDashboard = new();
     private RunStatisticsSnapshot? latestStatistics;
     private bool statisticsDirty;
+    private MetricColors colors = new();
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<DataGridViewRow, RowAppearance> rowAppearances = new();
+    private sealed class RowAppearance { public bool Failure; }
+
+    private void SetRowAppearance(DataGridViewRow row, bool failure)
+    {
+        rowAppearances.GetOrCreateValue(row).Failure = failure;
+        row.DefaultCellStyle.BackColor = failure ? colors.FailureBackground : colors.NormalStatisticsBackground;
+    }
+
+    void IThemePaletteAware.ApplyPalette(ThemePalette palette)
+    {
+        if (colors == palette.Metrics) return;
+        colors = palette.Metrics;
+        // Recolor only existing explicit row styles; no data loading or statistics rebuild.
+        foreach (var table in new[] { grid, statisticsGrid })
+            foreach (DataGridViewRow row in table.Rows)
+                if (rowAppearances.TryGetValue(row, out var appearance))
+                    row.DefaultCellStyle.BackColor = appearance.Failure ? colors.FailureBackground : colors.NormalStatisticsBackground;
+    }
 
     public ResultsControl()
     {
@@ -86,7 +106,7 @@ public sealed class ResultsControl : UserControl
 
         var row = grid.Rows[0];
         if (HasFailure(cycle))
-            row.DefaultCellStyle.BackColor = Color.FromArgb(255, 242, 242);
+            SetRowAppearance(row, failure: true);
         if (!string.IsNullOrWhiteSpace(error))
             row.Cells[^1].ToolTipText = DiagnosticFormatting.Detailed(diagnostic);
 
@@ -106,10 +126,10 @@ public sealed class ResultsControl : UserControl
         grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         grid.RowHeadersVisible = false;
         grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        grid.BackgroundColor = SystemColors.Window;
+        grid.BackgroundColor = colors.GridBackground;
         grid.BorderStyle = BorderStyle.Fixed3D;
         grid.EnableHeadersVisualStyles = false;
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(240, 242, 245);
+        grid.ColumnHeadersDefaultCellStyle.BackColor = colors.GridHeader;
         grid.ColumnHeadersDefaultCellStyle.Font = new Font(grid.Font, FontStyle.Bold);
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Cycle", HeaderText = "Ciclo", FillWeight = 48 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Time", HeaderText = "Horário", FillWeight = 72 });
@@ -132,10 +152,10 @@ public sealed class ResultsControl : UserControl
         statisticsGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         statisticsGrid.RowHeadersVisible = false;
         statisticsGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        statisticsGrid.BackgroundColor = SystemColors.Window;
+        statisticsGrid.BackgroundColor = colors.GridBackground;
         statisticsGrid.BorderStyle = BorderStyle.Fixed3D;
         statisticsGrid.EnableHeadersVisualStyles = false;
-        statisticsGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(240, 242, 245);
+        statisticsGrid.ColumnHeadersDefaultCellStyle.BackColor = colors.GridHeader;
         statisticsGrid.ColumnHeadersDefaultCellStyle.Font = new Font(statisticsGrid.Font, FontStyle.Bold);
         statisticsGrid.Columns.Add("Stage", "Etapa");
         statisticsGrid.Columns.Add("Success", "Resultados");
@@ -185,9 +205,7 @@ public sealed class ResultsControl : UserControl
         row.Cells[8].Value = statistics.ConsecutiveFailures.ToString("N0");
         row.Cells[9].Value = statistics.MaximumConsecutiveFailures.ToString("N0");
         row.Cells[10].Value = FormatElapsed(statistics.TimeSinceLastFailure(DateTimeOffset.Now));
-        row.DefaultCellStyle.BackColor = statistics.ConsecutiveFailures > 0
-            ? Color.FromArgb(255, 242, 242)
-            : SystemColors.Window;
+        SetRowAppearance(row, statistics.ConsecutiveFailures > 0);
     }
 
     private static string FormatLatency(double? milliseconds) =>

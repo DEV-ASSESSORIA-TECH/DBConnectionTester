@@ -356,6 +356,7 @@ public sealed class ProfilesPage : UserControl
     private void UpdateEditState()
     {
         editorTitle.Text = selectedId is null ? "Novo perfil" : (string.IsNullOrWhiteSpace(name.Text) ? "Editar perfil" : name.Text);
+        UiStyle.SetState(editorState, HasUnsavedChanges ? UiState.Warning : justSaved ? UiState.Success : UiState.Normal);
         editorState.Text = HasUnsavedChanges ? "Alterações não salvas" : justSaved ? "Perfil salvo" : "";
         editorState.Visible = editorState.Text.Length > 0;
         use.Enabled = editingEnabled && !refreshPending && !mutationPending && !decisionPending

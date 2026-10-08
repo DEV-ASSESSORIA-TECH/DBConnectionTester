@@ -60,7 +60,6 @@ public sealed class SettingsPage : UserControl
         IStoragePreferenceStore preferences)
     {
         UiStyle.SetRole(save, UiRole.PrimaryAction);
-        UiStyle.SetRole(cancelSwitch, UiRole.DestructiveAction);
         UiStyle.SetRole(settingsState, UiRole.Status);
         UiStyle.SetRole(operationStatus, UiRole.Status);
         UiStyle.SetRole(pendingStorage, UiRole.Warning);
@@ -81,7 +80,7 @@ public sealed class SettingsPage : UserControl
         theme.Format += (_, e) => e.Value = e.ListItem switch
         { ApplicationTheme.Light => "Claro", ApplicationTheme.Dark => "Escuro", _ => "Sistema" };
         var root = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
-        root.Controls.Add(new Label { Text = "Configurações", AutoSize = true, Font = new Font(Font.FontFamily, 20, FontStyle.Bold), Margin = new Padding(3, 3, 3, 16) });
+        root.Controls.Add(UiStyle.WithRole(new Label { Text = "Configurações", AutoSize = true, Font = new Font(Font.FontFamily, 20, FontStyle.Bold), Margin = new Padding(3, 3, 3, 16) }, UiRole.Heading));
         root.Controls.Add(operationStatus);
         root.Controls.Add(BuildAppearanceGroup());
         root.Controls.Add(BuildStorageGroup());
@@ -242,9 +241,11 @@ public sealed class SettingsPage : UserControl
         savedCopyPreferences = copyPreferences.Checked;
         LoadSettings(settings);
         UpdateBankState();
+        UiStyle.SetState(settingsState, UiState.Success);
         settingsState.Text = "Configurações salvas.";
         SettingsSaved?.Invoke(settings);
         StorageSelected?.Invoke(savedBank);
+        UiStyle.SetState(operationStatus, UiState.Success);
         operationStatus.Text = "Configurações salvas.";
         return true;
     }, allowDecision: fromDecision);
@@ -343,6 +344,7 @@ public sealed class SettingsPage : UserControl
     {
         currentDatabasePath.Text = selectedBank.DatabasePath;
         var different = !SameBank(selectedBank, store.Descriptor);
+        UiStyle.SetState(bankInfo, !SameBank(selectedBank, savedBank) ? UiState.Warning : UiState.Normal);
         bankInfo.Text = $"Localização: {ScopeName(selectedBank.Scope)} · Banco compatível";
         if (!SameBank(selectedBank, savedBank)) bankInfo.Text += " · Troca não salva";
         copyPreferences.Visible = copyDescription.Visible = different;
@@ -370,12 +372,17 @@ public sealed class SettingsPage : UserControl
     {
         if (!operationsEnabled || operationPending || (decisionPending && !allowDecision) || IsDisposed) return false;
         operationPending = true;
+        UiStyle.SetState(operationStatus, UiState.Busy);
         operationStatus.Text = status;
         UpdateOperationState();
         try
         {
             var result = await operation();
-            if (!IsDisposed && operationStatus.Text == status) operationStatus.Text = result ? "Operação concluída." : "Operação cancelada.";
+            if (!IsDisposed && operationStatus.Text == status)
+            {
+                UiStyle.SetState(operationStatus, result ? UiState.Success : UiState.Normal);
+                operationStatus.Text = result ? "Operação concluída." : "Operação cancelada.";
+            }
             return result;
         }
         catch (Exception exception) when (exception is ArgumentException or IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or ApplicationStoreException
@@ -384,9 +391,13 @@ public sealed class SettingsPage : UserControl
             if (!IsDisposed)
             {
                 if (exception is System.ComponentModel.Win32Exception { NativeErrorCode: 1223 })
+                {
+                    UiStyle.SetState(operationStatus, UiState.Normal);
                     operationStatus.Text = "Operação cancelada.";
+                }
                 else
                 {
+                    UiStyle.SetState(operationStatus, UiState.Error);
                     operationStatus.Text = "Não foi possível concluir a operação.";
                     var message = exception switch
                     {
@@ -416,6 +427,7 @@ public sealed class SettingsPage : UserControl
 
     private void UpdateEditState()
     {
+        if (!loadingSettings) UiStyle.SetState(settingsState, HasUnsavedChanges ? UiState.Warning : UiState.Normal);
         if (!loadingSettings) { settingsState.Text = HasUnsavedChanges ? "Alterações não salvas." : ""; discard.Enabled = operationsEnabled && !IsBusy && HasUnsavedChanges; }
     }
 

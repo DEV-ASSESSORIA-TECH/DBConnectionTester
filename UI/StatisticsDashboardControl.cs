@@ -3,7 +3,7 @@ using DBConnectionTester.Models;
 
 namespace DBConnectionTester.UI;
 
-public sealed class StatisticsDashboardControl : UserControl
+public sealed class StatisticsDashboardControl : UserControl, IThemePaletteAware
 {
     private const int MaximumPoints = 100;
 
@@ -15,9 +15,30 @@ public sealed class StatisticsDashboardControl : UserControl
 
     private RunStatisticsSnapshot? latestStatistics;
     private bool dashboardDirty = true;
+    private MetricColors colors = new();
+
+    private enum TrendTone { Waiting, Attention, Stable, Improving, Degrading }
+    private TrendTone trendTone;
+
+    void IThemePaletteAware.ApplyPalette(ThemePalette palette)
+    {
+        if (colors == palette.Metrics) return;
+        colors = palette.Metrics;
+        ApplyTrendColor();
+    }
+
+    private void ApplyTrendColor() => trendLabel.ForeColor = trendTone switch
+    {
+        TrendTone.Attention => colors.Attention,
+        TrendTone.Stable => colors.Stable,
+        TrendTone.Improving => colors.Improving,
+        TrendTone.Degrading => colors.Degrading,
+        _ => colors.Muted
+    };
 
     public StatisticsDashboardControl()
     {
+        UiStyle.SetRole(trendLabel, UiRole.Status);
         Dock = DockStyle.Fill;
         stageSelector.Items.AddRange(new object[]
         {
@@ -99,7 +120,9 @@ public sealed class StatisticsDashboardControl : UserControl
         if (statistics is null)
         {
             trendLabel.Text = "Aguardando dados";
-            trendLabel.ForeColor = SystemColors.GrayText;
+            trendTone = TrendTone.Waiting;
+            UiStyle.SetState(trendLabel, UiState.Normal);
+            ApplyTrendColor();
             chart.SetData(Array.Empty<TrendPoint>(), null, null);
             return;
         }
@@ -107,7 +130,8 @@ public sealed class StatisticsDashboardControl : UserControl
         if (statistics.ConsecutiveFailures > 0)
         {
             trendLabel.Text = $"Atenção: {statistics.ConsecutiveFailures:N0} falha(s) consecutiva(s)";
-            trendLabel.ForeColor = Color.FromArgb(185, 45, 45);
+            trendTone = TrendTone.Attention;
+            UiStyle.SetState(trendLabel, UiState.Error);
         }
         else
         {
@@ -115,15 +139,23 @@ public sealed class StatisticsDashboardControl : UserControl
                 histories[option.Stage]
                     .Where(point => point.Status == StepStatus.Success)
                     .Select(point => point.ElapsedMs));
-            (trendLabel.Text, trendLabel.ForeColor) = direction switch
+            (trendLabel.Text, trendTone) = direction switch
             {
-                LatencyTrendDirection.Stable => ("Tendência estável", Color.FromArgb(55, 105, 155)),
-                LatencyTrendDirection.Improving => ("Latência melhorando", Color.FromArgb(28, 120, 72)),
-                LatencyTrendDirection.Degrading => ("Latência degradando", Color.FromArgb(200, 110, 25)),
-                _ => ("Dados insuficientes para tendência", SystemColors.GrayText)
+                LatencyTrendDirection.Stable => ("Tendência estável", TrendTone.Stable),
+                LatencyTrendDirection.Improving => ("Latência melhorando", TrendTone.Improving),
+                LatencyTrendDirection.Degrading => ("Latência degradando", TrendTone.Degrading),
+                _ => ("Dados insuficientes para tendência", TrendTone.Waiting)
             };
         }
 
+        UiStyle.SetState(trendLabel, trendTone switch
+        {
+            TrendTone.Attention => UiState.Error,
+            TrendTone.Degrading => UiState.Warning,
+            TrendTone.Improving => UiState.Success,
+            _ => UiState.Normal
+        });
+        ApplyTrendColor();
         chart.SetData(histories[option.Stage], statistics.MedianMs, statistics.P95Ms);
     }
 
@@ -155,17 +187,25 @@ internal enum MetricStage
 
 internal readonly record struct TrendPoint(long Cycle, StepStatus Status, long ElapsedMs);
 
-internal sealed class LatencyTrendControl : Control
+internal sealed class LatencyTrendControl : Control, IThemePaletteAware
 {
     private IReadOnlyList<TrendPoint> points = Array.Empty<TrendPoint>();
     private double? median;
     private double? p95;
+    private MetricColors colors = new();
+
+    void IThemePaletteAware.ApplyPalette(ThemePalette palette)
+    {
+        if (colors == palette.Metrics) return;
+        colors = palette.Metrics;
+        Invalidate();
+    }
 
     public LatencyTrendControl()
     {
         Dock = DockStyle.Fill;
         DoubleBuffered = true;
-        BackColor = SystemColors.Window;
+        BackColor = colors.GridBackground;
         Margin = new Padding(3);
     }
 
@@ -193,23 +233,23 @@ internal sealed class LatencyTrendControl : Control
         var area = new Rectangle(axisWidth, labelHeight + 6,
             Math.Max(1, Width - axisWidth - 12), Math.Max(1, Height - labelHeight * 2 - 12));
         if (Width <= axisWidth + 12 || Height <= labelHeight * 2 + 12) return;
-        using var borderPen = new Pen(Color.FromArgb(220, 224, 229));
+        using var borderPen = new Pen(colors.ChartGrid);
         e.Graphics.DrawRectangle(borderPen, area);
 
         if (successful.Length == 0)
         {
             TextRenderer.DrawText(e.Graphics, "Sem latências para exibir", Font, area,
-                SystemColors.GrayText, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                colors.Muted, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             return;
         }
 
-        using var gridPen = new Pen(Color.FromArgb(220, 224, 229)) { DashStyle = DashStyle.Dot };
+        using var gridPen = new Pen(colors.ChartGrid) { DashStyle = DashStyle.Dot };
         e.Graphics.DrawLine(gridPen, area.Left, area.Top + area.Height / 2f, area.Right, area.Top + area.Height / 2f);
-        DrawReference(e.Graphics, area, maximum, median, Color.FromArgb(65, 120, 180));
-        DrawReference(e.Graphics, area, maximum, p95, Color.FromArgb(220, 135, 45));
+        DrawReference(e.Graphics, area, maximum, median, colors.Median);
+        DrawReference(e.Graphics, area, maximum, p95, colors.P95);
         // Keep reference labels outside the plot so nearby percentiles cannot overlap.
         var legendX = area.Left;
-        foreach (var reference in new[] { ("Mediana", median, Color.FromArgb(65, 120, 180)), ("P95", p95, Color.FromArgb(220, 135, 45)) })
+        foreach (var reference in new[] { ("Mediana", median, colors.Median), ("P95", p95, colors.P95) })
         {
             if (reference.Item2 is null) continue;
             var text = $"{reference.Item1}: {reference.Item2:0.0} ms";
@@ -219,10 +259,10 @@ internal sealed class LatencyTrendControl : Control
             legendX += width + 16;
         }
 
-        using var linePen = new Pen(Color.FromArgb(55, 105, 155), 2);
-        using var successBrush = new SolidBrush(Color.FromArgb(55, 105, 155));
-        using var failurePen = new Pen(Color.FromArgb(190, 50, 50), 2);
-        using var skippedPen = new Pen(Color.FromArgb(160, 165, 170));
+        using var linePen = new Pen(colors.Series, 2);
+        using var successBrush = new SolidBrush(colors.Series);
+        using var failurePen = new Pen(colors.Failure, 2);
+        using var skippedPen = new Pen(colors.Skipped);
         PointF? previous = null;
         for (var index = 0; index < points.Count; index++)
         {
@@ -253,14 +293,14 @@ internal sealed class LatencyTrendControl : Control
             }
         }
 
-        TextRenderer.DrawText(e.Graphics, $"{maximum:0} ms", Font, new Point(0, area.Top - Font.Height / 2), SystemColors.GrayText);
-        TextRenderer.DrawText(e.Graphics, "0", Font, new Point(axisWidth - TextRenderer.MeasureText("0", Font).Width - 6, area.Bottom - Font.Height / 2), SystemColors.GrayText);
+        TextRenderer.DrawText(e.Graphics, $"{maximum:0} ms", Font, new Point(0, area.Top - Font.Height / 2), colors.Muted);
+        TextRenderer.DrawText(e.Graphics, "0", Font, new Point(axisWidth - TextRenderer.MeasureText("0", Font).Width - 6, area.Bottom - Font.Height / 2), colors.Muted);
         if (points.Count > 0)
         {
             var axis = new Rectangle(area.Left, area.Bottom + 4, area.Width, labelHeight);
-            TextRenderer.DrawText(e.Graphics, $"Ciclo {points[0].Cycle}", Font, axis, SystemColors.GrayText, TextFormatFlags.Left);
+            TextRenderer.DrawText(e.Graphics, $"Ciclo {points[0].Cycle}", Font, axis, colors.Muted, TextFormatFlags.Left);
             if (points.Count > 1)
-                TextRenderer.DrawText(e.Graphics, $"Ciclo {points[^1].Cycle}", Font, axis, SystemColors.GrayText, TextFormatFlags.Right);
+                TextRenderer.DrawText(e.Graphics, $"Ciclo {points[^1].Cycle}", Font, axis, colors.Muted, TextFormatFlags.Right);
         }
     }
 

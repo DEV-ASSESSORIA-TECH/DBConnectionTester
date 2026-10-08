@@ -228,6 +228,7 @@ public sealed partial class MainForm
 
         public NavigationButton()
         {
+            UiStyle.SetRole(this, UiRole.Navigation);
             regularFont = new Font(Font, FontStyle.Regular);
             selectedFont = new Font(Font, FontStyle.Bold);
             Font = regularFont;

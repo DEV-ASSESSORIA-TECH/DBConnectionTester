@@ -11,13 +11,14 @@ public enum UiRole
 
 public enum UiState { Normal, Selected, Busy, Warning, Error, Success }
 
-/// <summary>Semantic metadata only: no controls, layout, event subscriptions or Tag usage.</summary>
+/// <summary>Roles on existing controls; state changes style only that control, without layout or subscriptions.</summary>
 public static class UiStyle
 {
     private sealed class Metadata
     {
         public UiRole Role;
         public UiState State;
+        public ThemePalette? Palette;
     }
 
     private static readonly ConditionalWeakTable<Control, Metadata> metadata = new();
@@ -28,7 +29,13 @@ public static class UiStyle
         return control;
     }
 
-    public static void SetRole(Control control, UiRole role) => metadata.GetOrCreateValue(control).Role = role;
+    public static void SetRole(Control control, UiRole role)
+    {
+        var entry = metadata.GetOrCreateValue(control);
+        if (entry.Role == role) return;
+        entry.Role = role;
+        ApplyChangedRoleOrState(control, entry);
+    }
     public static void SetState(Control control, UiState state)
     {
         if (!metadata.TryGetValue(control, out var entry))
@@ -36,16 +43,38 @@ public static class UiStyle
             entry = metadata.GetOrCreateValue(control);
             entry.Role = DefaultRole(control);
         }
+        if (entry.State == state) return;
         entry.State = state;
+        ApplyChangedRoleOrState(control, entry);
     }
     public static UiRole GetRole(Control control) => metadata.TryGetValue(control, out var entry) ? entry.Role : DefaultRole(control);
     public static UiState GetState(Control control) => metadata.TryGetValue(control, out var entry) ? entry.State : UiState.Normal;
+
+    internal static void BindPalette(Control control, ThemePalette palette)
+    {
+        if (!metadata.TryGetValue(control, out var entry))
+        {
+            entry = metadata.GetOrCreateValue(control);
+            entry.Role = DefaultRole(control);
+        }
+        entry.Palette = palette;
+    }
+
+    private static void ApplyChangedRoleOrState(Control control, Metadata entry)
+    {
+        // Existing themes have no role overrides: metadata changes cause no repaint.
+        if (entry.Palette is not { Roles.IsEmpty: false } palette) return;
+        var colors = palette.ColorsFor(control);
+        control.BackColor = colors.Background;
+        control.ForeColor = colors.Foreground;
+    }
 
     private static UiRole DefaultRole(Control control) => control switch
     {
         Button => UiRole.NeutralAction,
         GroupBox => UiRole.Card,
-        TextBoxBase or ComboBox or NumericUpDown or ListBox or DataGridView => UiRole.Input,
+        TextBoxBase or ComboBox or NumericUpDown or ListBox or ListView or DataGridView
+            or DateTimePicker or CheckBox or RadioButton => UiRole.Input,
         Label => UiRole.Text,
         _ => UiRole.Container
     };

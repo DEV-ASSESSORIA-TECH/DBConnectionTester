@@ -24,16 +24,16 @@ public sealed class HomePage : UserControl
         AutoScroll = true;
         Padding = new Padding(24);
         var content = VerticalTable();
-        content.Controls.Add(new Label
+        content.Controls.Add(UiStyle.WithRole(new Label
         {
             Text = "Início", AutoSize = true, Dock = DockStyle.Top,
             Font = new Font(Font.FontFamily, 22, FontStyle.Bold), Margin = new Padding(3, 0, 3, 6)
-        });
-        content.Controls.Add(new Label
+        }, UiRole.Heading));
+        content.Controls.Add(UiStyle.WithRole(new Label
         {
             Text = "Inicie um teste ou consulte suas últimas execuções.", AutoSize = true,
             Dock = DockStyle.Top, Margin = new Padding(3, 0, 3, 18)
-        });
+        }, UiRole.SecondaryText));
         var start = ActionButton("Nova execução");
         UiStyle.SetRole(start, UiRole.PrimaryAction);
         start.Font = new Font(Font, FontStyle.Bold);
@@ -78,6 +78,7 @@ public sealed class HomePage : UserControl
     {
         if (IsDisposed) return;
         using var request = recentRequests.Start(token);
+        UiStyle.SetState(recentFeedback, UiState.Busy);
         recentFeedback.Text = "Carregando últimas execuções…";
         recentFeedback.Visible = true;
         retry.Visible = false;
@@ -92,6 +93,7 @@ public sealed class HomePage : UserControl
             recentRuns.ClearSelection();
             recentRuns.CurrentCell = null;
             recentRuns.Visible = items.Count > 0;
+            UiStyle.SetState(recentFeedback, UiState.Normal);
             recentFeedback.Text = "Nenhuma execução no histórico. Comece em Nova execução ou escolha um perfil.";
             recentFeedback.Visible = items.Count == 0;
         }
@@ -99,6 +101,7 @@ public sealed class HomePage : UserControl
         catch (Exception error) when (error is ApplicationStoreException or Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             if (!request.IsCurrent || IsDisposed) return;
+            UiStyle.SetState(recentFeedback, UiState.Error);
             recentFeedback.Text = recentRuns.Rows.Count > 0
                 ? "Não foi possível atualizar as últimas execuções. Os registros exibidos podem estar desatualizados."
                 : "Não foi possível carregar as últimas execuções. Tente novamente ou consulte o Histórico.";

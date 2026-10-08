@@ -240,6 +240,14 @@ public sealed partial class MainForm
     private void ApplyRunUiState(RunUiState state, TestSettings? settings = null)
     {
         runUiState = state;
+        UiStyle.SetState(lblStatus, state switch
+        {
+            RunUiState.Running => UiState.Busy,
+            RunUiState.Stopping => UiState.Warning,
+            RunUiState.Completed => UiState.Success,
+            RunUiState.Failed => UiState.Error,
+            _ => UiState.Normal
+        });
         var active = state is RunUiState.Running or RunUiState.Stopping;
         var stopping = state == RunUiState.Stopping;
         SetConfigurationEnabled(!active);
