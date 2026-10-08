@@ -31,6 +31,10 @@ public sealed class ProfilesPage : UserControl
     private Guid? selectedId;
     private bool loading;
     private bool editingEnabled = true;
+    private bool refreshPending;
+    private bool mutationPending;
+    private readonly LatestUiRequest refreshRequests = new();
+    private readonly LatestUiRequest mutationRequests = new();
     private readonly Dictionary<Control, UiLayout.FieldRow> fields = [];
     private readonly Button create = new() { Text = "Novo", AutoSize = true };
     private readonly TableLayoutPanel editor;
@@ -139,24 +143,53 @@ public sealed class ProfilesPage : UserControl
 
     public event Action<SavedConnectionProfile>? UseRequested;
 
-    public async Task RefreshAsync(CancellationToken token = default)
+    public Task RefreshAsync(CancellationToken token = default) => LoadProfilesAsync(null, token);
+
+    private async Task LoadProfilesAsync(Guid? selectId, CancellationToken token = default)
     {
-        var items = await repository.ListAsync(token);
-        profiles.DataSource = items.ToList();
-        ClearEditor();
+        using var request = refreshRequests.Start(token);
+        refreshPending = true;
+        ApplyVisibility();
+        try
+        {
+            var items = await Task.Run(() => repository.ListAsync(request.Token), request.Token);
+            if (!request.IsCurrent) return;
+            profiles.BeginUpdate();
+            loading = true;
+            try
+            {
+                profiles.DataSource = items.ToList();
+                profiles.ClearSelected();
+            }
+            finally { loading = false; profiles.EndUpdate(); }
+            var selected = items.FirstOrDefault(item => item.ProfileId == selectId);
+            if (selected is null) ClearEditor();
+            else profiles.SelectedItem = selected;
+        }
+        catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
+        catch (ApplicationStoreException) when (!request.IsCurrent) { }
+        finally
+        {
+            if (request.IsCurrent) { refreshPending = false; ApplyVisibility(); }
+        }
     }
 
     public void SetEditingEnabled(bool enabled)
     {
         editingEnabled = enabled;
-        create.Enabled = save.Enabled = enabled;
-        delete.Enabled = use.Enabled = enabled && selectedId is not null;
-        editor.Enabled = enabled;
         ApplyVisibility();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) { refreshRequests.Dispose(); mutationRequests.Dispose(); }
+        base.Dispose(disposing);
     }
 
     private void ApplyVisibility()
     {
+        var canEdit = editingEnabled && !refreshPending && !mutationPending;
+        editor.Enabled = profiles.Enabled = create.Enabled = save.Enabled = canEdit;
         var type = (databaseType.SelectedItem as DatabaseProfile)?.Type ?? DatabaseType.MySqlMariaDb;
         var auth = authentication.SelectedItem is SqlServerAuthentication selected ? selected : SqlServerAuthentication.Windows;
         var state = DatabaseUiState.Create(type, auth);
@@ -167,18 +200,22 @@ public sealed class ProfilesPage : UserControl
             fields[user].SetVisible(state.ShowCredentials); fields[database].SetVisible(state.ShowDatabase);
             fields[sqliteFile].SetVisible(state.ShowSqliteFile); fields[authentication].SetVisible(state.ShowSqlServerAuthentication);
             fields[odbcDriver].SetVisible(state.ShowOdbcDriver);
-            dns.Enabled = editingEnabled && state.AllowDns; ping.Enabled = editingEnabled && state.AllowPing;
-            tcp.Enabled = editingEnabled && state.AllowTcp; databaseTest.Enabled = editingEnabled && state.AllowDatabaseTest;
+            dns.Enabled = canEdit && state.AllowDns; ping.Enabled = canEdit && state.AllowPing;
+            tcp.Enabled = canEdit && state.AllowTcp; databaseTest.Enabled = canEdit && state.AllowDatabaseTest;
             if (state.RequireDatabaseTest) databaseTest.Checked = true;
             if (state.RequireTcp) tcp.Checked = true;
-            testCount.Enabled = editingEnabled && !continuous.Checked;
-            delete.Enabled = use.Enabled = editingEnabled && selectedId is not null;
+            testCount.Enabled = canEdit && !continuous.Checked;
+            delete.Enabled = use.Enabled = canEdit && selectedId is not null;
         }
         finally { editor.ResumeLayout(true); }
     }
 
     private async Task SaveAsync()
     {
+        if (!editingEnabled || refreshPending || mutationPending || IsDisposed) return;
+        using var request = mutationRequests.Start();
+        mutationPending = true;
+        ApplyVisibility();
         try
         {
             var selectedType = (databaseType.SelectedItem as DatabaseProfile)?.Type ?? DatabaseType.MySqlMariaDb;
@@ -189,64 +226,74 @@ public sealed class ProfilesPage : UserControl
                 odbcDriver.Text,
                 new ProfileExecutionDefaults((long)testCount.Value, continuous.Checked, (double)interval.Value,
                     (int)timeout.Value, dns.Checked, ping.Checked, tcp.Checked, databaseTest.Checked, background.Checked));
-            var saved = await repository.SaveAsync(draft);
-            await RefreshAsync();
-            profiles.SelectedItem = profiles.Items.Cast<SavedConnectionProfile>().FirstOrDefault(item => item.ProfileId == saved.ProfileId);
+            var saved = await Task.Run(() => repository.SaveAsync(draft, request.Token), request.Token);
+            if (request.IsCurrent) await LoadProfilesAsync(saved.ProfileId, request.Token);
         }
+        catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
         catch (Exception exception) when (exception is ArgumentException or ApplicationStoreException)
         {
-            MessageBox.Show(this, exception.Message, "Perfil", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (request.IsCurrent) MessageBox.Show(this, exception.Message, "Perfil", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        finally { if (!IsDisposed) { mutationPending = false; ApplyVisibility(); } }
     }
 
     private async Task DeleteAsync()
     {
-        if (selectedId is not Guid id || MessageBox.Show(this, "Excluir este perfil? O histórico será preservado.",
+        if (!editingEnabled || refreshPending || mutationPending || selectedId is not Guid id || MessageBox.Show(this, "Excluir este perfil? O histórico será preservado.",
                 "Excluir perfil", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
+        using var request = mutationRequests.Start();
+        mutationPending = true;
+        ApplyVisibility();
         try
         {
-            await repository.DeleteAsync(id);
-            await RefreshAsync();
+            await Task.Run(() => repository.DeleteAsync(id, request.Token), request.Token);
+            if (request.IsCurrent) await LoadProfilesAsync(null, request.Token);
         }
+        catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
         catch (Exception exception) when (exception is ApplicationStoreException or Microsoft.Data.Sqlite.SqliteException)
-        { MessageBox.Show(this, exception.Message, "Excluir perfil", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        { if (request.IsCurrent) MessageBox.Show(this, exception.Message, "Excluir perfil", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        finally { if (!IsDisposed) { mutationPending = false; ApplyVisibility(); } }
+    }
+
+    private void UpdateEditor(Action update)
+    {
+        var wasLoading = loading;
+        loading = true;
+        editor.SuspendLayout();
+        try { update(); ApplyVisibility(); }
+        finally { loading = wasLoading; editor.ResumeLayout(true); }
     }
 
     private void LoadSelection()
     {
-        if (profiles.SelectedItem is not SavedConnectionProfile profile)
-            return;
-        loading = true;
-        editor.SuspendLayout();
-        selectedId = profile.ProfileId;
-        name.Text = profile.Name;
-        databaseType.SelectedItem = DatabaseProfiles.All.First(item => item.Type == profile.DatabaseType);
-        host.Text = profile.Host;
-        port.Value = Math.Clamp(profile.Port ?? DatabaseProfiles.Get(profile.DatabaseType).DefaultPort ?? 1, 1, 65535);
-        user.Text = profile.UserName;
-        database.Text = profile.DatabaseName;
-        sqliteFile.Text = profile.SqliteFile;
-        authentication.SelectedItem = profile.SqlServerAuthentication;
-        odbcDriver.Text = profile.OdbcDriver;
-        testCount.Value = profile.ExecutionDefaults.TestCount;
-        continuous.Checked = profile.ExecutionDefaults.Continuous;
-        interval.Value = (decimal)profile.ExecutionDefaults.IntervalSeconds;
-        timeout.Value = profile.ExecutionDefaults.TimeoutSeconds;
-        dns.Checked = profile.ExecutionDefaults.Dns;
-        ping.Checked = profile.ExecutionDefaults.Ping;
-        tcp.Checked = profile.ExecutionDefaults.Tcp;
-        databaseTest.Checked = profile.ExecutionDefaults.DatabaseTest;
-        background.Checked = profile.ExecutionDefaults.StartInBackground;
-        loading = false;
-        ApplyVisibility();
-        editor.ResumeLayout(true);
+        if (loading || profiles.SelectedItem is not SavedConnectionProfile profile) return;
+        UpdateEditor(() =>
+        {
+            selectedId = profile.ProfileId;
+            name.Text = profile.Name;
+            databaseType.SelectedItem = DatabaseProfiles.All.First(item => item.Type == profile.DatabaseType);
+            host.Text = profile.Host;
+            port.Value = Math.Clamp(profile.Port ?? DatabaseProfiles.Get(profile.DatabaseType).DefaultPort ?? 1, 1, 65535);
+            user.Text = profile.UserName;
+            database.Text = profile.DatabaseName;
+            sqliteFile.Text = profile.SqliteFile;
+            authentication.SelectedItem = profile.SqlServerAuthentication;
+            odbcDriver.Text = profile.OdbcDriver;
+            testCount.Value = profile.ExecutionDefaults.TestCount;
+            continuous.Checked = profile.ExecutionDefaults.Continuous;
+            interval.Value = (decimal)profile.ExecutionDefaults.IntervalSeconds;
+            timeout.Value = profile.ExecutionDefaults.TimeoutSeconds;
+            dns.Checked = profile.ExecutionDefaults.Dns;
+            ping.Checked = profile.ExecutionDefaults.Ping;
+            tcp.Checked = profile.ExecutionDefaults.Tcp;
+            databaseTest.Checked = profile.ExecutionDefaults.DatabaseTest;
+            background.Checked = profile.ExecutionDefaults.StartInBackground;
+        });
     }
 
-    private void ClearEditor()
+    private void ClearEditor() => UpdateEditor(() =>
     {
-        loading = true;
-        editor.SuspendLayout();
         selectedId = null;
         profiles.ClearSelected();
         name.Clear(); host.Clear(); user.Clear(); database.Clear(); sqliteFile.Clear(); odbcDriver.Clear();
@@ -256,7 +303,7 @@ public sealed class ProfilesPage : UserControl
         interval.Value = (decimal)defaults.IntervalSeconds; timeout.Value = defaults.TimeoutSeconds;
         dns.Checked = defaults.Dns; ping.Checked = defaults.Ping; tcp.Checked = defaults.Tcp;
         databaseTest.Checked = defaults.DatabaseTest; background.Checked = defaults.StartInBackground;
-    }
+    });
 
     private void AddRow(TableLayoutPanel table, int row, string caption, Control control)
         => fields[control] = UiLayout.AddField(table, row, caption, control);
