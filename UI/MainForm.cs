@@ -34,6 +34,12 @@ public sealed partial class MainForm : Form
     private readonly Button btnOpenLog = new() { Text = "Abrir TXT", AutoSize = true, Enabled = false };
     private readonly Button btnOpenFolder = new() { Text = "Abrir pasta", AutoSize = true };
     private readonly Label lblStatus = new() { AutoSize = true, Text = "Pronto." };
+    private readonly Label lblRunProgress = new();
+    private readonly System.Windows.Forms.Timer elapsedTimer = new() { Interval = 1000 };
+    private readonly System.Diagnostics.Stopwatch runElapsed = new();
+    private TestSettings? progressSettings;
+    private bool showProgressBar;
+    private bool showRunProgress;
     private readonly ProgressBar progressBar = new() { Minimum = 0, Maximum = 100, Value = 0, Dock = DockStyle.Fill };
     private readonly ResultsControl resultsControl = new();
     private readonly Panel pageHost = new BufferedPanel() { Dock = DockStyle.Fill };

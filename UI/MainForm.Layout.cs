@@ -60,7 +60,7 @@ public sealed partial class MainForm
     {
         var page = new UserControl { Dock = DockStyle.Fill, Padding = new Padding(12) };
         var root = new BufferedPanel { Dock = DockStyle.Fill };
-        var settingsArea = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, RowCount = 1 };
+        var settingsArea = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 2, RowCount = 1 };
         var connection = BuildConnectionGroup();
         var execution = BuildExecutionGroup();
         settingsArea.Controls.Add(connection, 0, 0);
@@ -87,23 +87,66 @@ public sealed partial class MainForm
         var note = new Label { Dock = DockStyle.Bottom, Height = Font.Height + 12, Padding = new Padding(3, 6, 3, 0),
             Text = "Credenciais ficam somente na memória. O histórico completo é salvo no banco local." };
         var actions = BuildControlArea();
+        var progress = BuildProgressArea();
         root.Controls.Add(resultsControl);
         root.Controls.Add(note);
+        root.Controls.Add(progress);
         root.Controls.Add(viewport);
         root.Controls.Add(actions);
+        var updatingConfigurationHeight = false;
         void UpdateConfigurationHeight()
         {
-            var resultMinimum = 150 * root.DeviceDpi / 96;
-            var available = Math.Max(100 * root.DeviceDpi / 96, root.ClientSize.Height - actions.Height - note.Height - resultMinimum);
-            var height = Math.Min(settingsArea.Height + 6 * root.DeviceDpi / 96, available);
-            if (viewport.Height != height) viewport.Height = height;
-            var needsScroll = settingsArea.Height + 6 * root.DeviceDpi / 96 > available;
-            if (viewport.AutoScroll != needsScroll) viewport.AutoScroll = needsScroll;
+            if (updatingConfigurationHeight) return;
+            updatingConfigurationHeight = true;
+            try
+            {
+                // Explicit row heights follow the already laid-out group content,
+                // avoiding stale preferred sizes when wrapped options change height.
+                var connectionHeight = connection.Height + connection.Margin.Vertical;
+                var executionHeight = execution.Height + execution.Margin.Vertical;
+                if (settingsArea.RowStyles.Count > 0)
+                {
+                    settingsArea.RowStyles[0].SizeType = SizeType.Absolute;
+                    settingsArea.RowStyles[0].Height = columns == 2 ? Math.Max(connectionHeight, executionHeight) : connectionHeight;
+                    if (columns == 1 && settingsArea.RowStyles.Count > 1)
+                    {
+                        settingsArea.RowStyles[1].SizeType = SizeType.Absolute;
+                        settingsArea.RowStyles[1].Height = executionHeight;
+                    }
+                }
+                var requiredHeight = columns == 2 ? Math.Max(connectionHeight, executionHeight) : connectionHeight + executionHeight;
+                var resultMinimum = 200 * root.DeviceDpi / 96;
+                var available = Math.Max(100 * root.DeviceDpi / 96, root.ClientSize.Height - actions.Height - progress.Height - note.Height - resultMinimum);
+                var height = Math.Min(requiredHeight, available);
+                if (viewport.Height != height) viewport.Height = height;
+                var needsScroll = requiredHeight > available;
+                if (viewport.AutoScroll != needsScroll) viewport.AutoScroll = needsScroll;
+                if (!needsScroll)
+                {
+                    viewport.AutoScrollPosition = Point.Empty;
+                    viewport.VerticalScroll.Visible = viewport.HorizontalScroll.Visible = false;
+                }
+            }
+            finally { updatingConfigurationHeight = false; }
         }
-        settingsArea.SizeChanged += (_, _) => UpdateConfigurationHeight();
-        root.SizeChanged += (_, _) => UpdateConfigurationHeight();
-        actions.SizeChanged += (_, _) => UpdateConfigurationHeight();
-        root.DpiChangedAfterParent += (_, _) => UpdateConfigurationHeight();
+        var configurationLayoutPending = false;
+        void ScheduleConfigurationHeight()
+        {
+            if (!root.IsHandleCreated) { UpdateConfigurationHeight(); return; }
+            if (configurationLayoutPending || root.IsDisposed) return;
+            configurationLayoutPending = true;
+            root.BeginInvoke((Action)(() =>
+            {
+                configurationLayoutPending = false;
+                if (!root.IsDisposed) UpdateConfigurationHeight();
+            }));
+        }
+        settingsArea.SizeChanged += (_, _) => ScheduleConfigurationHeight();
+        root.SizeChanged += (_, _) => ScheduleConfigurationHeight();
+        actions.SizeChanged += (_, _) => ScheduleConfigurationHeight();
+        progress.SizeChanged += (_, _) => ScheduleConfigurationHeight();
+        root.DpiChangedAfterParent += (_, _) => ScheduleConfigurationHeight();
+        page.VisibleChanged += (_, _) => { if (page.Visible) ScheduleConfigurationHeight(); };
         UpdateConfigurationHeight();
         page.Controls.Add(root);
         return page;
@@ -288,7 +331,7 @@ public sealed partial class MainForm
         hints.SetToolTip(numTimeout, "Tempo limite de cada etapa, em segundos.");
         FlowLayoutPanel Flow(params Control[] controls)
         {
-            var panel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = Padding.Empty };
+            var panel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Margin = Padding.Empty };
             panel.Controls.AddRange(controls);
             return panel;
         }
@@ -315,14 +358,12 @@ public sealed partial class MainForm
             Dock = DockStyle.Top,
             AutoSize = false,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 1,
             Margin = new Padding(0, 6, 0, 6)
         };
         // The action bar has a bounded height. An AutoSize table can retain surplus
         // height in its last row even when that row has an absolute style.
         area.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        area.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        area.RowStyles.Add(new RowStyle(SizeType.Absolute, lblStatus.Font.Height * 2 + 8));
 
         var buttons = new FlowLayoutPanel
         {
@@ -338,27 +379,19 @@ public sealed partial class MainForm
             btnTestOnce, btnStart, btnStop, btnOpenCsv, btnOpenLog, btnOpenFolder
         });
 
-        progressBar.Margin = new Padding(3, 8, 3, 3);
-        lblStatus.Margin = new Padding(4, 4, 4, 0);
-        lblStatus.AutoSize = false;
-        lblStatus.Dock = DockStyle.Fill;
         area.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         area.Controls.Add(buttons, 0, 0);
-        area.Controls.Add(progressBar, 0, 1);
-        area.Controls.Add(lblStatus, 0, 2);
         (int Width, Font Font, int Dpi)? measuredActions = null;
         var actionsHeight = 0;
         void UpdateHeight()
         {
-            var statusHeight = lblStatus.Font.Height * 2 + 8;
-            if (area.RowStyles[2].Height != statusHeight) area.RowStyles[2].Height = statusHeight;
             var key = (Math.Max(1, area.ClientSize.Width), buttons.Font, area.DeviceDpi);
             if (measuredActions != key)
             {
                 measuredActions = key;
                 actionsHeight = buttons.GetPreferredSize(new Size(key.Item1, 0)).Height;
             }
-            var height = actionsHeight + progressBar.Height + progressBar.Margin.Vertical + statusHeight;
+            var height = actionsHeight + 8 * area.DeviceDpi / 96;
             if (area.Height != height) area.Height = height;
         }
         // Invalidate the measurement when button content changes (e.g. DPI scaling).
@@ -374,7 +407,53 @@ public sealed partial class MainForm
         return area;
     }
 
-    private static TableLayoutPanel CreateSettingsTable(int labelWidth) => UiLayout.Fields(labelWidth);
+    private Control BuildProgressArea()
+    {
+        var area = new TableLayoutPanel { Name = "ExecutionProgressArea", Dock = DockStyle.Top, AutoSize = false,
+            ColumnCount = 2, RowCount = 2, Padding = new Padding(3, 2, 3, 5) };
+        area.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        area.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+        for (var i = 0; i < 2; i++) area.RowStyles.Add(new RowStyle(SizeType.Absolute));
+        lblStatus.AutoSize = lblRunProgress.AutoSize = false;
+        lblStatus.Dock = lblRunProgress.Dock = progressBar.Dock = DockStyle.Fill;
+        lblStatus.Margin = lblRunProgress.Margin = Padding.Empty;
+        progressBar.Margin = new Padding(0, 2, 0, 3);
+        area.Controls.Add(lblStatus, 0, 0);
+        lblRunProgress.TextAlign = ContentAlignment.MiddleRight;
+        area.Controls.Add(lblRunProgress, 1, 0);
+        area.Controls.Add(progressBar, 0, 1);
+        area.SetColumnSpan(progressBar, 2);
+        void UpdateHeight()
+        {
+            var statusHeight = Math.Clamp(TextRenderer.MeasureText(lblStatus.Text, lblStatus.Font,
+                new Size(Math.Max(1, (int)((area.ClientSize.Width - area.Padding.Horizontal) * (showRunProgress ? 0.4 : 1))), int.MaxValue), TextFormatFlags.WordBreak).Height + 4,
+                lblStatus.Font.Height + 6, lblStatus.Font.Height * 2 + 8);
+            var countHeight = showRunProgress ? lblRunProgress.Font.Height + 6 : 0;
+            var barHeight = showProgressBar ? 20 * area.DeviceDpi / 96 : 0;
+            area.SetColumnSpan(lblStatus, showRunProgress ? 1 : 2);
+            area.RowStyles[0].Height = Math.Max(statusHeight, countHeight);
+            area.RowStyles[1].Height = barHeight;
+            var height = Math.Max(statusHeight, countHeight) + barHeight + area.Padding.Vertical;
+            if (area.Height != height) area.Height = height;
+        }
+        area.SizeChanged += (_, _) => UpdateHeight();
+        area.FontChanged += (_, _) => UpdateHeight();
+        area.DpiChangedAfterParent += (_, _) => UpdateHeight();
+        lblStatus.TextChanged += (_, _) => UpdateHeight();
+        lblRunProgress.VisibleChanged += (_, _) => UpdateHeight();
+        progressBar.VisibleChanged += (_, _) => UpdateHeight();
+        elapsedTimer.Tick += (_, _) => UpdateRunProgressText();
+        Disposed += (_, _) => elapsedTimer.Dispose();
+        UpdateHeight();
+        return area;
+    }
+
+    private static TableLayoutPanel CreateSettingsTable(int labelWidth)
+    {
+        var table = UiLayout.Fields(labelWidth);
+        table.Padding = new Padding(8, 5, 8, 5);
+        return table;
+    }
 
     private static GroupBox CreateGroup(string title, Control content)
     {
@@ -382,11 +461,18 @@ public sealed partial class MainForm
         {
             Text = title,
             Dock = DockStyle.Top,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            AutoSize = false,
             Margin = new Padding(4)
         };
+        void FitContent()
+        {
+            var height = content.Bottom + group.Padding.Bottom;
+            if (group.Height != height) group.Height = height;
+        }
+        content.SizeChanged += (_, _) => FitContent();
+        group.Layout += (_, _) => FitContent();
         group.Controls.Add(content);
+        FitContent();
         return group;
     }
 
@@ -402,7 +488,12 @@ public sealed partial class MainForm
     }
 
     private static UiLayout.FieldRow AddRow(TableLayoutPanel table, int row, string text, Control control)
-        => UiLayout.AddField(table, row, text, control);
+    {
+        var field = UiLayout.AddField(table, row, text, control);
+        field.Label.Margin = new Padding(3, 2, 6, 2);
+        field.Input.Margin = new Padding(3, 1, 3, 1);
+        return field;
+    }
 
     private void ConfigureTray()
     {

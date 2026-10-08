@@ -105,14 +105,9 @@ public sealed partial class MainForm
             var percentage = (int)Math.Round(value.Completed * 100.0 / settings.TestCount.Value);
             progressBar.Value = Math.Clamp(percentage, 0, 100);
         }
-        var prefix = singleRun
-            ? "Teste único concluído"
-            : settings.Continuous
-            ? $"Executando continuamente | {value.Completed:N0} testes"
-            : $"Executando {value.Completed:N0}/{settings.TestCount.Value:N0}";
-        lblStatus.Text = $"{prefix} | DNS: {value.DnsFailures} | Ping: {value.PingFailures} | " +
-                         $"TCP: {value.TcpFailures} | DB conexão: {value.DatabaseConnectFailures} | " +
-                         $"DB consulta: {value.DatabaseQueryFailures}";
+        lblStatus.Text = runUiState == RunUiState.Stopping ? "Finalizando execução..."
+            : settings.Continuous ? "Execução contínua em andamento." : "Executando testes...";
+        UpdateRunProgressText();
         homePage.UpdateRunStatus(lblStatus.Text);
         UpdateTrayStatus(settings, value);
     }
@@ -246,17 +241,35 @@ public sealed partial class MainForm
         trayOpenCsv.Enabled = hasOutput;
         trayOpenLog.Enabled = btnOpenLog.Enabled;
 
-        if (state == RunUiState.Running && settings?.Continuous == true)
+        if (state == RunUiState.Running && settings is not null)
         {
-            progressBar.Style = ProgressBarStyle.Marquee;
-            progressBar.MarqueeAnimationSpeed = 30;
+            progressSettings = settings;
+            runElapsed.Restart();
+            elapsedTimer.Start();
+            progressBar.Value = 0;
         }
-        else
+        else if (!active)
         {
-            progressBar.Style = ProgressBarStyle.Blocks;
-            if (state == RunUiState.Running)
-                progressBar.Value = 0;
+            elapsedTimer.Stop();
+            runElapsed.Stop();
         }
+        showRunProgress = progressSettings is not null && state != RunUiState.Idle;
+        showProgressBar = showRunProgress && progressSettings?.Continuous == false && state != RunUiState.Failed;
+        // Continuous runs have no completion percentage.
+        progressBar.Style = ProgressBarStyle.Blocks;
+        progressBar.Visible = showProgressBar;
+        lblRunProgress.Visible = showRunProgress;
+        UpdateRunProgressText();
+    }
+
+    private void UpdateRunProgressText()
+    {
+        if (!showRunProgress || progressSettings is null) return;
+        var elapsed = runElapsed.Elapsed;
+        var duration = $"{(long)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+        lblRunProgress.Text = progressSettings.Continuous
+            ? $"{completedTests:N0} ciclos concluídos · {duration} decorridos"
+            : $"{completedTests:N0} de {progressSettings.TestCount.Value:N0} ciclos · {duration} decorridos";
     }
 
     private void SetConfigurationEnabled(bool enabled)
