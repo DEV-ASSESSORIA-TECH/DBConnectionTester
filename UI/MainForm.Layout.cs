@@ -68,7 +68,7 @@ public sealed partial class MainForm
         var columns = 0;
         settingsArea.SizeChanged += (_, _) =>
         {
-            var count = settingsArea.ClientSize.Width * 96d / settingsArea.DeviceDpi >= 820 ? 2 : 1;
+            var count = settingsArea.ClientSize.Width * 96d / settingsArea.DeviceDpi >= 800 ? 2 : 1;
             if (columns == count) return;
             columns = count;
             settingsArea.SuspendLayout();
