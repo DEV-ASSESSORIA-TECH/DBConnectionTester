@@ -55,7 +55,9 @@ public sealed class ProfilesPage : UserControl
 
         editor = UiLayout.Fields(160);
         var row = 0;
+        AddSection(editor, row++, "Identificação");
         AddRow(editor, row++, "Nome:", name);
+        AddSection(editor, row++, "Conexão");
         AddRow(editor, row++, "Tipo:", databaseType);
         AddRow(editor, row++, "Servidor:", host);
         AddRow(editor, row++, "Porta:", port);
@@ -64,6 +66,8 @@ public sealed class ProfilesPage : UserControl
         AddRow(editor, row++, "Arquivo SQLite:", sqliteFile);
         AddRow(editor, row++, "Autenticação SQL Server:", authentication);
         AddRow(editor, row++, "Driver ODBC:", odbcDriver);
+        AddNote(editor, row++, "A senha não é salva no perfil. Informe-a em Nova execução.");
+        AddSection(editor, row++, "Execução");
         AddRow(editor, row++, "Quantidade:", testCount);
         AddRow(editor, row++, "Modo:", continuous);
         AddRow(editor, row++, "Intervalo (s):", interval);
@@ -72,15 +76,7 @@ public sealed class ProfilesPage : UserControl
         layers.Controls.AddRange(new Control[] { dns, ping, tcp, databaseTest });
         AddRow(editor, row++, "Camadas:", layers);
         AddRow(editor, row++, "Comportamento:", background);
-        editor.RowCount = row + 1;
-        editor.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        editor.Controls.Add(new Label
-        {
-            Text = "A senha nunca é salva no perfil e será solicitada na execução.",
-            AutoSize = true,
-            Margin = new Padding(3, 10, 3, 10)
-        }, 0, row);
-        editor.SetColumnSpan(editor.GetControlFromPosition(0, row)!, 2);
+        editor.RowCount = row;
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
 
         save.Font = new Font(Font, FontStyle.Bold);
@@ -429,6 +425,23 @@ public sealed class ProfilesPage : UserControl
         dns.Checked = defaults.Dns; ping.Checked = defaults.Ping; tcp.Checked = defaults.Tcp;
         databaseTest.Checked = defaults.DatabaseTest; background.Checked = defaults.StartInBackground;
     });
+
+    private static void AddSection(TableLayoutPanel table, int row, string title)
+    {
+        AddNote(table, row, title);
+        var label = (Label)table.GetControlFromPosition(0, row)!;
+        label.Font = new Font(table.Font, FontStyle.Bold);
+        label.Margin = new Padding(3, row == 0 ? 0 : 14, 3, 6);
+    }
+
+    private static void AddNote(TableLayoutPanel table, int row, string text)
+    {
+        table.RowCount = Math.Max(table.RowCount, row + 1);
+        while (table.RowStyles.Count <= row) table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var label = new Label { Text = text, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 6, 3, 6) };
+        table.Controls.Add(label, 0, row);
+        table.SetColumnSpan(label, 2);
+    }
 
     private void AddRow(TableLayoutPanel table, int row, string caption, Control control)
         => fields[control] = UiLayout.AddField(table, row, caption, control);
