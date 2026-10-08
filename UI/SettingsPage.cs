@@ -60,7 +60,7 @@ public sealed class SettingsPage : UserControl
         Controls.Add(root);
         LoadSettings(settings);
 
-        browseLegacy.Click += (_, _) => BrowseLegacyDirectory();
+        browseLegacy.Click += async (_, _) => await RunOperationAsync("Selecionando pasta…", () => Task.FromResult(BrowseLegacyDirectory()));
         save.Click += async (_, _) => await SaveAsync();
         clone.Click += async (_, _) => await CreateOrCloneAsync(copyCurrent: true);
         create.Click += async (_, _) => await CreateOrCloneAsync(copyCurrent: false);
@@ -135,6 +135,12 @@ public sealed class SettingsPage : UserControl
     internal Task<bool> SaveAsync() => RunOperationAsync("Salvando configurações…", async () =>
     {
         var settings = new ApplicationSettings(SelectedTheme, legacyEnabled.Checked, legacyDirectory.Text.Trim());
+        if (settings.LegacyOutputEnabled)
+        {
+            if (string.IsNullOrWhiteSpace(settings.LegacyOutputDirectory)) throw new ArgumentException("Informe a pasta para a saída CSV/TXT contínua.");
+            settings = settings with { LegacyOutputDirectory = Path.GetFullPath(settings.LegacyOutputDirectory) };
+            if (File.Exists(settings.LegacyOutputDirectory)) throw new IOException("A pasta CSV/TXT escolhida está ocupada por um arquivo.");
+        }
         await Task.Run(() => settingsRepository.SaveAsync(settings));
         currentSettings = settings;
         SettingsSaved?.Invoke(settings);
@@ -158,8 +164,6 @@ public sealed class SettingsPage : UserControl
     private async Task<string?> ResolveTargetDirectoryAsync(StorageScope scope)
     {
         var locations = StorageLocations.CreateDefault();
-        if (scope == StorageScope.SharedMachine)
-            await new SharedMachineStorageElevator().PrepareDirectoryAsync();
         if (scope == StorageScope.Custom)
         {
             using var dialog = new FolderBrowserDialog { Description = "Escolha uma pasta vazia para o armazenamento" };
@@ -171,7 +175,13 @@ public sealed class SettingsPage : UserControl
             StorageScope.SharedMachine => locations.SharedDatabasePath,
             _ => locations.PortableDatabasePath
         };
-        return Path.GetDirectoryName(databasePath);
+        var directory = Path.GetDirectoryName(databasePath)!;
+        if (string.Equals(Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar),
+            Path.GetDirectoryName(store.Descriptor.DatabasePath)!.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+            throw new IOException("O destino é a pasta do armazenamento atual. Escolha outro escopo ou uma pasta personalizada vazia.");
+        if (scope == StorageScope.SharedMachine)
+            await new SharedMachineStorageElevator().PrepareDirectoryAsync();
+        return directory;
     }
 
     private Task<bool> UseExistingAsync() => RunOperationAsync("Verificando armazenamento…", async () =>
@@ -235,12 +245,24 @@ public sealed class SettingsPage : UserControl
             if (!IsDisposed && operationStatus.Text == status) operationStatus.Text = result ? "Operação concluída." : "Operação cancelada.";
             return result;
         }
-        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or ApplicationStoreException)
+        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or ApplicationStoreException
+            or System.ComponentModel.Win32Exception or System.Security.SecurityException or System.Text.Json.JsonException or Microsoft.Data.Sqlite.SqliteException)
         {
             if (!IsDisposed)
             {
-                operationStatus.Text = "Não foi possível concluir a operação.";
-                ReportMessage(exception.Message, "Configurações", true);
+                if (exception is System.ComponentModel.Win32Exception { NativeErrorCode: 1223 })
+                    operationStatus.Text = "Operação cancelada.";
+                else
+                {
+                    operationStatus.Text = "Não foi possível concluir a operação.";
+                    var message = exception switch
+                    {
+                        UnauthorizedAccessException or System.Security.SecurityException => "Sem permissão para acessar o arquivo, pasta ou preferência selecionada. O armazenamento atual continua ativo.",
+                        System.Text.Json.JsonException => "O pacote contém um manifesto inválido e não pode ser restaurado.",
+                        _ => exception.Message
+                    };
+                    ReportMessage(message, "Configurações", true);
+                }
             }
             return false;
         }
@@ -264,11 +286,12 @@ public sealed class SettingsPage : UserControl
         legacyDirectory.Text = settings.LegacyOutputDirectory;
     }
 
-    private void BrowseLegacyDirectory()
+    private bool BrowseLegacyDirectory()
     {
         using var dialog = new FolderBrowserDialog { InitialDirectory = legacyDirectory.Text };
-        if (dialog.ShowDialog(this) == DialogResult.OK)
-            legacyDirectory.Text = dialog.SelectedPath;
+        if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+        legacyDirectory.Text = dialog.SelectedPath;
+        return true;
     }
 
     private static TableLayoutPanel SettingsTable()

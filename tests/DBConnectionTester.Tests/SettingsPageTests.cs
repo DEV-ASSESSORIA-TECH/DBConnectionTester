@@ -61,6 +61,46 @@ public sealed class SettingsPageTests
         Assert.True(Field<Button>(page, "save").Enabled);
     });
 
+    [Theory]
+    [InlineData("Permission")]
+    [InlineData("UacCancel")]
+    [InlineData("UacFailure")]
+    [InlineData("Manifest")]
+    [InlineData("Sqlite")]
+    public Task ExpectedFailuresReleaseControlsWithoutApplyingSettings(string failure) => RunUi(async (page, repository, _) =>
+    {
+        Exception error = failure switch
+        {
+            "Permission" => new UnauthorizedAccessException("Denied"),
+            "UacCancel" => new System.ComponentModel.Win32Exception(1223),
+            "UacFailure" => new System.ComponentModel.Win32Exception(5),
+            "Manifest" => new System.Text.Json.JsonException("Invalid manifest"),
+            _ => new Microsoft.Data.Sqlite.SqliteException("Busy", 5)
+        };
+        repository.Save = _ => Task.FromException(error);
+        var applied = false; var reported = false;
+        page.SettingsSaved += _ => applied = true;
+        page.MessageReporter = (_, _, warning) => reported = warning;
+        Field<ComboBox>(page, "theme").SelectedItem = ApplicationTheme.Dark;
+        Assert.False(await page.SaveAsync());
+        Assert.False(applied);
+        Assert.False(page.IsBusy);
+        Assert.True(Field<Button>(page, "save").Enabled);
+        Assert.Equal(ApplicationTheme.Dark, page.SelectedTheme);
+        Assert.Equal(failure != "UacCancel", reported);
+    });
+
+    [Fact]
+    public Task InvalidOutputDirectoryDoesNotPersistSettings() => RunUi(async (page, repository, _) =>
+    {
+        var writes = 0;
+        repository.Save = _ => { writes++; return Task.CompletedTask; };
+        Field<CheckBox>(page, "legacyEnabled").Checked = true;
+        Field<TextBox>(page, "legacyDirectory").Text = "";
+        Assert.False(await page.SaveAsync());
+        Assert.Equal(0, writes);
+    });
+
     private static Task RunUi(Func<SettingsPage, Repository, Form, Task> action)
     {
         var complete = Signal();
