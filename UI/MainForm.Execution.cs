@@ -191,7 +191,6 @@ public sealed partial class MainForm
         }
 
         exitRequested = true;
-        trayIcon.Visible = false;
         Close();
     }
 
@@ -202,13 +201,13 @@ public sealed partial class MainForm
         if (!runCoordinator.IsRunning)
         {
             if (settingsPage.IsBusy) { e.Cancel = true; exitRequested = false; return; }
-            if (profileCloseApproved || (!profilesPage.HasUnsavedChanges && !profilesPage.IsBusy) || e.CloseReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing) return;
+            if (profileCloseApproved || (!profilesPage.HasUnsavedChanges && !profilesPage.IsBusy && !settingsPage.HasUnsavedChanges) || e.CloseReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing) return;
             e.Cancel = true;
             if (profileClosePending) return;
             profileClosePending = true;
             try
             {
-                if (await profilesPage.TryLeaveAsync()) { profileCloseApproved = true; BeginInvoke((Action)Close); }
+                if (await profilesPage.TryLeaveAsync() && await settingsPage.TryLeaveAsync()) { profileCloseApproved = true; BeginInvoke((Action)Close); }
                 else exitRequested = false;
             }
             finally { profileClosePending = false; }

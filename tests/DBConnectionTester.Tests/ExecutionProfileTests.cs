@@ -118,6 +118,19 @@ public sealed class ExecutionProfileTests
                         finally { releaseSettings.TrySetResult(); }
                         Assert.True(await settingsWork);
                         Assert.True(Field<Button>(form, "btnStart").Enabled);
+                        form.NavigateTo("Configurações");
+                        var theme = (ComboBox)typeof(SettingsPage).GetField("theme", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(settingsPage)!;
+                        theme.SelectedItem = ApplicationTheme.Dark;
+                        settingsPage.EditDecision = () => DialogResult.Cancel;
+                        form.NavigateTo("Início");
+                        Assert.True(settingsPage.Visible);
+                        form.Close();
+                        Assert.False(form.IsDisposed);
+                        Assert.True(settingsPage.HasUnsavedChanges);
+                        settingsPage.EditDecision = () => DialogResult.No;
+                        form.NavigateTo("Nova execução");
+                        Assert.False(settingsPage.Visible);
+                        Assert.False(settingsPage.HasUnsavedChanges);
                         finished.TrySetResult();
                     }
                     catch (Exception error) { finished.TrySetException(error); }

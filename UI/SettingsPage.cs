@@ -27,10 +27,15 @@ public sealed class SettingsPage : UserControl
     private ApplicationSettings currentSettings;
     private bool operationsEnabled = true;
     private bool operationPending;
-    private readonly Label operationStatus = new() { AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 4, 3, 8) };
+    private bool decisionPending;
+    private bool loadingSettings;
+    internal Func<DialogResult>? EditDecision;
+    private readonly Label settingsState = new() { Visible = false, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 6, 3, 3) };
+    private readonly Label operationStatus = new() { Visible = false, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 4, 3, 8) };
     internal Action<string, string, bool>? MessageReporter;
     public event Action<bool>? BusyChanged;
-    internal bool IsBusy => operationPending;
+    internal bool IsBusy => operationPending || decisionPending;
+    internal bool HasUnsavedChanges => ReadSettings() != currentSettings;
 
 
     public SettingsPage(
@@ -58,7 +63,12 @@ public sealed class SettingsPage : UserControl
         root.Controls.Add(BuildStorageGroup());
         root.Controls.Add(BuildPackageGroup());
         Controls.Add(root);
+        operationStatus.TextChanged += (_, _) => operationStatus.Visible = operationStatus.Text.Length > 0;
+        settingsState.TextChanged += (_, _) => settingsState.Visible = settingsState.Text.Length > 0;
         LoadSettings(settings);
+        theme.SelectedIndexChanged += (_, _) => UpdateEditState();
+        legacyEnabled.CheckedChanged += (_, _) => UpdateEditState();
+        legacyDirectory.TextChanged += (_, _) => UpdateEditState();
 
         browseLegacy.Click += async (_, _) => await RunOperationAsync("Selecionando pasta…", () => Task.FromResult(BrowseLegacyDirectory()));
         save.Click += async (_, _) => await SaveAsync();
@@ -99,6 +109,7 @@ public sealed class SettingsPage : UserControl
         path.Controls.Add(browseLegacy, 1, 0);
         AddRow(table, 2, "Pasta CSV/TXT:", path);
         table.Controls.Add(save, 1, 3);
+        table.Controls.Add(settingsState, 1, 4);
         return Group("Aparência e saída contínua", table);
     }
 
@@ -132,9 +143,9 @@ public sealed class SettingsPage : UserControl
         return Group("Pacote portátil", panel);
     }
 
-    internal Task<bool> SaveAsync() => RunOperationAsync("Salvando configurações…", async () =>
+    internal Task<bool> SaveAsync(bool fromDecision = false) => RunOperationAsync("Salvando configurações…", async () =>
     {
-        var settings = new ApplicationSettings(SelectedTheme, legacyEnabled.Checked, legacyDirectory.Text.Trim());
+        var settings = ReadSettings();
         if (settings.LegacyOutputEnabled)
         {
             if (string.IsNullOrWhiteSpace(settings.LegacyOutputDirectory)) throw new ArgumentException("Informe a pasta para a saída CSV/TXT contínua.");
@@ -143,10 +154,12 @@ public sealed class SettingsPage : UserControl
         }
         await Task.Run(() => settingsRepository.SaveAsync(settings));
         currentSettings = settings;
+        LoadSettings(settings);
+        settingsState.Text = "Configurações salvas.";
         SettingsSaved?.Invoke(settings);
         operationStatus.Text = "Configurações salvas.";
         return true;
-    });
+    }, allowDecision: fromDecision);
 
     private Task<bool> CreateOrCloneAsync(bool copyCurrent) => RunOperationAsync(
         copyCurrent ? "Copiando armazenamento…" : "Criando armazenamento…", async () =>
@@ -233,9 +246,9 @@ public sealed class SettingsPage : UserControl
         BusyChanged?.Invoke(IsBusy);
     }
 
-    internal async Task<bool> RunOperationAsync(string status, Func<Task<bool>> operation)
+    internal async Task<bool> RunOperationAsync(string status, Func<Task<bool>> operation, bool allowDecision = false)
     {
-        if (!operationsEnabled || IsBusy || IsDisposed) return false;
+        if (!operationsEnabled || operationPending || (decisionPending && !allowDecision) || IsDisposed) return false;
         operationPending = true;
         operationStatus.Text = status;
         UpdateOperationState();
@@ -245,7 +258,7 @@ public sealed class SettingsPage : UserControl
             if (!IsDisposed && operationStatus.Text == status) operationStatus.Text = result ? "Operação concluída." : "Operação cancelada.";
             return result;
         }
-        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or ApplicationStoreException
+        catch (Exception exception) when (exception is ArgumentException or IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or ApplicationStoreException
             or System.ComponentModel.Win32Exception or System.Security.SecurityException or System.Text.Json.JsonException or Microsoft.Data.Sqlite.SqliteException)
         {
             if (!IsDisposed)
@@ -279,11 +292,43 @@ public sealed class SettingsPage : UserControl
         else MessageBox.Show(this, message, title, MessageBoxButtons.OK, error ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
     }
 
+    private ApplicationSettings ReadSettings() => new(SelectedTheme, legacyEnabled.Checked, legacyDirectory.Text.Trim());
+
+    private void UpdateEditState()
+    {
+        if (!loadingSettings) settingsState.Text = HasUnsavedChanges ? "Alterações não salvas." : "";
+    }
+
+    internal async Task<bool> TryLeaveAsync()
+    {
+        if (IsDisposed || IsBusy) return false;
+        if (!HasUnsavedChanges) return true;
+        decisionPending = true;
+        UpdateOperationState();
+        try
+        {
+            var choice = EditDecision?.Invoke() ?? MessageBox.Show(this,
+                "Há configurações não salvas.\n\nSim: salvar e continuar.\nNão: descartar e continuar.\nCancelar: continuar editando.",
+                "Configurações não salvas", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button3);
+            if (choice == DialogResult.Yes) return await SaveAsync(fromDecision: true);
+            if (choice != DialogResult.No) return false;
+            LoadSettings(currentSettings);
+            settingsState.Text = "";
+            return true;
+        }
+        finally { decisionPending = false; if (!IsDisposed) UpdateOperationState(); }
+    }
+
     private void LoadSettings(ApplicationSettings settings)
     {
-        theme.SelectedIndex = Array.IndexOf(Enum.GetValues<ApplicationTheme>(), settings.Theme);
-        legacyEnabled.Checked = settings.LegacyOutputEnabled;
-        legacyDirectory.Text = settings.LegacyOutputDirectory;
+        loadingSettings = true;
+        try
+        {
+            theme.SelectedIndex = Array.IndexOf(Enum.GetValues<ApplicationTheme>(), settings.Theme);
+            legacyEnabled.Checked = settings.LegacyOutputEnabled;
+            legacyDirectory.Text = settings.LegacyOutputDirectory;
+        }
+        finally { loadingSettings = false; }
     }
 
     private bool BrowseLegacyDirectory()

@@ -184,10 +184,15 @@ public sealed partial class MainForm
     private async void ShowPage(string title, UserControl page)
     {
         if (ReferenceEquals(activePage, page) || profileNavigationPending) return;
-        if (ReferenceEquals(activePage, profilesPage))
+        if (ReferenceEquals(activePage, profilesPage) || ReferenceEquals(activePage, settingsPage))
         {
             profileNavigationPending = true;
-            try { if (!await profilesPage.TryLeaveAsync() || IsDisposed) return; }
+            try
+            {
+                var allowed = ReferenceEquals(activePage, profilesPage)
+                    ? await profilesPage.TryLeaveAsync() : await settingsPage.TryLeaveAsync();
+                if (!allowed || IsDisposed) return;
+            }
             finally { profileNavigationPending = false; }
         }
         pageHost.SuspendLayout();

@@ -66,6 +66,7 @@ public sealed class SettingsPageTests
     [InlineData("UacCancel")]
     [InlineData("UacFailure")]
     [InlineData("Manifest")]
+    [InlineData("Checksum")]
     [InlineData("Sqlite")]
     public Task ExpectedFailuresReleaseControlsWithoutApplyingSettings(string failure) => RunUi(async (page, repository, _) =>
     {
@@ -75,6 +76,7 @@ public sealed class SettingsPageTests
             "UacCancel" => new System.ComponentModel.Win32Exception(1223),
             "UacFailure" => new System.ComponentModel.Win32Exception(5),
             "Manifest" => new System.Text.Json.JsonException("Invalid manifest"),
+            "Checksum" => new InvalidDataException("Invalid checksum"),
             _ => new Microsoft.Data.Sqlite.SqliteException("Busy", 5)
         };
         repository.Save = _ => Task.FromException(error);
@@ -99,6 +101,43 @@ public sealed class SettingsPageTests
         Field<TextBox>(page, "legacyDirectory").Text = "";
         Assert.False(await page.SaveAsync());
         Assert.Equal(0, writes);
+    });
+
+    [Theory]
+    [InlineData(DialogResult.Yes)]
+    [InlineData(DialogResult.No)]
+    [InlineData(DialogResult.Cancel)]
+    public Task UnsavedSettingsCanBeSavedDiscardedOrKept(DialogResult choice) => RunUi(async (page, repository, _) =>
+    {
+        var writes = 0; var applied = false;
+        repository.Save = _ => { writes++; return Task.CompletedTask; };
+        page.SettingsSaved += _ => applied = true;
+        Field<ComboBox>(page, "theme").SelectedItem = ApplicationTheme.Dark;
+        Assert.True(page.HasUnsavedChanges);
+        Assert.Equal("Alterações não salvas.", Field<Label>(page, "settingsState").Text);
+        page.EditDecision = () => choice;
+        Assert.Equal(choice != DialogResult.Cancel, await page.TryLeaveAsync());
+        Assert.Equal(choice == DialogResult.Yes ? 1 : 0, writes);
+        Assert.Equal(choice == DialogResult.Yes, applied);
+        Assert.Equal(choice == DialogResult.Cancel, page.HasUnsavedChanges);
+        Assert.Equal(choice == DialogResult.No ? ApplicationTheme.System : ApplicationTheme.Dark, page.SelectedTheme);
+        Assert.False(page.IsBusy);
+    });
+
+    [Fact]
+    public Task FailedSavePreventsLeavingAndPreservesDraft() => RunUi(async (page, repository, _) =>
+    {
+        repository.Save = _ => Task.FromException(new IOException("Disk failure"));
+        Field<ComboBox>(page, "theme").SelectedItem = ApplicationTheme.Dark;
+        page.EditDecision = () => DialogResult.Yes;
+        Assert.False(await page.TryLeaveAsync());
+        Assert.True(page.HasUnsavedChanges);
+        Assert.Equal(ApplicationTheme.Dark, page.SelectedTheme);
+        Assert.False(page.IsBusy);
+        Assert.True(Field<Button>(page, "save").Enabled);
+        page.EditDecision = () => DialogResult.No;
+        Assert.True(await page.TryLeaveAsync());
+        Assert.Equal(ApplicationTheme.System, page.SelectedTheme);
     });
 
     private static Task RunUi(Func<SettingsPage, Repository, Form, Task> action)
