@@ -33,7 +33,10 @@ public sealed partial class MainForm
             btnStart.Enabled = btnTestOnce.Enabled = canStart;
         };
         settingsPage.StorageSelected += descriptor =>
-            globalStatus.Text = $"Próxima inicialização: {descriptor.Scope} · {descriptor.DatabasePath}";
+            globalStatus.Text = descriptor.StoreId == applicationStore.Descriptor.StoreId &&
+                string.Equals(descriptor.DatabasePath, applicationStore.Descriptor.DatabasePath, StringComparison.OrdinalIgnoreCase)
+                ? $"Banco atual: {SettingsPage.ScopeName(applicationStore.Descriptor.Scope)}"
+                : "Troca pendente — reinicie para aplicar.";
 
         var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176));
@@ -52,7 +55,7 @@ public sealed partial class MainForm
             pageHost.Controls.Add(page);
         }
         var statusPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 7, 10, 0) };
-        globalStatus.Text = $"{applicationStore.Descriptor.Scope} · {applicationStore.Descriptor.DatabasePath}";
+        globalStatus.Text = $"Banco atual: {SettingsPage.ScopeName(applicationStore.Descriptor.Scope)}";
         statusPanel.Controls.Add(globalStatus);
         shell.Controls.Add(navigation, 0, 0);
         shell.SetRowSpan(navigation, 2);

@@ -17,18 +17,26 @@ public sealed class SettingsPage : UserControl
     private readonly TextBox legacyDirectory = new();
     private readonly Button browseLegacy = new() { Text = "Escolher...", AutoSize = true };
     private readonly Button save = new() { Text = "Salvar configurações", AutoSize = true };
-    private readonly ComboBox targetScope = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly Button clone = new() { Text = "Copiar armazenamento atual", AutoSize = true };
-    private readonly Button create = new() { Text = "Criar armazenamento vazio", AutoSize = true };
-    private readonly Button useExisting = new() { Text = "Usar banco existente", AutoSize = true };
+    private readonly Button clone = new() { Text = "Copiar banco atual…", AutoSize = true };
+    private readonly Button create = new() { Text = "Criar banco vazio…", AutoSize = true };
+    private readonly Button useExisting = new() { Text = "Escolher…", AutoSize = true };
     private readonly Button package = new() { Text = "Criar pacote portátil", AutoSize = true };
     private readonly Button restore = new() { Text = "Restaurar pacote", AutoSize = true };
     private readonly Button openFolder = new() { Text = "Abrir pasta", AutoSize = true };
     private readonly CheckBox includeExecutable = new() { Text = "Incluir aplicativo", AutoSize = true };
     private readonly TextBox currentDatabasePath = new() { ReadOnly = true, AccessibleName = "Caminho do banco atual" };
+    private readonly Label bankDetails = new() { AutoSize = true, Dock = DockStyle.Top, Visible = false };
+    private readonly Label copyDescription = new() { AutoSize = true, Dock = DockStyle.Top, Text = "Inclui tema e exportação automática. Sem copiar, o destino mantém suas preferências." };
     private readonly Label storageSize = new() { AutoSize = true };
-    private readonly TextBox targetPath = new() { ReadOnly = true, AccessibleName = "Destino previsto" };
-    private readonly Label targetDescription = new() { AutoSize = true, Dock = DockStyle.Top };
+    private readonly Label bankInfo = new() { AutoSize = true, Dock = DockStyle.Top };
+    private readonly CheckBox copyPreferences = new() { Text = "Copiar preferências atuais para o banco selecionado", AutoSize = true };
+    private readonly Button discard = new() { Text = "Descartar alterações", AutoSize = true };
+    private readonly Button cancelSwitch = new() { Text = "Cancelar troca pendente", AutoSize = true, Visible = false };
+    private StoreDescriptor selectedBank;
+    private StoreDescriptor savedBank;
+    private bool savedCopyPreferences;
+    private bool clonedBank;
+    private readonly SettingsCommitService settingsCommit = new();
     private readonly Label pendingStorage = new() { AutoSize = true, Dock = DockStyle.Top, Visible = false, Margin = new Padding(3, 10, 3, 6) };
     private readonly bool executableAvailable = new CurrentApplicationBinaryProvider().GetSingleFileExecutablePath() is { } executable && File.Exists(executable);
     private ApplicationSettings currentSettings;
@@ -42,7 +50,7 @@ public sealed class SettingsPage : UserControl
     internal Action<string, string, bool>? MessageReporter;
     public event Action<bool>? BusyChanged;
     internal bool IsBusy => operationPending || decisionPending;
-    internal bool HasUnsavedChanges => ReadSettings() != currentSettings;
+    internal bool HasUnsavedChanges => ReadSettings() != currentSettings || !SameBank(selectedBank, savedBank) || copyPreferences.Checked != savedCopyPreferences;
 
 
     public SettingsPage(
@@ -53,30 +61,25 @@ public sealed class SettingsPage : UserControl
     {
         this.store = store;
         currentSettings = settings;
+        selectedBank = savedBank = store.Descriptor;
         this.settingsRepository = settingsRepository;
         this.preferences = preferences;
         Dock = DockStyle.Fill;
         AutoScroll = true;
         Padding = new Padding(24);
         theme.Items.AddRange(Enum.GetValues<ApplicationTheme>().Cast<object>().ToArray());
-        targetScope.Items.AddRange(new object[]
-            { StorageScope.LocalUser, StorageScope.Portable, StorageScope.SharedMachine, StorageScope.Custom });
         theme.FormattingEnabled = true;
         theme.Format += (_, e) => e.Value = e.ListItem switch
         { ApplicationTheme.Light => "Claro", ApplicationTheme.Dark => "Escuro", _ => "Sistema" };
-        targetScope.FormattingEnabled = true;
-        targetScope.Format += (_, e) => e.Value = e.ListItem is StorageScope scope ? ScopeName(scope) : "";
-        targetScope.SelectedItem = store.Descriptor.Scope;
-        targetScope.SelectedIndexChanged += (_, _) => UpdateTargetDescription();
-
         var root = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
         root.Controls.Add(new Label { Text = "Configurações", AutoSize = true, Font = new Font(Font.FontFamily, 20, FontStyle.Bold), Margin = new Padding(3, 3, 3, 16) });
         root.Controls.Add(operationStatus);
         root.Controls.Add(BuildAppearanceGroup());
         root.Controls.Add(BuildStorageGroup());
+        root.Controls.Add(BuildSaveArea());
         root.Controls.Add(BuildPackageGroup());
         Controls.Add(root);
-        UpdateTargetDescription();
+        UpdateBankState();
         operationStatus.TextChanged += (_, _) => operationStatus.Visible = operationStatus.Text.Length > 0;
         settingsState.TextChanged += (_, _) => settingsState.Visible = settingsState.Text.Length > 0;
         LoadSettings(settings);
@@ -84,6 +87,9 @@ public sealed class SettingsPage : UserControl
         theme.SelectedIndexChanged += (_, _) => UpdateEditState();
         legacyEnabled.CheckedChanged += (_, _) => { UpdateEditState(); UpdateOperationState(); };
         legacyDirectory.TextChanged += (_, _) => UpdateEditState();
+        copyPreferences.CheckedChanged += (_, _) => UpdateEditState();
+        discard.Click += (_, _) => DiscardChanges();
+        cancelSwitch.Click += async (_, _) => await CancelSwitchAsync();
 
         browseLegacy.Click += async (_, _) => await RunOperationAsync("Selecionando pasta…", () => Task.FromResult(BrowseLegacyDirectory()));
         save.Click += async (_, _) => await SaveAsync();
@@ -94,7 +100,7 @@ public sealed class SettingsPage : UserControl
         restore.Click += async (_, _) => await RestorePackageAsync();
         openFolder.Click += async (_, _) => await RunOperationAsync("Abrindo pasta…", () =>
         {
-            Process.Start(new ProcessStartInfo("explorer.exe", Path.GetDirectoryName(store.Descriptor.DatabasePath)!) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo("explorer.exe", Path.GetDirectoryName(selectedBank.DatabasePath)!) { UseShellExecute = true });
             return Task.FromResult(true);
         });
         layoutContainers = LayoutContainers(this).ToArray();
@@ -145,53 +151,57 @@ public sealed class SettingsPage : UserControl
         path.Controls.Add(legacyDirectory, 0, 0);
         path.Controls.Add(browseLegacy, 1, 0);
         AddRow(table, 4, "Pasta de destino:", path);
+        return Group("Preferências", table);
+    }
+
+    private Control BuildSaveArea()
+    {
+        var table = SettingsTable();
         var actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
         save.Font = new Font(Font, FontStyle.Bold);
         settingsState.Dock = DockStyle.None;
-        actions.Controls.AddRange(new Control[] { save, settingsState });
-        AddWide(table, 5, actions);
-        return Group("Preferências", table);
+        actions.Controls.AddRange(new Control[] { save, discard, settingsState });
+        AddWide(table, 0, actions);
+        AddNote(table, 1, "As preferências permanecem no banco de dados. A cópia para o destino é opcional.");
+        return table;
     }
 
     private Control BuildStorageGroup()
     {
         var table = SettingsTable();
-        currentDatabasePath.Text = store.Descriptor.DatabasePath;
-        AddRow(table, 0, "Localização:", new Label { Text = ScopeName(store.Descriptor.Scope), AutoSize = true });
-        AddRow(table, 1, "Banco atual:", currentDatabasePath);
-        AddRow(table, 2, "Tamanho em disco:", storageSize);
-        RefreshStorageSize();
-        openFolder.Dock = DockStyle.None;
+        var path = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = Padding.Empty };
+        path.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        path.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        currentDatabasePath.AccessibleName = "Caminho do banco selecionado";
+        currentDatabasePath.Dock = DockStyle.Top;
+        path.Controls.Add(currentDatabasePath, 0, 0);
+        path.Controls.Add(useExisting, 1, 0);
+        AddRow(table, 0, "Caminho:", path);
+        AddWide(table, 1, bankInfo);
         var detailsButton = new Button { Text = "Mostrar detalhes", AutoSize = true };
-        var details = new TextBox { ReadOnly = true, Text = store.Descriptor.StoreId.ToString("D"), Dock = DockStyle.Top, Visible = false,
-            AccessibleName = "Identidade do armazenamento", Margin = new Padding(3, 4, 3, 4) };
+        var details = bankDetails;
         detailsButton.Click += (_, _) =>
         {
             details.Visible = !details.Visible;
-            table.RowStyles[4].SizeType = details.Visible ? SizeType.AutoSize : SizeType.Absolute;
-            table.RowStyles[4].Height = 0;
+            details.Text = $"Identidade: {selectedBank.StoreId:D} · Tamanho em disco: {storageSize.Text}";
+            table.RowStyles[3].SizeType = details.Visible ? SizeType.AutoSize : SizeType.Absolute;
+            table.RowStyles[3].Height = 0;
             detailsButton.Text = details.Visible ? "Ocultar detalhes" : "Mostrar detalhes";
         };
-        var storageActions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = Padding.Empty };
-        storageActions.Controls.AddRange(new Control[] { openFolder, detailsButton });
-        AddRow(table, 3, "Ações:", storageActions);
-        AddWide(table, 4, details);
-        table.RowStyles[4].SizeType = SizeType.Absolute;
-        table.RowStyles[4].Height = 0;
-        var destination = SettingsTable();
-        AddRow(destination, 0, "Localização de destino:", targetScope);
-        AddRow(destination, 1, "Destino previsto:", targetPath);
-        AddWide(destination, 2, targetDescription);
-        AddWide(destination, 3, StorageAction(clone, "Copia histórico, perfis e configurações para o destino vazio."));
-        AddWide(destination, 4, StorageAction(create, "Cria um banco sem histórico ou perfis, com configurações padrão."));
-        AddWide(destination, 5, StorageAction(useExisting, "Escolhe um banco compatível já existente; a localização acima não se aplica."));
-        AddNote(destination, 6, "A troca será aplicada após reiniciar. O banco atual é preservado.");
-        AddWide(destination, 7, pendingStorage);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.Controls.Add(Group("Armazenamento atual", table));
-        layout.Controls.Add(Group("Trocar armazenamento", destination));
-        return layout;
+        var information = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
+        information.Controls.AddRange(new Control[] { openFolder, detailsButton });
+        AddWide(table, 2, information);
+        AddWide(table, 3, details);
+        table.RowStyles[3].SizeType = SizeType.Absolute; table.RowStyles[3].Height = 0;
+        AddWide(table, 4, copyPreferences);
+        AddWide(table, 5, copyDescription);
+        var preparation = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
+        preparation.Controls.AddRange(new Control[] { clone, create });
+        AddWide(table, 6, preparation);
+        AddNote(table, 7, "Essas ações preparam outro banco para seleção. A troca será aplicada ao reiniciar, após salvar.");
+        AddWide(table, 8, pendingStorage);
+        AddWide(table, 9, cancelSwitch);
+        return Group("Banco de dados", table);
     }
 
     private GroupBox BuildPackageGroup()
@@ -215,11 +225,17 @@ public sealed class SettingsPage : UserControl
             settings = settings with { LegacyOutputDirectory = Path.GetFullPath(settings.LegacyOutputDirectory) };
             if (File.Exists(settings.LegacyOutputDirectory)) throw new IOException("A pasta CSV/TXT escolhida está ocupada por um arquivo.");
         }
-        await Task.Run(() => settingsRepository.SaveAsync(settings));
+        var target = selectedBank;
+        var copy = copyPreferences.Checked && !SameBank(target, store.Descriptor);
+        await Task.Run(() => settingsCommit.SaveAsync(store, settingsRepository, currentSettings, settings, target, copy, preferences));
         currentSettings = settings;
+        savedBank = selectedBank;
+        savedCopyPreferences = copyPreferences.Checked;
         LoadSettings(settings);
+        UpdateBankState();
         settingsState.Text = "Configurações salvas.";
         SettingsSaved?.Invoke(settings);
+        StorageSelected?.Invoke(savedBank);
         operationStatus.Text = "Configurações salvas.";
         return true;
     }, allowDecision: fromDecision);
@@ -227,46 +243,24 @@ public sealed class SettingsPage : UserControl
     private Task<bool> CreateOrCloneAsync(bool copyCurrent) => RunOperationAsync(
         copyCurrent ? "Copiando armazenamento…" : "Criando armazenamento…", async () =>
     {
-        var scope = targetScope.SelectedItem is StorageScope selected ? selected : StorageScope.LocalUser;
-        var directory = await ResolveTargetDirectoryAsync(scope);
-        if (directory is null) return false;
+        using var dialog = new FolderBrowserDialog { Description = "Escolha uma pasta vazia para preparar o banco" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+        var directory = dialog.SelectedPath;
         var selectedStore = await Task.Run(() => copyCurrent
-            ? migration.CloneAsync(store, directory, scope)
-            : migration.CreateEmptyAsync(directory, scope));
-        await ActivateAsync(selectedStore.Descriptor);
+            ? migration.CloneAsync(store, directory, StorageScope.Custom)
+            : migration.CreateEmptyAsync(directory, StorageScope.Custom));
+        SetSelectedBank(selectedStore.Descriptor, includesPreferences: copyCurrent);
         return true;
     });
-
-    private async Task<string?> ResolveTargetDirectoryAsync(StorageScope scope)
-    {
-        var locations = StorageLocations.CreateDefault();
-        if (scope == StorageScope.Custom)
-        {
-            using var dialog = new FolderBrowserDialog { Description = "Escolha uma pasta vazia para o armazenamento" };
-            return dialog.ShowDialog(this) == DialogResult.OK ? dialog.SelectedPath : null;
-        }
-        var databasePath = scope switch
-        {
-            StorageScope.LocalUser => locations.LocalDatabasePath,
-            StorageScope.SharedMachine => locations.SharedDatabasePath,
-            _ => locations.PortableDatabasePath
-        };
-        var directory = Path.GetDirectoryName(databasePath)!;
-        if (string.Equals(Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar),
-            Path.GetDirectoryName(store.Descriptor.DatabasePath)!.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
-            throw new IOException("O destino é a pasta do armazenamento atual. Escolha outro escopo ou uma pasta personalizada vazia.");
-        if (scope == StorageScope.SharedMachine)
-            await new SharedMachineStorageElevator().PrepareDirectoryAsync();
-        return directory;
-    }
 
     private Task<bool> UseExistingAsync() => RunOperationAsync("Verificando armazenamento…", async () =>
     {
         using var dialog = new OpenFileDialog { Filter = "Banco do DB Connection Tester (data.db)|data.db|SQLite (*.db)|*.db" };
         if (dialog.ShowDialog(this) != DialogResult.OK) return false;
         var path = dialog.FileName;
-        var selected = await Task.Run(() => StorageMigrationService.UseExistingAsync(path));
-        await ActivateAsync(selected.Descriptor);
+        var selected = await Task.Run(() => SqliteApplicationStore.InspectAsync(path));
+        if (!selected.IsCompatible) throw new ApplicationStoreException($"O banco selecionado não é compatível: {selected.ErrorMessage}");
+        SetSelectedBank(selected.Descriptor!);
         return true;
     });
 
@@ -290,26 +284,76 @@ public sealed class SettingsPage : UserControl
         var path = source.FileName;
         var directory = destination.SelectedPath;
         var restored = await Task.Run(() => new PortablePackageService(store).RestoreAsync(path, directory));
-        await ActivateAsync(restored.Store);
+        SetSelectedBank(restored.Store);
+        ReportMessage("Pacote restaurado. Salve as configurações para confirmar a troca de banco.", "Pacote portátil", false);
         return true;
     });
 
-    private async Task ActivateAsync(StoreDescriptor descriptor)
+    internal void SetSelectedBank(StoreDescriptor descriptor, bool includesPreferences = false)
     {
-        await Task.Run(() => preferences.Write(new StoragePreference(descriptor.StoreId, descriptor.DatabasePath, descriptor.Scope, null)));
-        pendingStorage.Text = $"Será usado após reiniciar: {ScopeName(descriptor.Scope)}\n{descriptor.DatabasePath}";
-        pendingStorage.Visible = true;
-        StorageSelected?.Invoke(descriptor);
-        ReportMessage("O armazenamento foi selecionado. Reinicie o aplicativo para concluir a troca.", "Armazenamento", false);
+        selectedBank = descriptor;
+        clonedBank = includesPreferences;
+        copyPreferences.Checked = includesPreferences;
+        UpdateBankState();
+        UpdateEditState();
+    }
+
+    internal Task<bool> SelectBankAsync(string path) => RunOperationAsync("Verificando banco…", async () =>
+    {
+        var inspection = await Task.Run(() => SqliteApplicationStore.InspectAsync(path));
+        if (!inspection.IsCompatible) throw new ApplicationStoreException($"O banco selecionado não é compatível: {inspection.ErrorMessage}");
+        SetSelectedBank(inspection.Descriptor!);
+        return true;
+    });
+
+    internal Task<bool> CancelSwitchAsync() => RunOperationAsync("Cancelando troca…", async () =>
+    {
+        await Task.Run(() => preferences.Write(new StoragePreference(store.Descriptor.StoreId, store.Descriptor.DatabasePath, store.Descriptor.Scope, preferences.Read()?.ObservedPortableStoreId)));
+        var keepDraft = !SameBank(selectedBank, savedBank);
+        savedBank = store.Descriptor;
+        savedCopyPreferences = false;
+        if (!keepDraft) { selectedBank = store.Descriptor; clonedBank = false; copyPreferences.Checked = false; }
+        UpdateBankState(); UpdateEditState();
+        StorageSelected?.Invoke(store.Descriptor);
+        return true;
+    });
+
+    internal void DiscardChanges()
+    {
+        if (IsBusy) return;
+        LoadSettings(currentSettings);
+        selectedBank = savedBank; clonedBank = false;
+        copyPreferences.Checked = savedCopyPreferences;
+        UpdateBankState(); UpdateEditState();
+    }
+
+    private static bool SameBank(StoreDescriptor a, StoreDescriptor b) => a.StoreId == b.StoreId
+        && string.Equals(a.DatabasePath, b.DatabasePath, StringComparison.OrdinalIgnoreCase);
+
+    private void UpdateBankState()
+    {
+        currentDatabasePath.Text = selectedBank.DatabasePath;
+        var different = !SameBank(selectedBank, store.Descriptor);
+        bankInfo.Text = $"Localização: {ScopeName(selectedBank.Scope)} · Banco compatível";
+        if (!SameBank(selectedBank, savedBank)) bankInfo.Text += " · Troca não salva";
+        copyPreferences.Visible = copyDescription.Visible = different;
+        copyPreferences.Text = clonedBank ? "Preferências incluídas na cópia do banco" : "Copiar preferências atuais para o banco selecionado";
+        pendingStorage.Visible = cancelSwitch.Visible = !SameBank(savedBank, store.Descriptor);
+        pendingStorage.Text = "Troca pendente — reinicie para aplicar. O banco atual continua em uso.";
+        RefreshStorageSize();
+        bankDetails.Text = $"Identidade: {selectedBank.StoreId:D} · Tamanho em disco: {storageSize.Text}";
+        UpdateOperationState();
     }
 
     private void UpdateOperationState()
     {
         var enabled = operationsEnabled && !IsBusy;
         foreach (var control in new Control[] { clone, create, useExisting, package, restore, save, openFolder,
-            theme, legacyEnabled, legacyDirectory, browseLegacy, targetScope, includeExecutable }) control.Enabled = enabled;
+            theme, legacyEnabled, legacyDirectory, browseLegacy, includeExecutable, discard, cancelSwitch, copyPreferences }) control.Enabled = enabled;
         legacyDirectory.Enabled = browseLegacy.Enabled = enabled && legacyEnabled.Checked;
         includeExecutable.Enabled = enabled && executableAvailable;
+        copyPreferences.Enabled = enabled && !clonedBank;
+        discard.Enabled = enabled && HasUnsavedChanges;
         BusyChanged?.Invoke(IsBusy);
     }
 
@@ -363,7 +407,7 @@ public sealed class SettingsPage : UserControl
 
     private void UpdateEditState()
     {
-        if (!loadingSettings) settingsState.Text = HasUnsavedChanges ? "Alterações não salvas." : "";
+        if (!loadingSettings) { settingsState.Text = HasUnsavedChanges ? "Alterações não salvas." : ""; discard.Enabled = operationsEnabled && !IsBusy && HasUnsavedChanges; }
     }
 
     internal async Task<bool> TryLeaveAsync()
@@ -380,7 +424,8 @@ public sealed class SettingsPage : UserControl
             if (choice == DialogResult.Yes) return await SaveAsync(fromDecision: true);
             if (choice != DialogResult.No) return false;
             LoadSettings(currentSettings);
-            settingsState.Text = "";
+            selectedBank = savedBank; clonedBank = false; copyPreferences.Checked = savedCopyPreferences;
+            UpdateBankState(); settingsState.Text = "";
             return true;
         }
         finally { decisionPending = false; if (!IsDisposed) UpdateOperationState(); }
@@ -406,28 +451,6 @@ public sealed class SettingsPage : UserControl
         return true;
     }
 
-    private void UpdateTargetDescription()
-    {
-        var scope = targetScope.SelectedItem is StorageScope selected ? selected : StorageScope.LocalUser;
-        var locations = StorageLocations.CreateDefault();
-        targetPath.Text = scope switch
-        {
-            StorageScope.LocalUser => locations.LocalDatabasePath,
-            StorageScope.SharedMachine => locations.SharedDatabasePath,
-            StorageScope.Portable => locations.PortableDatabasePath,
-            _ => "A pasta será escolhida ao copiar ou criar o banco."
-        };
-        targetDescription.Text = scope switch
-        {
-            StorageScope.SharedMachine => "Disponível aos usuários deste computador. Pode solicitar autorização do Windows.",
-            StorageScope.Portable => "O banco fica na pasta do aplicativo, para uso portátil.",
-            StorageScope.Custom => "Escolha uma pasta vazia para criar ou copiar o armazenamento.",
-            _ => "O banco fica na pasta de dados do seu usuário do Windows."
-        };
-        if (scope != StorageScope.Custom && string.Equals(Path.GetFullPath(targetPath.Text), store.Descriptor.DatabasePath, StringComparison.OrdinalIgnoreCase))
-            targetDescription.Text += " Este é o banco atual; escolha outro destino para copiar ou criar.";
-    }
-
     private static Control StorageAction(Button button, string description)
     {
         var table = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = new Padding(3, 4, 3, 4) };
@@ -442,7 +465,7 @@ public sealed class SettingsPage : UserControl
     private void RefreshStorageSize()
     {
         long bytes = 0;
-        foreach (var path in new[] { store.Descriptor.DatabasePath, store.Descriptor.DatabasePath + "-wal", store.Descriptor.DatabasePath + "-shm" })
+        foreach (var path in new[] { selectedBank.DatabasePath, selectedBank.DatabasePath + "-wal", selectedBank.DatabasePath + "-shm" })
         {
             try { var info = new FileInfo(path); if (info.Exists) bytes += info.Length; }
             catch (IOException) { storageSize.Text = "Indisponível"; return; }
@@ -451,7 +474,7 @@ public sealed class SettingsPage : UserControl
         storageSize.Text = FormatSize(bytes);
     }
 
-    private static string ScopeName(StorageScope scope) => scope switch
+    internal static string ScopeName(StorageScope scope) => scope switch
     {
         StorageScope.LocalUser => "Usuário atual",
         StorageScope.Portable => "Portátil",

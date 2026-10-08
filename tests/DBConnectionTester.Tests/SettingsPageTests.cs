@@ -153,24 +153,13 @@ public sealed class SettingsPageTests
         Assert.True(Field<TextBox>(page, "legacyDirectory").Enabled);
         var theme = Field<ComboBox>(page, "theme");
         Assert.Equal("Claro", theme.GetItemText(ApplicationTheme.Light));
-        var scope = Field<ComboBox>(page, "targetScope");
-        scope.SelectedItem = StorageScope.Custom;
-        Assert.Contains("escolhida", Field<TextBox>(page, "targetPath").Text);
-        scope.SelectedItem = StorageScope.LocalUser;
-        Assert.Equal(StorageLocations.CreateDefault().LocalDatabasePath, Field<TextBox>(page, "targetPath").Text);
         Assert.True(Field<TextBox>(page, "currentDatabasePath").ReadOnly);
         var store = Field<SqliteApplicationStore>(page, "store");
-        var selected = store.Descriptor with { DatabasePath = Path.Combine(Path.GetTempPath(), "selected-data.db") };
-        var activated = false;
-        page.StorageSelected += descriptor => activated = descriptor == selected;
-        await (Task)typeof(SettingsPage).GetMethod("ActivateAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(page, new object[] { selected })!;
-        Assert.True(activated);
-        Assert.Contains(selected.DatabasePath, Field<Label>(page, "pendingStorage").Text);
-        Assert.True(Field<Label>(page, "pendingStorage").Visible);
+        Assert.False(Field<Label>(page, "pendingStorage").Visible);
         Assert.Equal(Field<bool>(page, "executableAvailable"), Field<CheckBox>(page, "includeExecutable").Enabled);
         var detailsButton = Descendants(page).OfType<Button>().Single(button => button.Text == "Mostrar detalhes");
         detailsButton.PerformClick();
-        Assert.Contains(Descendants(page).OfType<TextBox>(), text => text.Text == store.Descriptor.StoreId.ToString("D") && text.Visible);
+        Assert.Contains(Descendants(page).OfType<Label>(), text => text.Text.Contains(store.Descriptor.StoreId.ToString("D")) && text.Visible);
         detailsButton.PerformClick();
         foreach (var size in new[] { new System.Drawing.Size(620, 600), new System.Drawing.Size(920, 860), new System.Drawing.Size(1300, 950) })
         {
@@ -178,7 +167,7 @@ public sealed class SettingsPageTests
             page.AutoScrollPosition = System.Drawing.Point.Empty;
             await Task.Delay(40);
             var groups = Descendants(page).OfType<GroupBox>().OrderBy(group => group.PointToScreen(System.Drawing.Point.Empty).Y).ToArray();
-            Assert.Equal(4, groups.Length);
+            Assert.Equal(3, groups.Length);
             foreach (var group in groups)
                 foreach (var label in Descendants(group).OfType<Label>().Where(label => label.Visible))
                     Assert.True(label.PointToScreen(System.Drawing.Point.Empty).Y + label.Height <= group.PointToScreen(System.Drawing.Point.Empty).Y + group.Height, $"Texto cortado em {group.Text}: {label.Text}");
@@ -205,6 +194,65 @@ public sealed class SettingsPageTests
                 image.Save(Path.Combine(output, $"settings-refined-bottom-{size.Width}x{size.Height}.png"));
             }
         }
+    });
+
+    [Fact]
+    public Task BankSelectionIsDraftUntilSavedAndCanBeDiscarded() => RunUi(async (page, _, _) =>
+    {
+        var source = Field<SqliteApplicationStore>(page, "store").Descriptor;
+        var preferences = Field<Preferences>(page, "preferences");
+        var target = await SqliteApplicationStore.OpenOrCreateAsync(Path.Combine(Path.GetDirectoryName(source.DatabasePath)!, "other", "data.db"), StorageScope.Custom);
+        Assert.True(await page.SelectBankAsync(target.Descriptor.DatabasePath));
+        Assert.True(page.HasUnsavedChanges);
+        Assert.Null(preferences.Value);
+        Assert.Contains("Troca não salva", Field<Label>(page, "bankInfo").Text);
+        Assert.False(Field<Label>(page, "pendingStorage").Visible);
+        page.EditDecision = () => DialogResult.Cancel;
+        Assert.False(await page.TryLeaveAsync());
+        page.DiscardChanges();
+        Assert.False(page.HasUnsavedChanges);
+        Assert.Equal(source.DatabasePath, Field<TextBox>(page, "currentDatabasePath").Text);
+        Assert.True(await page.SelectBankAsync(target.Descriptor.DatabasePath));
+        Field<ComboBox>(page, "theme").SelectedItem = ApplicationTheme.Dark;
+        Field<CheckBox>(page, "copyPreferences").Checked = true;
+        Assert.True(await page.SaveAsync());
+        Assert.Equal(target.Descriptor.StoreId, preferences.Value!.StoreId);
+        Assert.False(page.HasUnsavedChanges);
+        Assert.True(Field<Label>(page, "pendingStorage").Visible);
+        Assert.Contains("Troca pendente", Field<Label>(page, "pendingStorage").Text);
+        Assert.Equal(ApplicationTheme.Dark, (await new PersistentSettingsRepository(target).GetAsync()).Theme);
+        var output = Environment.GetEnvironmentVariable("DBCT_UI_SNAPSHOT_DIR");
+        if (output is not null)
+        {
+            Directory.CreateDirectory(output);
+            using var image = new System.Drawing.Bitmap(page.Width, page.Height);
+            page.DrawToBitmap(image, new System.Drawing.Rectangle(System.Drawing.Point.Empty, page.Size));
+            image.Save(Path.Combine(output, "settings-pending.png"));
+        }
+        page.SetSelectedBank(source);
+        page.DiscardChanges();
+        Assert.Equal(target.Descriptor.DatabasePath, Field<TextBox>(page, "currentDatabasePath").Text);
+        Assert.False(page.HasUnsavedChanges);
+        Assert.True(await page.CancelSwitchAsync());
+        Assert.Equal(source.StoreId, preferences.Value!.StoreId);
+        Assert.Equal(ApplicationTheme.Dark, page.SelectedTheme);
+        Assert.False(Field<Label>(page, "pendingStorage").Visible);
+        Assert.False(page.HasUnsavedChanges);
+    });
+
+    [Fact]
+    public Task InvalidSelectedBankCannotSaveOrReplacePendingSelection() => RunUi(async (page, _, _) =>
+    {
+        var store = Field<SqliteApplicationStore>(page, "store");
+        var preferences = Field<Preferences>(page, "preferences");
+        page.SetSelectedBank(store.Descriptor with { DatabasePath = Path.Combine(Path.GetDirectoryName(store.Descriptor.DatabasePath)!, "missing.db") });
+        Assert.False(await page.SaveAsync());
+        Assert.Null(preferences.Value);
+        Assert.True(page.HasUnsavedChanges);
+        Assert.False(Field<Label>(page, "pendingStorage").Visible);
+        page.EditDecision = () => DialogResult.No;
+        Assert.True(await page.TryLeaveAsync());
+        Assert.False(page.HasUnsavedChanges);
     });
 
     [Fact]
@@ -278,7 +326,8 @@ public sealed class SettingsPageTests
     }
     private sealed class Preferences : IStoragePreferenceStore
     {
-        public StoragePreference? Read() => null;
-        public void Write(StoragePreference preference) { }
+        public StoragePreference? Value;
+        public StoragePreference? Read() => Value;
+        public void Write(StoragePreference preference) => Value = preference;
     }
 }
