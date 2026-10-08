@@ -36,7 +36,7 @@ public sealed partial class MainForm : Form
     private readonly Label lblStatus = new() { AutoSize = true, Text = "Pronto." };
     private readonly ProgressBar progressBar = new() { Minimum = 0, Maximum = 100, Value = 0, Dock = DockStyle.Fill };
     private readonly ResultsControl resultsControl = new();
-    private readonly Panel pageHost = new() { Dock = DockStyle.Fill };
+    private readonly Panel pageHost = new BufferedPanel() { Dock = DockStyle.Fill };
     private readonly FlowLayoutPanel navigation = new()
     {
         Dock = DockStyle.Fill,
@@ -60,14 +60,14 @@ public sealed partial class MainForm : Form
     private readonly ToolStripMenuItem trayStop = new("Encerrar teste") { Enabled = false };
     private readonly ToolStripMenuItem trayExit = new("Sair");
 
-    private RowBinding hostRow = null!;
-    private RowBinding portRow = null!;
-    private RowBinding userRow = null!;
-    private RowBinding passwordRow = null!;
-    private RowBinding databaseRow = null!;
-    private RowBinding sqlAuthRow = null!;
-    private RowBinding odbcDriverRow = null!;
-    private RowBinding sqliteFileRow = null!;
+    private UiLayout.FieldRow hostRow = null!;
+    private UiLayout.FieldRow portRow = null!;
+    private UiLayout.FieldRow userRow = null!;
+    private UiLayout.FieldRow passwordRow = null!;
+    private UiLayout.FieldRow databaseRow = null!;
+    private UiLayout.FieldRow sqlAuthRow = null!;
+    private UiLayout.FieldRow odbcDriverRow = null!;
+    private UiLayout.FieldRow sqliteFileRow = null!;
 
     private RunCoordinator runCoordinator;
     private readonly SqliteApplicationStore applicationStore;
@@ -89,7 +89,7 @@ public sealed partial class MainForm : Form
         Text = $"DB Connection Tester {ApplicationInfo.Version}";
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
-        MinimumSize = new Size(980, 720);
+        MinimumSize = SizeFromClientSize(new Size(800, 600));
         Size = new Size(1120, 900);
         MaximizeBox = true;
 
@@ -118,7 +118,7 @@ public sealed partial class MainForm : Form
         new TestCycleExecutor(),
         new RunOutputFactory(applicationStore, settings)));
 
-    internal ApplicationTheme ConfiguredTheme => settingsPage.SelectedTheme;
+    internal ApplicationTheme ConfiguredTheme => applicationSettings.Theme;
 }
 
 internal enum RunUiState

@@ -94,11 +94,12 @@ public sealed partial class MainForm
 
     private void UpdateProgress(TestSettings settings, TestProgress value, bool singleRun)
     {
-        completedTests = value.Completed;
+        completedTests = Math.Max(completedTests, value.Completed);
         if (value.LatestCycle is not null)
             resultsControl.AddCycle(value.LatestCycle);
         if (value.Statistics is not null)
             resultsControl.UpdateStatistics(value.Statistics);
+        if (runUiState is not (RunUiState.Running or RunUiState.Stopping)) return;
         if (!settings.Continuous)
         {
             var percentage = (int)Math.Round(value.Completed * 100.0 / settings.TestCount.Value);
@@ -241,9 +242,9 @@ public sealed partial class MainForm
 
         var hasOutput = !string.IsNullOrWhiteSpace(currentCsvPath);
         btnOpenCsv.Enabled = hasOutput;
-        btnOpenLog.Enabled = hasOutput;
+        btnOpenLog.Enabled = !string.IsNullOrWhiteSpace(currentTxtPath);
         trayOpenCsv.Enabled = hasOutput;
-        trayOpenLog.Enabled = hasOutput;
+        trayOpenLog.Enabled = btnOpenLog.Enabled;
 
         if (state == RunUiState.Running && settings?.Continuous == true)
         {

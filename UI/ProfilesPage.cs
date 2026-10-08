@@ -29,19 +29,23 @@ public sealed class ProfilesPage : UserControl
     private readonly Button delete = new() { Text = "Excluir", AutoSize = true };
     private readonly Button use = new() { Text = "Usar em nova execução", AutoSize = true };
     private Guid? selectedId;
+    private bool loading;
+    private bool editingEnabled = true;
+    private readonly Dictionary<Control, UiLayout.FieldRow> fields = [];
+    private readonly Button create = new() { Text = "Novo", AutoSize = true };
+    private readonly TableLayoutPanel editor;
+
 
     public ProfilesPage(IConnectionProfileRepository repository)
     {
         this.repository = repository;
         Dock = DockStyle.Fill;
         Padding = new Padding(20);
-        databaseType.DataSource = DatabaseProfiles.All.ToList();
+        databaseType.Items.AddRange(DatabaseProfiles.All.Cast<object>().ToArray());
         databaseType.DisplayMember = nameof(DatabaseProfile.DisplayName);
-        authentication.DataSource = Enum.GetValues<SqlServerAuthentication>();
+        authentication.Items.AddRange(Enum.GetValues<SqlServerAuthentication>().Cast<object>().ToArray());
 
-        var editor = new TableLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, ColumnCount = 2, Padding = new Padding(10) };
-        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
-        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        editor = UiLayout.Fields(160);
         var row = 0;
         AddRow(editor, row++, "Nome:", name);
         AddRow(editor, row++, "Tipo:", databaseType);
@@ -60,6 +64,8 @@ public sealed class ProfilesPage : UserControl
         layers.Controls.AddRange(new Control[] { dns, ping, tcp, databaseTest });
         AddRow(editor, row++, "Camadas:", layers);
         AddRow(editor, row++, "Comportamento:", background);
+        editor.RowCount = row + 1;
+        editor.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         editor.Controls.Add(new Label
         {
             Text = "A senha nunca é salva no perfil e será solicitada na execução.",
@@ -68,12 +74,33 @@ public sealed class ProfilesPage : UserControl
         }, 0, row);
         editor.SetColumnSpan(editor.GetControlFromPosition(0, row)!, 2);
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        var create = new Button { Text = "Novo", AutoSize = true };
-        buttons.Controls.AddRange(new Control[] { create, save, delete, use });
-        editor.Controls.Add(buttons, 0, ++row);
-        editor.SetColumnSpan(buttons, 2);
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 260, FixedPanel = FixedPanel.Panel1 };
+        buttons.Controls.AddRange(new Control[] { create, save, delete, use });
+        var viewport = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
+        viewport.Controls.Add(editor);
+        var editorHost = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        editorHost.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        editorHost.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        editorHost.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        editorHost.Controls.Add(buttons, 0, 0);
+        editorHost.Controls.Add(viewport, 0, 1);
+
+        var split = new SplitContainer { Dock = DockStyle.Fill, Size = new Size(900, 650), SplitterDistance = 220,
+            FixedPanel = FixedPanel.Panel1, Panel1MinSize = 80, Panel2MinSize = 140 };
+        split.SizeChanged += (_, _) =>
+        {
+            var orientation = split.ClientSize.Width * 96d / split.DeviceDpi >= 800 ? Orientation.Vertical : Orientation.Horizontal;
+            if (split.Orientation == orientation) return;
+            var extent = orientation == Orientation.Vertical ? split.ClientSize.Width : split.ClientSize.Height;
+            if (extent <= split.Panel1MinSize + split.Panel2MinSize + split.SplitterWidth) return;
+            split.SuspendLayout();
+            split.SplitterDistance = split.Panel1MinSize;
+            split.Orientation = orientation;
+            var preferred = (int)((orientation == Orientation.Vertical ? 220 : 130) * split.DeviceDpi / 96d);
+            split.SplitterDistance = Math.Clamp(preferred, split.Panel1MinSize,
+                Math.Max(split.Panel1MinSize, extent - split.Panel2MinSize - split.SplitterWidth));
+            split.ResumeLayout(true);
+        };
         var listPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
         listPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         listPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -81,9 +108,23 @@ public sealed class ProfilesPage : UserControl
         listPanel.Controls.Add(profiles, 0, 1);
         split.Panel1.Padding = new Padding(0, 0, 12, 0);
         split.Panel1.Controls.Add(listPanel);
-        split.Panel2.Controls.Add(editor);
+        split.Panel2.Controls.Add(editorHost);
         Controls.Add(split);
 
+        databaseType.SelectedIndexChanged += (_, _) =>
+        {
+            if (loading) return;
+            var type = (databaseType.SelectedItem as DatabaseProfile)?.Type ?? DatabaseType.MySqlMariaDb;
+            port.Value = DatabaseProfiles.Get(type).DefaultPort ?? 1;
+            dns.Checked = ping.Checked = tcp.Checked = DatabaseProfiles.Get(type).UsesNetwork;
+            databaseTest.Checked = DatabaseProfiles.Get(type).SupportsDatabaseTest;
+            if (type == DatabaseType.SapSqlAnywhere && string.IsNullOrWhiteSpace(odbcDriver.Text)) odbcDriver.Text = "SQL Anywhere 17";
+            ApplyVisibility();
+        };
+        authentication.FormattingEnabled = true;
+        authentication.Format += (_, e) => e.Value = e.ListItem is SqlServerAuthentication.Windows ? "Windows" : "Usuário e senha";
+        authentication.SelectedIndexChanged += (_, _) => { if (!loading) ApplyVisibility(); };
+        continuous.CheckedChanged += (_, _) => testCount.Enabled = editingEnabled && !continuous.Checked;
         profiles.SelectedIndexChanged += (_, _) => LoadSelection();
         create.Click += (_, _) => ClearEditor();
         save.Click += async (_, _) => await SaveAsync();
@@ -93,6 +134,7 @@ public sealed class ProfilesPage : UserControl
             if (profiles.SelectedItem is SavedConnectionProfile profile)
                 UseRequested?.Invoke(profile);
         };
+        ClearEditor();
     }
 
     public event Action<SavedConnectionProfile>? UseRequested;
@@ -104,7 +146,36 @@ public sealed class ProfilesPage : UserControl
         ClearEditor();
     }
 
-    public void SetEditingEnabled(bool enabled) => save.Enabled = delete.Enabled = enabled;
+    public void SetEditingEnabled(bool enabled)
+    {
+        editingEnabled = enabled;
+        create.Enabled = save.Enabled = enabled;
+        delete.Enabled = use.Enabled = enabled && selectedId is not null;
+        editor.Enabled = enabled;
+        ApplyVisibility();
+    }
+
+    private void ApplyVisibility()
+    {
+        var type = (databaseType.SelectedItem as DatabaseProfile)?.Type ?? DatabaseType.MySqlMariaDb;
+        var auth = authentication.SelectedItem is SqlServerAuthentication selected ? selected : SqlServerAuthentication.Windows;
+        var state = DatabaseUiState.Create(type, auth);
+        editor.SuspendLayout();
+        try
+        {
+            fields[host].SetVisible(state.ShowHost); fields[port].SetVisible(state.ShowPort);
+            fields[user].SetVisible(state.ShowCredentials); fields[database].SetVisible(state.ShowDatabase);
+            fields[sqliteFile].SetVisible(state.ShowSqliteFile); fields[authentication].SetVisible(state.ShowSqlServerAuthentication);
+            fields[odbcDriver].SetVisible(state.ShowOdbcDriver);
+            dns.Enabled = editingEnabled && state.AllowDns; ping.Enabled = editingEnabled && state.AllowPing;
+            tcp.Enabled = editingEnabled && state.AllowTcp; databaseTest.Enabled = editingEnabled && state.AllowDatabaseTest;
+            if (state.RequireDatabaseTest) databaseTest.Checked = true;
+            if (state.RequireTcp) tcp.Checked = true;
+            testCount.Enabled = editingEnabled && !continuous.Checked;
+            delete.Enabled = use.Enabled = editingEnabled && selectedId is not null;
+        }
+        finally { editor.ResumeLayout(true); }
+    }
 
     private async Task SaveAsync()
     {
@@ -133,14 +204,21 @@ public sealed class ProfilesPage : UserControl
         if (selectedId is not Guid id || MessageBox.Show(this, "Excluir este perfil? O histórico será preservado.",
                 "Excluir perfil", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
-        await repository.DeleteAsync(id);
-        await RefreshAsync();
+        try
+        {
+            await repository.DeleteAsync(id);
+            await RefreshAsync();
+        }
+        catch (Exception exception) when (exception is ApplicationStoreException or Microsoft.Data.Sqlite.SqliteException)
+        { MessageBox.Show(this, exception.Message, "Excluir perfil", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
 
     private void LoadSelection()
     {
         if (profiles.SelectedItem is not SavedConnectionProfile profile)
             return;
+        loading = true;
+        editor.SuspendLayout();
         selectedId = profile.ProfileId;
         name.Text = profile.Name;
         databaseType.SelectedItem = DatabaseProfiles.All.First(item => item.Type == profile.DatabaseType);
@@ -160,10 +238,15 @@ public sealed class ProfilesPage : UserControl
         tcp.Checked = profile.ExecutionDefaults.Tcp;
         databaseTest.Checked = profile.ExecutionDefaults.DatabaseTest;
         background.Checked = profile.ExecutionDefaults.StartInBackground;
+        loading = false;
+        ApplyVisibility();
+        editor.ResumeLayout(true);
     }
 
     private void ClearEditor()
     {
+        loading = true;
+        editor.SuspendLayout();
         selectedId = null;
         profiles.ClearSelected();
         name.Clear(); host.Clear(); user.Clear(); database.Clear(); sqliteFile.Clear(); odbcDriver.Clear();
@@ -175,10 +258,6 @@ public sealed class ProfilesPage : UserControl
         databaseTest.Checked = defaults.DatabaseTest; background.Checked = defaults.StartInBackground;
     }
 
-    private static void AddRow(TableLayoutPanel table, int row, string caption, Control control)
-    {
-        table.Controls.Add(new Label { Text = caption, AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
-        control.Dock = DockStyle.Fill;
-        table.Controls.Add(control, 1, row);
-    }
+    private void AddRow(TableLayoutPanel table, int row, string caption, Control control)
+        => fields[control] = UiLayout.AddField(table, row, caption, control);
 }

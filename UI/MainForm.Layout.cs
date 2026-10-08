@@ -10,6 +10,7 @@ public sealed partial class MainForm
         cmbDatabaseType.DataSource = DatabaseProfiles.All.ToList();
         cmbDatabaseType.DisplayMember = nameof(DatabaseProfile.DisplayName);
         cmbSqlServerAuth.DataSource = Enum.GetValues<SqlServerAuthentication>();
+        cmbSqlServerAuth.FormattingEnabled = true;
         cmbSqlServerAuth.Format += (_, e) =>
             e.Value = (SqlServerAuthentication?)e.ListItem == SqlServerAuthentication.Windows
                 ? "Autenticação do Windows"
@@ -39,7 +40,11 @@ public sealed partial class MainForm
                      ("Histórico", historyPage), ("Perfis", profilesPage), ("Configurações", settingsPage)
                  })
             navigation.Controls.Add(CreateNavigationButton(title, page));
-        pageHost.Controls.AddRange(new Control[] { settingsPage, profilesPage, historyPage, executionPage, homePage });
+        foreach (var page in new UserControl[] { settingsPage, profilesPage, historyPage, executionPage, homePage })
+        {
+            page.Visible = false;
+            pageHost.Controls.Add(page);
+        }
         var statusPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 7, 10, 0) };
         globalStatus.Text = $"{applicationStore.Descriptor.Scope} · {applicationStore.Descriptor.DatabasePath}";
         statusPanel.Controls.Add(globalStatus);
@@ -53,45 +58,48 @@ public sealed partial class MainForm
 
     private UserControl BuildExecutionPage()
     {
-        var page = new UserControl { Dock = DockStyle.Fill, AutoScroll = true };
-        var root = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(12),
-            ColumnCount = 1,
-            RowCount = 4,
-            AutoScroll = true
-        };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var page = new UserControl { Dock = DockStyle.Fill, Padding = new Padding(12) };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        var settingsArea = new TableLayoutPanel
+        var settingsArea = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, RowCount = 1 };
+        var connection = BuildConnectionGroup();
+        var execution = BuildExecutionGroup();
+        settingsArea.Controls.Add(connection, 0, 0);
+        settingsArea.Controls.Add(execution, 1, 0);
+        var columns = 0;
+        settingsArea.SizeChanged += (_, _) =>
         {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty
+            var count = settingsArea.ClientSize.Width * 96d / settingsArea.DeviceDpi >= 900 ? 2 : 1;
+            if (columns == count) return;
+            columns = count;
+            settingsArea.SuspendLayout();
+            settingsArea.ColumnCount = count;
+            settingsArea.RowCount = count == 2 ? 1 : 2;
+            settingsArea.ColumnStyles.Clear(); settingsArea.RowStyles.Clear();
+            for (var i = 0; i < count; i++) settingsArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / count));
+            for (var i = 0; i < settingsArea.RowCount; i++) settingsArea.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            settingsArea.SetCellPosition(connection, new TableLayoutPanelCellPosition(0, 0));
+            settingsArea.SetCellPosition(execution, new TableLayoutPanelCellPosition(count == 2 ? 1 : 0, count == 2 ? 0 : 1));
+            settingsArea.ResumeLayout(true);
         };
-        settingsArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56));
-        settingsArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
-        settingsArea.Controls.Add(BuildConnectionGroup(), 0, 0);
-        settingsArea.Controls.Add(BuildExecutionGroup(), 1, 0);
-
-        root.Controls.Add(settingsArea, 0, 0);
-        root.Controls.Add(BuildControlArea(), 0, 1);
-        root.Controls.Add(resultsControl, 0, 2);
-        root.Controls.Add(new Label
+        var split = new SplitContainer
         {
-            AutoSize = true,
-            ForeColor = SystemColors.GrayText,
-            Margin = new Padding(6, 8, 6, 0),
-            Text = "Credenciais ficam somente na memória e não são gravadas nos relatórios. " +
-                   "A grade mantém os 100 ciclos mais recentes; o histórico completo é salvo no banco local."
-        }, 0, 3);
-
+            Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, Size = new Size(900, 650),
+            SplitterDistance = 310, Panel1MinSize = 100, Panel2MinSize = 150
+        };
+        var viewport = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
+        viewport.Controls.Add(settingsArea);
+        split.Panel1.Controls.Add(viewport);
+        resultsControl.Dock = DockStyle.Fill;
+        split.Panel2.Controls.Add(resultsControl);
+        root.Controls.Add(BuildControlArea(), 0, 0);
+        root.Controls.Add(split, 0, 1);
+        var note = new Label { AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 6, 3, 0),
+            Text = "Credenciais ficam somente na memória. O histórico completo é salvo no banco local." };
+        root.Controls.Add(note, 0, 2);
         page.Controls.Add(root);
         return page;
     }
@@ -113,13 +121,21 @@ public sealed partial class MainForm
         return button;
     }
 
+    private UserControl? activePage;
     private void ShowPage(string title, UserControl page)
     {
-        foreach (Control candidate in pageHost.Controls)
-            candidate.Visible = ReferenceEquals(candidate, page);
-        page.BringToFront();
-        foreach (var item in navigationButtons)
-            item.Value.Font = new Font(item.Value.Font, item.Key == title ? FontStyle.Bold : FontStyle.Regular);
+        if (ReferenceEquals(activePage, page)) return;
+        pageHost.SuspendLayout();
+        try
+        {
+            foreach (var item in navigationButtons)
+                item.Value.Font = new Font(item.Value.Font, item.Key == title ? FontStyle.Bold : FontStyle.Regular);
+            if (activePage is not null) activePage.Visible = false;
+            activePage = page;
+            page.Visible = true;
+            page.BringToFront();
+        }
+        finally { pageHost.ResumeLayout(true); }
     }
 
     internal void NavigateTo(string title)
@@ -187,7 +203,7 @@ public sealed partial class MainForm
         selectedProfileId = profile.ProfileId;
         ApplyDatabaseType(resetPort: false);
         ShowPage("Nova execução", executionPage);
-        txtPassword.Focus();
+        if (txtPassword.Visible && txtPassword.Enabled) txtPassword.Focus();
     }
 
     private void ApplyApplicationSettings(ApplicationSettings settings)
@@ -279,26 +295,26 @@ public sealed partial class MainForm
 
         progressBar.Margin = new Padding(3, 8, 3, 3);
         lblStatus.Margin = new Padding(4, 4, 4, 0);
+        area.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        area.SizeChanged += (_, _) =>
+        {
+            var width = Math.Max(1, area.ClientSize.Width - 8);
+            if (lblStatus.MaximumSize.Width != width) lblStatus.MaximumSize = new Size(width, 0);
+        };
         area.Controls.Add(buttons, 0, 0);
         area.Controls.Add(progressBar, 0, 1);
         area.Controls.Add(lblStatus, 0, 2);
         return area;
     }
 
-    private static TableLayoutPanel CreateSettingsTable(int labelWidth) => new TableLayoutPanel
-    {
-        Dock = DockStyle.Fill,
-        AutoSize = true,
-        ColumnCount = 3,
-        Padding = new Padding(8)
-    }.WithColumns(labelWidth);
+    private static TableLayoutPanel CreateSettingsTable(int labelWidth) => UiLayout.Fields(labelWidth);
 
     private static GroupBox CreateGroup(string title, Control content)
     {
         var group = new GroupBox
         {
             Text = title,
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             AutoSize = true,
             Margin = new Padding(4)
         };
@@ -317,23 +333,8 @@ public sealed partial class MainForm
         return panel;
     }
 
-    private static RowBinding AddRow(TableLayoutPanel table, int row, string text, Control control)
-    {
-        var label = new Label { Text = text, Anchor = AnchorStyles.Left, AutoSize = true };
-        table.Controls.Add(label, 0, row);
-        control.Dock = DockStyle.Fill;
-        table.Controls.Add(control, 1, row);
-        table.SetColumnSpan(control, 2);
-        return new RowBinding(label, control);
-    }
-
-    private static void AddRowWithButton(TableLayoutPanel table, int row, string text, Control control, Control button)
-    {
-        table.Controls.Add(new Label { Text = text, Anchor = AnchorStyles.Left, AutoSize = true }, 0, row);
-        control.Dock = DockStyle.Fill;
-        table.Controls.Add(control, 1, row);
-        table.Controls.Add(button, 2, row);
-    }
+    private static UiLayout.FieldRow AddRow(TableLayoutPanel table, int row, string text, Control control)
+        => UiLayout.AddField(table, row, text, control);
 
     private void ConfigureTray()
     {
@@ -435,23 +436,4 @@ public sealed partial class MainForm
         passwordRow.SetVisible(state.ShowCredentials);
     }
 
-    private sealed record RowBinding(Label Label, Control Control)
-    {
-        public void SetVisible(bool visible)
-        {
-            Label.Visible = visible;
-            Control.Visible = visible;
-        }
-    }
-}
-
-internal static class TableLayoutExtensions
-{
-    public static TableLayoutPanel WithColumns(this TableLayoutPanel table, int labelWidth)
-    {
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, labelWidth));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        return table;
-    }
 }
