@@ -59,11 +59,7 @@ public sealed partial class MainForm
     private UserControl BuildExecutionPage()
     {
         var page = new UserControl { Dock = DockStyle.Fill, Padding = new Padding(12) };
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var root = new BufferedPanel { Dock = DockStyle.Fill };
         var settingsArea = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, RowCount = 1 };
         var connection = BuildConnectionGroup();
         var execution = BuildExecutionGroup();
@@ -95,11 +91,13 @@ public sealed partial class MainForm
         split.Panel1.Controls.Add(viewport);
         resultsControl.Dock = DockStyle.Fill;
         split.Panel2.Controls.Add(resultsControl);
-        root.Controls.Add(BuildControlArea(), 0, 0);
-        root.Controls.Add(split, 0, 1);
-        var note = new Label { AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 6, 3, 0),
+        var note = new Label { Dock = DockStyle.Bottom, Height = Font.Height + 12, Padding = new Padding(3, 6, 3, 0),
             Text = "Credenciais ficam somente na memória. O histórico completo é salvo no banco local." };
-        root.Controls.Add(note, 0, 2);
+        // Dock the bounded action bar above the split instead of asking an
+        // AutoSize row to measure another TableLayoutPanel's preferred height.
+        root.Controls.Add(split);
+        root.Controls.Add(note);
+        root.Controls.Add(BuildControlArea());
         page.Controls.Add(root);
         return page;
     }
@@ -273,13 +271,13 @@ public sealed partial class MainForm
         var area = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            AutoSize = false,
             ColumnCount = 1,
             RowCount = 3,
             Margin = new Padding(0, 6, 0, 6)
         };
-        // Keep each row at its content height; the split below owns the remaining space.
+        // The action bar has a bounded height. An AutoSize table can retain surplus
+        // height in its last row even when that row has an absolute style.
         area.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         area.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         area.RowStyles.Add(new RowStyle(SizeType.Absolute, lblStatus.Font.Height * 2 + 8));
@@ -306,6 +304,18 @@ public sealed partial class MainForm
         area.Controls.Add(buttons, 0, 0);
         area.Controls.Add(progressBar, 0, 1);
         area.Controls.Add(lblStatus, 0, 2);
+        void UpdateHeight()
+        {
+            var statusHeight = lblStatus.Font.Height * 2 + 8;
+            area.RowStyles[2].Height = statusHeight;
+            var actionsHeight = buttons.GetPreferredSize(new Size(Math.Max(1, area.ClientSize.Width), 0)).Height;
+            var height = actionsHeight + progressBar.Height + progressBar.Margin.Vertical + statusHeight;
+            if (area.Height != height) area.Height = height;
+        }
+        area.SizeChanged += (_, _) => UpdateHeight();
+        area.FontChanged += (_, _) => UpdateHeight();
+        area.DpiChangedAfterParent += (_, _) => UpdateHeight();
+        UpdateHeight();
         return area;
     }
 
