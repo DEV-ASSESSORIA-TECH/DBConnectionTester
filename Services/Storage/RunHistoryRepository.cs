@@ -12,11 +12,36 @@ public interface IRunHistoryRepository
     Task<PagedResult<PersistedCycle>> GetCyclesAsync(Guid runId, PageRequest page, CancellationToken token = default);
 }
 
-public sealed class RunHistoryRepository : IRunHistoryRepository
+public interface IRecentRunHistoryRepository
+{
+    Task<IReadOnlyList<RunHistoryItem>> GetRecentAsync(CancellationToken token = default);
+}
+
+public sealed class RunHistoryRepository : IRunHistoryRepository, IRecentRunHistoryRepository
 {
     private readonly SqliteApplicationStore store;
 
     public RunHistoryRepository(SqliteApplicationStore store) => this.store = store;
+
+    public async Task<IReadOnlyList<RunHistoryItem>> GetRecentAsync(CancellationToken token = default)
+    {
+        await using var connection = await store.OpenConnectionAsync(token);
+        await using var command = connection.CreateCommand();
+        // The home page needs only three summaries: no count, cycles or diagnostics.
+        command.CommandText = """
+            SELECT r.run_id, r.profile_id, p.name, r.status, r.termination_reason,
+                   r.started_at, r.finished_at, r.application_version, r.machine_name,
+                   r.database_type, r.target, r.completed_cycles, r.failure_message
+            FROM runs r
+            LEFT JOIN connection_profiles p ON p.profile_id = r.profile_id
+            ORDER BY r.started_at DESC, r.run_id DESC
+            LIMIT 3;
+            """;
+        var items = new List<RunHistoryItem>(3);
+        await using var reader = await command.ExecuteReaderAsync(token);
+        while (await reader.ReadAsync(token)) items.Add(ReadRun(reader));
+        return items;
+    }
 
     public async Task<PagedResult<RunHistoryItem>> SearchAsync(
         RunHistoryFilter filter,
