@@ -175,9 +175,16 @@ public sealed partial class MainForm
 
     private NavigationButton? activeNavigationButton;
     private UserControl? activePage;
-    private void ShowPage(string title, UserControl page)
+    private bool profileNavigationPending;
+    private async void ShowPage(string title, UserControl page)
     {
-        if (ReferenceEquals(activePage, page)) return;
+        if (ReferenceEquals(activePage, page) || profileNavigationPending) return;
+        if (ReferenceEquals(activePage, profilesPage))
+        {
+            profileNavigationPending = true;
+            try { if (!await profilesPage.TryLeaveAsync() || IsDisposed) return; }
+            finally { profileNavigationPending = false; }
+        }
         pageHost.SuspendLayout();
         try
         {

@@ -195,10 +195,24 @@ public sealed partial class MainForm
         Close();
     }
 
-    private void OnFormClosing(object? sender, FormClosingEventArgs e)
+    private bool profileClosePending;
+    private bool profileCloseApproved;
+    private async void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
         if (!runCoordinator.IsRunning)
+        {
+            if (profileCloseApproved || (!profilesPage.HasUnsavedChanges && !profilesPage.IsBusy) || e.CloseReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing) return;
+            e.Cancel = true;
+            if (profileClosePending) return;
+            profileClosePending = true;
+            try
+            {
+                if (await profilesPage.TryLeaveAsync()) { profileCloseApproved = true; BeginInvoke((Action)Close); }
+                else exitRequested = false;
+            }
+            finally { profileClosePending = false; }
             return;
+        }
 
         e.Cancel = true;
         if (exitRequested)

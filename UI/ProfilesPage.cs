@@ -29,6 +29,10 @@ public sealed class ProfilesPage : UserControl
     private readonly Button delete = new() { Text = "Excluir", AutoSize = true };
     private readonly Button use = new() { Text = "Usar em nova execução", AutoSize = true };
     private Guid? selectedId;
+    private ConnectionProfileDraft? editorBaseline;
+    private bool decisionPending;
+    internal Func<string, DialogResult>? EditDecision;
+    internal Action<string>? ErrorReporter;
     private bool loading;
     private bool editingEnabled = true;
     private bool refreshPending;
@@ -129,16 +133,21 @@ public sealed class ProfilesPage : UserControl
         authentication.Format += (_, e) => e.Value = e.ListItem is SqlServerAuthentication.Windows ? "Windows" : "Usuário e senha";
         authentication.SelectedIndexChanged += (_, _) => { if (!loading) ApplyVisibility(); };
         continuous.CheckedChanged += (_, _) => testCount.Enabled = editingEnabled && !continuous.Checked;
-        profiles.SelectedIndexChanged += (_, _) => LoadSelection();
-        create.Click += (_, _) => ClearEditor();
+        profiles.SelectedIndexChanged += async (_, _) => await ChangeSelectionAsync();
+        create.Click += async (_, _) => { if (await TryLeaveAsync()) ClearEditor(); };
         save.Click += async (_, _) => await SaveAsync();
         delete.Click += async (_, _) => await DeleteAsync();
-        use.Click += (_, _) =>
-        {
-            if (profiles.SelectedItem is SavedConnectionProfile profile)
-                UseRequested?.Invoke(profile);
-        };
+        use.Click += async (_, _) => await UseSelectionAsync();
         ClearEditor();
+        foreach (var control in new Control[] { name, databaseType, host, port, user, database, sqliteFile, authentication,
+            odbcDriver, testCount, continuous, interval, timeout, dns, ping, tcp, databaseTest, background })
+        {
+            void Changed(object? sender, EventArgs args) { if (!loading) UpdateEditState(); }
+            if (control is TextBox text) text.TextChanged += Changed;
+            else if (control is ComboBox combo) combo.SelectedIndexChanged += Changed;
+            else if (control is NumericUpDown number) number.ValueChanged += Changed;
+            else if (control is CheckBox check) check.CheckedChanged += Changed;
+        }
     }
 
     public event Action<SavedConnectionProfile>? UseRequested;
@@ -147,11 +156,14 @@ public sealed class ProfilesPage : UserControl
     public void SelectProfile(Guid? id)
     {
         var item = profiles.Items.Cast<SavedConnectionProfile>().FirstOrDefault(p => p.ProfileId == id);
-        if (item is null) ClearEditor();
+        if (item is null) create.PerformClick();
         else profiles.SelectedItem = item;
     }
 
-    public Task RefreshAsync(CancellationToken token = default) => LoadProfilesAsync(null, token);
+    public async Task RefreshAsync(CancellationToken token = default)
+    {
+        if (await TryLeaveAsync()) await LoadProfilesAsync(selectedId, token);
+    }
 
     private async Task LoadProfilesAsync(Guid? selectId, CancellationToken token = default)
     {
@@ -172,7 +184,11 @@ public sealed class ProfilesPage : UserControl
             finally { loading = false; profiles.EndUpdate(); }
             var selected = items.FirstOrDefault(item => item.ProfileId == selectId);
             if (selected is null) ClearEditor();
-            else profiles.SelectedItem = selected;
+            else
+            {
+                SetListSelection(selected);
+                LoadSelection();
+            }
             ProfilesChanged?.Invoke(items);
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
@@ -197,7 +213,7 @@ public sealed class ProfilesPage : UserControl
 
     private void ApplyVisibility()
     {
-        var canEdit = editingEnabled && !refreshPending && !mutationPending;
+        var canEdit = editingEnabled && !refreshPending && !mutationPending && !decisionPending;
         editor.Enabled = profiles.Enabled = create.Enabled = save.Enabled = canEdit;
         var type = (databaseType.SelectedItem as DatabaseProfile)?.Type ?? DatabaseType.MySqlMariaDb;
         var auth = authentication.SelectedItem is SqlServerAuthentication selected ? selected : SqlServerAuthentication.Windows;
@@ -214,41 +230,39 @@ public sealed class ProfilesPage : UserControl
             if (state.RequireDatabaseTest) databaseTest.Checked = true;
             if (state.RequireTcp) tcp.Checked = true;
             testCount.Enabled = canEdit && !continuous.Checked;
-            delete.Enabled = use.Enabled = canEdit && selectedId is not null;
+            delete.Enabled = canEdit && selectedId is not null;
+            use.Enabled = canEdit && (selectedId is not null || HasUnsavedChanges);
         }
         finally { editor.ResumeLayout(true); }
     }
 
-    private async Task SaveAsync()
+    private async Task<bool> SaveAsync()
     {
-        if (!editingEnabled || refreshPending || mutationPending || IsDisposed) return;
+        if (!editingEnabled || refreshPending || mutationPending || IsDisposed) return false;
         using var request = mutationRequests.Start();
         mutationPending = true;
         ApplyVisibility();
         try
         {
-            var selectedType = (databaseType.SelectedItem as DatabaseProfile)?.Type ?? DatabaseType.MySqlMariaDb;
-            var draft = new ConnectionProfileDraft(selectedId, name.Text, selectedType, host.Text,
-                DatabaseProfiles.Get(selectedType).UsesNetwork ? (int)port.Value : null,
-                user.Text, database.Text, sqliteFile.Text,
-                authentication.SelectedItem is SqlServerAuthentication auth ? auth : SqlServerAuthentication.Windows,
-                odbcDriver.Text,
-                new ProfileExecutionDefaults((long)testCount.Value, continuous.Checked, (double)interval.Value,
-                    (int)timeout.Value, dns.Checked, ping.Checked, tcp.Checked, databaseTest.Checked, background.Checked));
+            var draft = ReadDraft();
             var saved = await Task.Run(() => repository.SaveAsync(draft, request.Token), request.Token);
-            if (request.IsCurrent) await LoadProfilesAsync(saved.ProfileId, request.Token);
+            if (!request.IsCurrent) return false;
+            await LoadProfilesAsync(saved.ProfileId, request.Token);
+            return !IsDisposed && selectedId == saved.ProfileId && !HasUnsavedChanges;
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
         catch (Exception exception) when (exception is ArgumentException or ApplicationStoreException)
         {
-            if (request.IsCurrent) MessageBox.Show(this, exception.Message, "Perfil", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (request.IsCurrent) ReportError(exception.Message);
         }
         finally { if (!IsDisposed) { mutationPending = false; ApplyVisibility(); } }
+        return false;
     }
 
     private async Task DeleteAsync()
     {
-        if (!editingEnabled || refreshPending || mutationPending || selectedId is not Guid id || MessageBox.Show(this, "Excluir este perfil? O histórico será preservado.",
+        if (!editingEnabled || refreshPending || mutationPending || selectedId is null || !await TryLeaveAsync()) return;
+        if (selectedId is not Guid id || MessageBox.Show(this, "Excluir este perfil? O histórico será preservado.",
                 "Excluir perfil", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
         using var request = mutationRequests.Start();
@@ -270,8 +284,105 @@ public sealed class ProfilesPage : UserControl
         var wasLoading = loading;
         loading = true;
         editor.SuspendLayout();
-        try { update(); ApplyVisibility(); }
-        finally { loading = wasLoading; editor.ResumeLayout(true); }
+        try { update(); ApplyVisibility(); editorBaseline = ReadDraft(); }
+        finally { loading = wasLoading; editor.ResumeLayout(true); UpdateEditState(); }
+    }
+
+    internal bool IsBusy => decisionPending || mutationPending || refreshPending;
+
+    internal bool HasUnsavedChanges => editorBaseline is not null && ReadDraft() != editorBaseline;
+
+    private ConnectionProfileDraft ReadDraft()
+    {
+        var type = (databaseType.SelectedItem as DatabaseProfile)?.Type ?? DatabaseType.MySqlMariaDb;
+        return new(selectedId, name.Text, type, host.Text, DatabaseProfiles.Get(type).UsesNetwork ? (int)port.Value : null,
+            user.Text, database.Text, sqliteFile.Text,
+            authentication.SelectedItem is SqlServerAuthentication auth ? auth : SqlServerAuthentication.Windows, odbcDriver.Text,
+            new((long)testCount.Value, continuous.Checked, (double)interval.Value, (int)timeout.Value,
+                dns.Checked, ping.Checked, tcp.Checked, databaseTest.Checked, background.Checked));
+    }
+
+    private void UpdateEditState()
+    {
+        use.Enabled = editingEnabled && !refreshPending && !mutationPending && !decisionPending
+            && (selectedId is not null || HasUnsavedChanges);
+    }
+
+    private void SetListSelection(SavedConnectionProfile? profile)
+    {
+        var previous = loading;
+        loading = true;
+        try { if (profile is null) profiles.ClearSelected(); else profiles.SelectedItem = profile; }
+        finally { loading = previous; }
+    }
+
+    private void RestoreSavedEditor()
+    {
+        var item = profiles.Items.Cast<SavedConnectionProfile>().FirstOrDefault(p => p.ProfileId == selectedId);
+        SetListSelection(item);
+        if (item is null) ClearEditor(); else LoadSelection();
+    }
+
+    private async Task ChangeSelectionAsync()
+    {
+        if (loading || decisionPending || mutationPending || refreshPending) return;
+        var requested = profiles.SelectedItem as SavedConnectionProfile;
+        if (requested?.ProfileId == selectedId) return;
+        var old = profiles.Items.Cast<SavedConnectionProfile>().FirstOrDefault(p => p.ProfileId == selectedId);
+        SetListSelection(old);
+        if (!await TryLeaveAsync() || IsDisposed) return;
+        var next = profiles.Items.Cast<SavedConnectionProfile>().FirstOrDefault(p => p.ProfileId == requested?.ProfileId);
+        SetListSelection(next);
+        if (next is null) ClearEditor(); else LoadSelection();
+    }
+
+    internal async Task<bool> TryLeaveAsync()
+    {
+        if (decisionPending || mutationPending || refreshPending || IsDisposed) return false;
+        if (!HasUnsavedChanges) return true;
+        decisionPending = true;
+        ApplyVisibility();
+        try
+        {
+            var result = AskEdits("Há alterações não salvas neste perfil.\n\nSim: salvar e continuar.\nNão: descartar alterações e continuar.\nCancelar: continuar editando.");
+            if (result == DialogResult.Yes) return await SaveAsync();
+            if (result != DialogResult.No) return false;
+            RestoreSavedEditor();
+            return true;
+        }
+        finally { decisionPending = false; if (!IsDisposed) ApplyVisibility(); }
+    }
+
+    private async Task UseSelectionAsync()
+    {
+        if (!editingEnabled || refreshPending || mutationPending || decisionPending || IsDisposed) return;
+        decisionPending = true;
+        ApplyVisibility();
+        try
+        {
+            if (HasUnsavedChanges)
+            {
+                var result = AskEdits(selectedId is null
+                    ? "Este perfil ainda não foi salvo.\n\nSim: salvar e usar.\nCancelar ou Não: continuar editando."
+                    : "Há alterações não salvas.\n\nSim: salvar e usar.\nNão: descartar alterações e usar a versão salva.\nCancelar: continuar editando.");
+                if (result == DialogResult.Yes) { if (!await SaveAsync()) return; }
+                else if (result == DialogResult.No && selectedId is not null) RestoreSavedEditor();
+                else return;
+            }
+            decisionPending = false;
+            ApplyVisibility();
+            if (profiles.SelectedItem is SavedConnectionProfile profile) UseRequested?.Invoke(profile);
+        }
+        finally { decisionPending = false; if (!IsDisposed) ApplyVisibility(); }
+    }
+
+    private DialogResult AskEdits(string message) => EditDecision?.Invoke(message)
+        ?? MessageBox.Show(this, message, "Alterações no perfil", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question, MessageBoxDefaultButton.Button3);
+
+    private void ReportError(string message)
+    {
+        if (ErrorReporter is { } reporter) reporter(message);
+        else MessageBox.Show(this, message, "Perfil", MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     private void LoadSelection()

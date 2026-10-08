@@ -101,6 +101,85 @@ public sealed class ProfilesLoadingTests
         finally { release.TrySetResult(); }
     });
 
+    [Fact]
+    public Task CancelAndDiscardProtectNewAndSelectedProfileEdits() => RunUi(async (page, repository, _) =>
+    {
+        await page.RefreshAsync();
+        var list = Field<ListBox>(page, "profiles");
+        list.SelectedIndex = 0;
+        Field<TextBox>(page, "host").Text = "edited-host";
+        Assert.True(page.HasUnsavedChanges);
+        page.EditDecision = _ => DialogResult.Cancel;
+        Field<Button>(page, "create").PerformClick();
+        Assert.Equal("edited-host", Field<TextBox>(page, "host").Text);
+        Assert.False(await page.TryLeaveAsync());
+        list.ClearSelected();
+        Assert.Equal(repository.Saved.ProfileId, ((SavedConnectionProfile)list.SelectedItem!).ProfileId);
+        Assert.Equal("edited-host", Field<TextBox>(page, "host").Text);
+        page.EditDecision = _ => DialogResult.No;
+        Assert.True(await page.TryLeaveAsync());
+        Assert.Equal("localhost", Field<TextBox>(page, "host").Text);
+        Assert.False(page.HasUnsavedChanges);
+        Field<Button>(page, "create").PerformClick();
+        Field<TextBox>(page, "name").Text = "New unsaved";
+        page.EditDecision = _ => DialogResult.Cancel;
+        list.SelectedIndex = 0;
+        Assert.Null(list.SelectedItem);
+        Assert.Equal("New unsaved", Field<TextBox>(page, "name").Text);
+    });
+
+    [Theory]
+    [InlineData(DialogResult.Yes)]
+    [InlineData(DialogResult.No)]
+    [InlineData(DialogResult.Cancel)]
+    public Task UsingEditedProfileRequiresExplicitChoice(DialogResult choice) => RunUi(async (page, repository, _) =>
+    {
+        await page.RefreshAsync();
+        Field<ListBox>(page, "profiles").SelectedIndex = 0;
+        Field<TextBox>(page, "host").Text = "edited-host";
+        page.EditDecision = _ => choice;
+        var writes = 0;
+        repository.Save = draft =>
+        {
+            writes++;
+            repository.Saved = repository.Saved with { Host = draft.Host };
+            return Task.FromResult(repository.Saved);
+        };
+        SavedConnectionProfile? used = null;
+        page.UseRequested += profile => used = profile;
+        await (Task)typeof(ProfilesPage).GetMethod("UseSelectionAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(page, null)!;
+        Assert.Equal(choice == DialogResult.Yes ? 1 : 0, writes);
+        if (choice == DialogResult.Cancel)
+        {
+            Assert.Null(used);
+            Assert.Equal("edited-host", Field<TextBox>(page, "host").Text);
+            Assert.True(page.HasUnsavedChanges);
+        }
+        else
+        {
+            Assert.Equal(choice == DialogResult.Yes ? "edited-host" : "localhost", used!.Host);
+            Assert.False(page.HasUnsavedChanges);
+        }
+    });
+
+    [Fact]
+    public Task FailedSaveKeepsDraftAndPreventsLeavingOrApplying() => RunUi(async (page, repository, _) =>
+    {
+        await page.RefreshAsync();
+        Field<ListBox>(page, "profiles").SelectedIndex = 0;
+        Field<TextBox>(page, "host").Text = "edited-host";
+        page.EditDecision = _ => DialogResult.Yes;
+        repository.Save = _ => Task.FromException<SavedConnectionProfile>(new ArgumentException("Invalid draft"));
+        Assert.False(await page.TryLeaveAsync());
+        Assert.True(page.HasUnsavedChanges);
+        Assert.Equal("edited-host", Field<TextBox>(page, "host").Text);
+        var used = false;
+        page.UseRequested += _ => used = true;
+        await (Task)typeof(ProfilesPage).GetMethod("UseSelectionAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(page, null)!;
+        Assert.False(used);
+        Assert.True(Field<Button>(page, "save").Enabled);
+    });
+
     private static Task RunUi(Func<ProfilesPage, Repository, Form, Task> action)
     {
         var finished = Signal();
@@ -110,6 +189,8 @@ public sealed class ProfilesLoadingTests
             {
                 var repository = new Repository();
                 using var page = new ProfilesPage(repository);
+                page.EditDecision = _ => DialogResult.No;
+                page.ErrorReporter = _ => { };
                 using var form = new Form { Width = 1300, Height = 850 };
                 form.Controls.Add(page);
                 form.Shown += async (_, _) =>
@@ -134,7 +215,7 @@ public sealed class ProfilesLoadingTests
 
     private sealed class Repository : IConnectionProfileRepository
     {
-        public SavedConnectionProfile Saved { get; } = new(Guid.NewGuid(), "Saved", DatabaseType.MySqlMariaDb, "localhost", 3306,
+        public SavedConnectionProfile Saved { get; set; } = new(Guid.NewGuid(), "Saved", DatabaseType.MySqlMariaDb, "localhost", 3306,
             "", "", "", SqlServerAuthentication.Windows, "", ProfileExecutionDefaults.Default, DateTimeOffset.Now, DateTimeOffset.Now);
         public Func<Task<IReadOnlyList<SavedConnectionProfile>>>? List;
         public Func<ConnectionProfileDraft, Task<SavedConnectionProfile>>? Save;
