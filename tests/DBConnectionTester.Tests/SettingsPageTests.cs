@@ -140,6 +140,78 @@ public sealed class SettingsPageTests
         Assert.Equal(ApplicationTheme.System, page.SelectedTheme);
     });
 
+    [Fact]
+    public Task RefinedSettingsKeepGroupsOrderedAndExplainPendingStorage() => RunUi(async (page, _, form) =>
+    {
+        Assert.False(Field<TextBox>(page, "legacyDirectory").Enabled);
+        Assert.False(Field<Button>(page, "browseLegacy").Enabled);
+        Field<CheckBox>(page, "legacyEnabled").Checked = true;
+        Assert.True(Field<TextBox>(page, "legacyDirectory").Enabled);
+        page.SetOperationsEnabled(false);
+        Assert.False(Field<TextBox>(page, "legacyDirectory").Enabled);
+        page.SetOperationsEnabled(true);
+        Assert.True(Field<TextBox>(page, "legacyDirectory").Enabled);
+        var theme = Field<ComboBox>(page, "theme");
+        Assert.Equal("Claro", theme.GetItemText(ApplicationTheme.Light));
+        var scope = Field<ComboBox>(page, "targetScope");
+        scope.SelectedItem = StorageScope.Custom;
+        Assert.Contains("escolhida", Field<TextBox>(page, "targetPath").Text);
+        scope.SelectedItem = StorageScope.LocalUser;
+        Assert.Equal(StorageLocations.CreateDefault().LocalDatabasePath, Field<TextBox>(page, "targetPath").Text);
+        Assert.True(Field<TextBox>(page, "currentDatabasePath").ReadOnly);
+        var store = Field<SqliteApplicationStore>(page, "store");
+        var selected = store.Descriptor with { DatabasePath = Path.Combine(Path.GetTempPath(), "selected-data.db") };
+        var activated = false;
+        page.StorageSelected += descriptor => activated = descriptor == selected;
+        await (Task)typeof(SettingsPage).GetMethod("ActivateAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(page, new object[] { selected })!;
+        Assert.True(activated);
+        Assert.Contains(selected.DatabasePath, Field<Label>(page, "pendingStorage").Text);
+        Assert.True(Field<Label>(page, "pendingStorage").Visible);
+        Assert.Equal(Field<bool>(page, "executableAvailable"), Field<CheckBox>(page, "includeExecutable").Enabled);
+        var detailsButton = Descendants(page).OfType<Button>().Single(button => button.Text == "Mostrar detalhes");
+        detailsButton.PerformClick();
+        Assert.Contains(Descendants(page).OfType<TextBox>(), text => text.Text == store.Descriptor.StoreId.ToString("D") && text.Visible);
+        detailsButton.PerformClick();
+        foreach (var size in new[] { new System.Drawing.Size(620, 600), new System.Drawing.Size(920, 860), new System.Drawing.Size(1300, 950) })
+        {
+            form.ClientSize = size;
+            page.AutoScrollPosition = System.Drawing.Point.Empty;
+            await Task.Delay(40);
+            var groups = Descendants(page).OfType<GroupBox>().OrderBy(group => group.PointToScreen(System.Drawing.Point.Empty).Y).ToArray();
+            Assert.Equal(4, groups.Length);
+            foreach (var group in groups)
+                foreach (var label in Descendants(group).OfType<Label>().Where(label => label.Visible))
+                    Assert.True(label.PointToScreen(System.Drawing.Point.Empty).Y + label.Height <= group.PointToScreen(System.Drawing.Point.Empty).Y + group.Height, $"Texto cortado em {group.Text}: {label.Text}");
+            for (var index = 1; index < groups.Length; index++)
+                Assert.True(groups[index].PointToScreen(System.Drawing.Point.Empty).Y >= groups[index - 1].PointToScreen(System.Drawing.Point.Empty).Y + groups[index - 1].Height);
+            var path = Field<TextBox>(page, "currentDatabasePath");
+            Assert.True(path.Width > 200);
+            var output = Environment.GetEnvironmentVariable("DBCT_UI_SNAPSHOT_DIR");
+            if (output is not null)
+            {
+                Directory.CreateDirectory(output);
+                using var image = new System.Drawing.Bitmap(form.Width, form.Height);
+                form.DrawToBitmap(image, new System.Drawing.Rectangle(System.Drawing.Point.Empty, form.Size));
+                image.Save(Path.Combine(output, $"settings-refined-{size.Width}x{size.Height}.png"));
+            }
+            page.ScrollControlIntoView(Field<Button>(page, "restore"));
+            var restore = Field<Button>(page, "restore");
+            var position = page.PointToClient(restore.PointToScreen(System.Drawing.Point.Empty));
+            Assert.True(position.Y >= 0 && position.Y + restore.Height <= page.ClientSize.Height);
+            if (output is not null)
+            {
+                using var image = new System.Drawing.Bitmap(form.Width, form.Height);
+                form.DrawToBitmap(image, new System.Drawing.Rectangle(System.Drawing.Point.Empty, form.Size));
+                image.Save(Path.Combine(output, $"settings-refined-bottom-{size.Width}x{size.Height}.png"));
+            }
+        }
+    });
+
+    private static IEnumerable<Control> Descendants(Control control)
+    {
+        foreach (Control child in control.Controls) { yield return child; foreach (var descendant in Descendants(child)) yield return descendant; }
+    }
+
     private static Task RunUi(Func<SettingsPage, Repository, Form, Task> action)
     {
         var complete = Signal();

@@ -23,12 +23,13 @@ public sealed class SettingsPage : UserControl
     private readonly Button package = new() { Text = "Criar pacote portátil", AutoSize = true };
     private readonly Button restore = new() { Text = "Restaurar pacote", AutoSize = true };
     private readonly Button openFolder = new() { Text = "Abrir pasta", AutoSize = true };
-    private readonly CheckBox includeExecutable = new() { Text = "Incluir EXE single-file", AutoSize = true };
+    private readonly CheckBox includeExecutable = new() { Text = "Incluir aplicativo", AutoSize = true };
     private readonly TextBox currentDatabasePath = new() { ReadOnly = true, AccessibleName = "Caminho do banco atual" };
     private readonly Label storageSize = new() { AutoSize = true };
     private readonly TextBox targetPath = new() { ReadOnly = true, AccessibleName = "Destino previsto" };
     private readonly Label targetDescription = new() { AutoSize = true, Dock = DockStyle.Top };
     private readonly Label pendingStorage = new() { AutoSize = true, Dock = DockStyle.Top, Visible = false, Margin = new Padding(3, 10, 3, 6) };
+    private readonly bool executableAvailable = new CurrentApplicationBinaryProvider().GetSingleFileExecutablePath() is { } executable && File.Exists(executable);
     private ApplicationSettings currentSettings;
     private bool operationsEnabled = true;
     private bool operationPending;
@@ -112,7 +113,6 @@ public sealed class SettingsPage : UserControl
     private GroupBox BuildAppearanceGroup()
     {
         var table = SettingsTable();
-        AddNote(table, 0, "Aparência", bold: true);
         AddRow(table, 1, "Tema:", theme);
         AddNote(table, 2, "Exportação automática", bold: true);
         AddRow(table, 3, "CSV e TXT:", legacyEnabled);
@@ -139,14 +139,23 @@ public sealed class SettingsPage : UserControl
         AddRow(table, 1, "Banco atual:", currentDatabasePath);
         AddRow(table, 2, "Tamanho em disco:", storageSize);
         RefreshStorageSize();
-        AddRow(table, 3, "Pasta do banco:", openFolder);
         openFolder.Dock = DockStyle.None;
         var detailsButton = new Button { Text = "Mostrar detalhes", AutoSize = true };
         var details = new TextBox { ReadOnly = true, Text = store.Descriptor.StoreId.ToString("D"), Dock = DockStyle.Top, Visible = false,
             AccessibleName = "Identidade do armazenamento", Margin = new Padding(3, 4, 3, 4) };
-        detailsButton.Click += (_, _) => { details.Visible = !details.Visible; detailsButton.Text = details.Visible ? "Ocultar detalhes" : "Mostrar detalhes"; };
-        AddWide(table, 4, detailsButton);
-        AddWide(table, 5, details);
+        detailsButton.Click += (_, _) =>
+        {
+            details.Visible = !details.Visible;
+            table.RowStyles[4].SizeType = details.Visible ? SizeType.AutoSize : SizeType.Absolute;
+            table.RowStyles[4].Height = 0;
+            detailsButton.Text = details.Visible ? "Ocultar detalhes" : "Mostrar detalhes";
+        };
+        var storageActions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = Padding.Empty };
+        storageActions.Controls.AddRange(new Control[] { openFolder, detailsButton });
+        AddRow(table, 3, "Ações:", storageActions);
+        AddWide(table, 4, details);
+        table.RowStyles[4].SizeType = SizeType.Absolute;
+        table.RowStyles[4].Height = 0;
         var destination = SettingsTable();
         AddRow(destination, 0, "Localização de destino:", targetScope);
         AddRow(destination, 1, "Destino previsto:", targetPath);
@@ -165,11 +174,14 @@ public sealed class SettingsPage : UserControl
 
     private GroupBox BuildPackageGroup()
     {
-        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(8) };
-        panel.Controls.Add(package);
-        panel.Controls.Add(includeExecutable);
-        panel.Controls.Add(restore);
-        return Group("Pacote portátil", panel);
+        var table = SettingsTable();
+        AddNote(table, 0, "O pacote contém histórico, perfis e configurações do banco atual.");
+        var creation = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
+        creation.Controls.AddRange(new Control[] { package, includeExecutable });
+        AddWide(table, 1, creation);
+        if (!executableAvailable) AddNote(table, 2, "Incluir aplicativo está disponível na versão publicada como executável único.");
+        AddWide(table, 3, StorageAction(restore, "Escolha um pacote e uma pasta vazia. O banco atual será preservado."));
+        return Group("Pacote portátil", table);
     }
 
     internal Task<bool> SaveAsync(bool fromDecision = false) => RunOperationAsync("Salvando configurações…", async () =>
@@ -275,6 +287,7 @@ public sealed class SettingsPage : UserControl
         foreach (var control in new Control[] { clone, create, useExisting, package, restore, save, openFolder,
             theme, legacyEnabled, legacyDirectory, browseLegacy, targetScope, includeExecutable }) control.Enabled = enabled;
         legacyDirectory.Enabled = browseLegacy.Enabled = enabled && legacyEnabled.Checked;
+        includeExecutable.Enabled = enabled && executableAvailable;
         BusyChanged?.Invoke(IsBusy);
     }
 
@@ -395,11 +408,12 @@ public sealed class SettingsPage : UserControl
 
     private static Control StorageAction(Button button, string description)
     {
-        var table = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Margin = new Padding(3, 5, 3, 5) };
+        var table = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = new Padding(3, 4, 3, 4) };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         button.Dock = DockStyle.None;
         table.Controls.Add(button, 0, 0);
-        table.Controls.Add(new Label { Text = description, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 2, 3, 2) }, 0, 1);
+        table.Controls.Add(new Label { Text = description, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(8, 6, 3, 2) }, 1, 0);
         return table;
     }
 
@@ -423,10 +437,19 @@ public sealed class SettingsPage : UserControl
         _ => "Pasta personalizada"
     };
 
-    private static TableLayoutPanel SettingsTable() => UiLayout.Fields(140);
+    private static TableLayoutPanel SettingsTable()
+    {
+        var table = UiLayout.Fields(140);
+        table.Padding = new Padding(4);
+        return table;
+    }
 
     private static void AddRow(TableLayoutPanel table, int row, string caption, Control value)
-        => UiLayout.AddField(table, row, caption, value);
+    {
+        var field = UiLayout.AddField(table, row, caption, value);
+        field.Label.Margin = new Padding(3, 3, 6, 3);
+        value.Margin = new Padding(3, 2, 3, 2);
+    }
 
     private static void AddWide(TableLayoutPanel table, int row, Control control)
     {
@@ -438,7 +461,7 @@ public sealed class SettingsPage : UserControl
 
     private static void AddNote(TableLayoutPanel table, int row, string text, bool bold = false)
     {
-        var label = new Label { Text = text, Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(3, bold ? 8 : 4, 3, 6) };
+        var label = new Label { Text = text, Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(3, bold ? 6 : 3, 3, 4) };
         if (bold) label.Font = new Font(table.Font, FontStyle.Bold);
         AddWide(table, row, label);
     }
@@ -446,7 +469,7 @@ public sealed class SettingsPage : UserControl
     private static GroupBox Group(string title, Control content)
     {
         var group = new GroupBox { Text = title, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(6, 20, 6, 6), Margin = new Padding(3, 4, 3, 12) };
+            Padding = new Padding(6, 3, 6, 18), Margin = new Padding(3, 4, 3, 12) };
         group.Controls.Add(content);
         return group;
     }
