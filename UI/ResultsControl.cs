@@ -6,11 +6,6 @@ public sealed class ResultsControl : UserControl
 {
     private const int MaximumVisibleCycles = 100;
 
-    private readonly StageResultCard dnsCard = new("DNS");
-    private readonly StageResultCard pingCard = new("Ping / ICMP");
-    private readonly StageResultCard tcpCard = new("TCP");
-    private readonly StageResultCard connectCard = new("Conexão DB");
-    private readonly StageResultCard queryCard = new("SELECT 1");
     private readonly DataGridView grid = new();
     private readonly DataGridView statisticsGrid = new();
     private readonly StatisticsDashboardControl statisticsDashboard = new();
@@ -20,22 +15,7 @@ public sealed class ResultsControl : UserControl
     public ResultsControl()
     {
         Dock = DockStyle.Fill;
-        MinimumSize = new Size(0, 280);
-
-        var cards = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 5,
-            RowCount = 1,
-            Padding = new Padding(0, 0, 0, 8)
-        };
-        for (var index = 0; index < 5; index++)
-            cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
-        cards.Controls.Add(dnsCard, 0, 0);
-        cards.Controls.Add(pingCard, 1, 0);
-        cards.Controls.Add(tcpCard, 2, 0);
-        cards.Controls.Add(connectCard, 3, 0);
-        cards.Controls.Add(queryCard, 4, 0);
+        MinimumSize = new Size(0, 150);
 
         ConfigureGrid();
         ConfigureStatisticsGrid();
@@ -48,34 +28,15 @@ public sealed class ResultsControl : UserControl
         recentTab.Controls.Add(grid);
         statisticsTab.Controls.Add(statisticsGrid);
         trendTab.Controls.Add(statisticsDashboard);
-        tabs.TabPages.Add(recentTab);
         tabs.TabPages.Add(statisticsTab);
+        tabs.TabPages.Add(recentTab);
         tabs.TabPages.Add(trendTab);
 
-        var content = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            Padding = new Padding(8)
-        };
-        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 94));
-        content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        content.Controls.Add(cards, 0, 0);
-        content.Controls.Add(tabs, 0, 1);
-
-        var group = new GroupBox { Text = "Resultados recentes", Dock = DockStyle.Fill };
-        group.Controls.Add(content);
-        Controls.Add(group);
+        Controls.Add(tabs);
     }
 
     public void ResetResults()
     {
-        dnsCard.ResetResult();
-        pingCard.ResetResult();
-        tcpCard.ResetResult();
-        connectCard.ResetResult();
-        queryCard.ResetResult();
         grid.Rows.Clear();
         ResetStatistics();
         statisticsDashboard.ResetDashboard();
@@ -106,14 +67,6 @@ public sealed class ResultsControl : UserControl
 
     public void AddCycle(TestCycleResult cycle)
     {
-        dnsCard.ShowResult(cycle.Dns.Status, cycle.Dns.ElapsedMs, cycle.Dns.Diagnostic);
-        pingCard.ShowResult(cycle.Ping.Status, cycle.Ping.ElapsedMs, cycle.Ping.Diagnostic);
-        tcpCard.ShowResult(cycle.Tcp.Status, cycle.Tcp.ElapsedMs, cycle.Tcp.Diagnostic);
-        connectCard.ShowResult(cycle.Database.ConnectStatus, cycle.Database.ConnectMs,
-            cycle.Database.ConnectDiagnostic);
-        queryCard.ShowResult(cycle.Database.QueryStatus, cycle.Database.QueryMs,
-            cycle.Database.QueryDiagnostic);
-
         var diagnostic = FirstDiagnostic(
             cycle.Dns.Diagnostic,
             cycle.Ping.Diagnostic,
@@ -268,88 +221,3 @@ public sealed class ResultsControl : UserControl
         values.FirstOrDefault(value => value is not null);
 }
 
-internal sealed class StageResultCard : Panel
-{
-    private readonly Label statusLabel;
-    private readonly Label elapsedLabel;
-    private readonly ToolTip toolTip = new();
-
-    public StageResultCard(string title)
-    {
-        var baseFont = SystemFonts.MessageBoxFont ?? SystemFonts.DefaultFont;
-        Dock = DockStyle.Fill;
-        Margin = new Padding(4, 2, 4, 2);
-        Padding = new Padding(10, 8, 10, 8);
-        BorderStyle = BorderStyle.FixedSingle;
-
-        var titleLabel = new Label
-        {
-            Text = title,
-            Dock = DockStyle.Top,
-            AutoSize = false,
-            Height = 22,
-            Font = new Font(baseFont, FontStyle.Bold)
-        };
-        statusLabel = new Label
-        {
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font(baseFont.FontFamily, 11, FontStyle.Bold)
-        };
-        elapsedLabel = new Label
-        {
-            Dock = DockStyle.Bottom,
-            AutoSize = false,
-            Height = 20,
-            ForeColor = SystemColors.GrayText
-        };
-
-        Controls.Add(statusLabel);
-        Controls.Add(elapsedLabel);
-        Controls.Add(titleLabel);
-        ResetResult();
-    }
-
-    public void ResetResult()
-    {
-        statusLabel.Text = "Aguardando";
-        elapsedLabel.Text = "—";
-        BackColor = Color.FromArgb(247, 248, 250);
-        statusLabel.ForeColor = SystemColors.GrayText;
-        toolTip.SetToolTip(this, "");
-        toolTip.SetToolTip(statusLabel, "");
-    }
-
-    public void ShowResult(StepStatus status, long elapsedMs, DiagnosticIssue? diagnostic)
-    {
-        statusLabel.Text = status switch
-        {
-            StepStatus.Success => "Sucesso",
-            StepStatus.Failed => "Falha",
-            _ => "Não executado"
-        };
-        elapsedLabel.Text = status == StepStatus.Skipped ? "—" : $"{elapsedMs:N0} ms";
-        BackColor = status switch
-        {
-            StepStatus.Success => Color.FromArgb(235, 248, 240),
-            StepStatus.Failed => Color.FromArgb(255, 238, 238),
-            _ => Color.FromArgb(247, 248, 250)
-        };
-        statusLabel.ForeColor = status switch
-        {
-            StepStatus.Success => Color.FromArgb(28, 120, 72),
-            StepStatus.Failed => Color.FromArgb(185, 45, 45),
-            _ => SystemColors.GrayText
-        };
-        var details = DiagnosticFormatting.Detailed(diagnostic);
-        toolTip.SetToolTip(this, details);
-        toolTip.SetToolTip(statusLabel, details);
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-            toolTip.Dispose();
-        base.Dispose(disposing);
-    }
-}
