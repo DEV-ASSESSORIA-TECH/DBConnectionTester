@@ -1,0 +1,219 @@
+using System.Reflection;
+using System.Windows.Forms;
+using DBConnectionTester.Models;
+using DBConnectionTester.Services.Storage;
+using DBConnectionTester.UI;
+
+namespace DBConnectionTester.Tests;
+
+[Collection("WinForms UI")]
+public sealed class HistoryLoadingTests
+{
+    [Fact]
+    public Task BlockingQueryLeavesUiResponsiveAndOlderSearchCannotReplaceNewerSearch() => RunUi(async (page, repository) =>
+    {
+        var uiThread = Environment.CurrentManagedThreadId;
+        using var release = new ManualResetEventSlim();
+        var started = Signal();
+        var calls = 0;
+        repository.Search = (_, _) =>
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                Assert.NotEqual(uiThread, Environment.CurrentManagedThreadId);
+                started.TrySetResult();
+                if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException();
+                return Task.FromResult(Page(repository.A));
+            }
+            return Task.FromResult(Page(repository.B));
+        };
+        var older = page.RefreshAsync();
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            // Reaching here on the UI thread while the query remains blocked
+            // proves that a WinForms message-loop continuation can run.
+            Assert.Equal(uiThread, Environment.CurrentManagedThreadId);
+            await page.RefreshAsync();
+            release.Set();
+            await older;
+            Assert.Equal(repository.B.RunId, Field<DataGridView>(page, "runs").Rows[0].Cells[0].Value);
+        }
+        finally { release.Set(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task OlderSelectionCannotReplaceDetailsOrCycles(bool blockCycles) => RunUi(async (page, repository) =>
+    {
+        var started = Signal();
+        var release = Signal();
+        repository.Details = async id =>
+        {
+            if (id == repository.A.RunId && !blockCycles)
+            {
+                started.TrySetResult();
+                await release.Task;
+            }
+            return new RunHistoryDetails(id == repository.A.RunId ? repository.A : repository.B, "{}", [], []);
+        };
+        repository.Cycles = async (id, _) =>
+        {
+            if (id == repository.A.RunId && blockCycles)
+            {
+                started.TrySetResult();
+                await release.Task;
+            }
+            var cycle = new PersistedCycle(id == repository.A.RunId ? 11 : 22, DateTimeOffset.Now, "", "", "", "", 0, []);
+            return new PagedResult<PersistedCycle>([cycle], 1, 1, 100);
+        };
+        var loading = page.RefreshAsync();
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var runs = Field<DataGridView>(page, "runs");
+            runs.ClearSelection();
+            runs.Rows[1].Selected = true;
+            await WaitUntil(() => Field<DataGridView>(page, "cycles").Rows.Count == 1);
+            release.TrySetResult();
+            await loading;
+            Assert.Contains(repository.B.RunId.ToString("D"), Field<TextBox>(page, "details").Text);
+            Assert.Equal(22L, Field<DataGridView>(page, "cycles").Rows[0].Cells[0].Value);
+        }
+        finally { release.TrySetResult(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PagerCommitsPageOnlyAfterLoadingAndIgnoresDoubleClick(bool cyclePager) => RunUi(async (page, repository) =>
+    {
+        var started = Signal();
+        var release = Signal();
+        var requests = 0;
+        repository.Search = async (_, request) =>
+        {
+            if (!cyclePager && Interlocked.Increment(ref requests) == 2)
+            {
+                started.TrySetResult();
+                await release.Task;
+            }
+            return new PagedResult<RunHistoryItem>([repository.A], 75, request.PageNumber, 25);
+        };
+        repository.Cycles = async (_, request) =>
+        {
+            if (cyclePager && Interlocked.Increment(ref requests) == 2)
+            {
+                started.TrySetResult();
+                await release.Task;
+            }
+            return new PagedResult<PersistedCycle>([], 300, request.PageNumber, 100);
+        };
+        await page.RefreshAsync();
+        if (cyclePager)
+        {
+            var cycleTab = (TabPage)Field<DataGridView>(page, "cycles").Parent!.Parent!;
+            ((TabControl)cycleTab.Parent!).SelectedTab = cycleTab;
+        }
+        var next = Field<Button>(page, cyclePager ? "nextCyclePage" : "nextRunPage");
+        var label = Field<Label>(page, cyclePager ? "cyclePageLabel" : "runPageLabel");
+        next.PerformClick();
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(next.Enabled);
+            next.PerformClick();
+            Assert.Equal(2, requests);
+            Assert.StartsWith("Página 1", label.Text);
+            release.TrySetResult();
+            await WaitUntil(() => label.Text.StartsWith("Página 2"));
+            Assert.Equal(2, requests);
+        }
+        finally { release.TrySetResult(); }
+    });
+
+    [Fact]
+    public Task DisposingPageDiscardsPendingQueryWithoutUpdatingDisposedControls() => RunUi(async (page, repository) =>
+    {
+        var started = Signal();
+        var release = Signal();
+        repository.Search = async (_, _) =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return Page(repository.A);
+        };
+        var loading = page.RefreshAsync();
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            page.Dispose();
+            release.TrySetResult();
+            await loading;
+        }
+        finally { release.TrySetResult(); }
+    });
+
+    private static async Task WaitUntil(Func<bool> predicate)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (!predicate()) await Task.Delay(10, timeout.Token);
+    }
+
+    private static Task RunUi(Func<HistoryPage, Repository, Task> action)
+    {
+        var finished = Signal();
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var repository = new Repository();
+                using var page = new HistoryPage(repository, repository);
+                using var form = new Form { Width = 1100, Height = 850 };
+                form.Controls.Add(page);
+                form.Shown += async (_, _) =>
+                {
+                    try { await action(page, repository); finished.TrySetResult(); }
+                    catch (Exception error) { finished.TrySetException(error); }
+                    finally { form.Close(); }
+                };
+                System.Windows.Forms.Application.Run(form);
+            }
+            catch (Exception error) { finished.TrySetException(error); }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
+        return finished.Task.WaitAsync(TimeSpan.FromSeconds(20));
+    }
+
+    private static TaskCompletionSource Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private static T Field<T>(HistoryPage page, string name) =>
+        (T)typeof(HistoryPage).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(page)!;
+    private static PagedResult<RunHistoryItem> Page(params RunHistoryItem[] items) => new(items, items.Length, 1, 25);
+
+    private sealed class Repository : IRunHistoryRepository, IConnectionProfileRepository
+    {
+        public RunHistoryItem A { get; } = Item("A");
+        public RunHistoryItem B { get; } = Item("B");
+        public Func<RunHistoryFilter, PageRequest, Task<PagedResult<RunHistoryItem>>>? Search;
+        public Func<Guid, Task<RunHistoryDetails?>>? Details;
+        public Func<Guid, PageRequest, Task<PagedResult<PersistedCycle>>>? Cycles;
+
+        public Task<PagedResult<RunHistoryItem>> SearchAsync(RunHistoryFilter filter, PageRequest page, CancellationToken token = default) =>
+            Search?.Invoke(filter, page) ?? Task.FromResult(Page(A, B));
+        public Task<RunHistoryDetails?> GetDetailsAsync(Guid id, CancellationToken token = default) =>
+            Details?.Invoke(id) ?? Task.FromResult<RunHistoryDetails?>(new(id == A.RunId ? A : B, "{}", [], []));
+        public Task<PagedResult<PersistedCycle>> GetCyclesAsync(Guid id, PageRequest page, CancellationToken token = default) =>
+            Cycles?.Invoke(id, page) ?? Task.FromResult(new PagedResult<PersistedCycle>([], 0, page.PageNumber, page.PageSize));
+        public Task<IReadOnlyList<SavedConnectionProfile>> ListAsync(CancellationToken token = default) =>
+            Task.FromResult<IReadOnlyList<SavedConnectionProfile>>([]);
+        public Task<SavedConnectionProfile?> GetAsync(Guid id, CancellationToken token = default) => throw new NotSupportedException();
+        public Task<SavedConnectionProfile> SaveAsync(ConnectionProfileDraft draft, CancellationToken token = default) => throw new NotSupportedException();
+        public Task DeleteAsync(Guid id, CancellationToken token = default) => throw new NotSupportedException();
+        private static RunHistoryItem Item(string target) => new(Guid.NewGuid(), null, null, PersistedRunStatus.Completed,
+            RunTerminationReason.PlannedCountCompleted, DateTimeOffset.Now, DateTimeOffset.Now, "test", "test",
+            DatabaseType.MySqlMariaDb, target, 1, null);
+    }
+}
