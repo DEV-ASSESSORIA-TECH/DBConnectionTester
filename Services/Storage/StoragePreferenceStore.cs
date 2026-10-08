@@ -1,5 +1,6 @@
 using DBConnectionTester.Models;
 using Microsoft.Win32;
+using System.Text.Json;
 
 namespace DBConnectionTester.Services.Storage;
 
@@ -17,11 +18,20 @@ public interface IStoragePreferenceStore
 
 public sealed class RegistryStoragePreferenceStore : IStoragePreferenceStore
 {
-    private const string RegistryPath = @"Software\DBConnectionTester";
+    private readonly string registryPath;
+
+    public RegistryStoragePreferenceStore() : this(@"Software\DBConnectionTester") { }
+    internal RegistryStoragePreferenceStore(string registryPath) => this.registryPath = registryPath;
 
     public StoragePreference? Read()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RegistryPath, writable: false);
+        using var key = Registry.CurrentUser.OpenSubKey(registryPath, writable: false);
+        if (key?.GetValue("StorageSelection") is string selection)
+        {
+            var preference = JsonSerializer.Deserialize<StoragePreference>(selection)
+                ?? throw new ApplicationStoreException("A seleção de armazenamento é inválida.");
+            return preference with { DatabasePath = Path.GetFullPath(preference.DatabasePath) };
+        }
         var storeIdText = key?.GetValue("ActiveStoreId") as string;
         var databasePath = key?.GetValue("ActiveStorePath") as string;
         var scopeText = key?.GetValue("ActiveStoreScope") as string;
@@ -37,13 +47,9 @@ public sealed class RegistryStoragePreferenceStore : IStoragePreferenceStore
 
     public void Write(StoragePreference preference)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(RegistryPath, writable: true);
-        key.SetValue("ActiveStoreId", preference.StoreId.ToString("D"), RegistryValueKind.String);
-        key.SetValue("ActiveStorePath", Path.GetFullPath(preference.DatabasePath), RegistryValueKind.String);
-        key.SetValue("ActiveStoreScope", preference.Scope.ToString(), RegistryValueKind.String);
-        if (preference.ObservedPortableStoreId is Guid observed)
-            key.SetValue("ObservedPortableStoreId", observed.ToString("D"), RegistryValueKind.String);
-        else
-            key.DeleteValue("ObservedPortableStoreId", throwOnMissingValue: false);
+        using var key = Registry.CurrentUser.CreateSubKey(registryPath, writable: true);
+        // One registry value prevents a partially updated path/identity selection.
+        key.SetValue("StorageSelection", JsonSerializer.Serialize(preference with
+        { DatabasePath = Path.GetFullPath(preference.DatabasePath) }), RegistryValueKind.String);
     }
 }
