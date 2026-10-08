@@ -21,6 +21,7 @@ public sealed class ExecutionLayoutTests
             try
             {
                 using var form = new MainForm(store, ApplicationSettings.Default);
+                Assert.Equal(new Size(1000, 680), form.Size);
                 var connection = Descendants(form).OfType<GroupBox>().Single(c => c.Text == "Conexão");
                 var status = (Label)typeof(MainForm).GetField("lblStatus", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(form)!;
                 form.Shown += async (_, _) =>
@@ -33,6 +34,10 @@ public sealed class ExecutionLayoutTests
                         var tabs = results.Controls.OfType<TabControl>().Single();
                         Assert.Equal("Resumo estatístico", tabs.SelectedTab!.Text);
                         Assert.False(bar.Visible);
+                        await Task.Delay(80);
+                        Assert.Equal(2, ((TableLayoutPanel)connection.Parent!).ColumnCount);
+                        Assert.False(Descendants(form).OfType<Panel>().Single(c => c.Name == "ExecutionConfigurationViewport").VerticalScroll.Visible);
+                        Snapshot(form, "execution-compact-initial");
                         tabs.SelectedIndex = 1;
                         form.NavigateTo("Início");
                         form.NavigateTo("Nova execução");
@@ -96,17 +101,18 @@ public sealed class ExecutionLayoutTests
                             Assert.True(results.Height >= 140);
                         }
                         var execution = Descendants(form).OfType<GroupBox>().Single(c => c.Text == "Execução");
-                        foreach (var databaseType in new[] { DatabaseType.MySqlMariaDb, DatabaseType.SqlServer })
+                        foreach (var databaseType in Enum.GetValues<DatabaseType>())
                         {
                             Field<ComboBox>(form, "cmbDatabaseType").SelectedItem = DatabaseProfiles.Get(databaseType);
-                            foreach (var width in new[] { 1040, 1020, 1010, 1000, 990, 1040 })
+                            Field<ComboBox>(form, "cmbSqlServerAuth").SelectedItem = SqlServerAuthentication.SqlLogin;
+                            foreach (var width in new[] { 1000, 980, 960, 950, 946, 945, 940, 930, 920, 940, 945, 946, 950, 960, 1000 })
                             {
                                 form.ClientSize = new Size(width, 750);
                                 await Task.Delay(80);
                                 var settingsArea = (TableLayoutPanel)connection.Parent!;
                                 // These widths bracket the transition and exercise the newly reclaimed space.
-                                if (width >= 1010) Assert.Equal(2, settingsArea.ColumnCount);
-                                if (width <= 1000) Assert.Equal(1, settingsArea.ColumnCount);
+                                if (width >= 946) Assert.Equal(2, settingsArea.ColumnCount);
+                                if (width <= 945) Assert.Equal(1, settingsArea.ColumnCount);
                                 if (settingsArea.ColumnCount == 2)
                                 {
                                     Assert.Equal(connection.Top, execution.Top);
@@ -120,6 +126,9 @@ public sealed class ExecutionLayoutTests
                                             Assert.True(child.Right <= flow.ClientSize.Width, $"{child.Text}: {child.Bounds} outside {flow.ClientSize}");
                                             Assert.True(child.Bottom <= flow.ClientSize.Height);
                                         }
+                                foreach (var group in new[] { connection, execution })
+                                    foreach (var label in Descendants(group).OfType<Label>().Where(c => c.Visible))
+                                        Assert.True(label.Right <= label.Parent!.ClientSize.Width, $"{label.Text}: {label.Bounds}");
                                 Snapshot(form, $"execution-breakpoint-{databaseType}-{width}");
                             }
                         }

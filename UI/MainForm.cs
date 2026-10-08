@@ -96,7 +96,7 @@ public sealed partial class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
         MinimumSize = SizeFromClientSize(new Size(800, 600));
-        Size = new Size(1120, 900);
+        Size = new Size(1000, 680);
         MaximizeBox = true;
 
         BuildUi();

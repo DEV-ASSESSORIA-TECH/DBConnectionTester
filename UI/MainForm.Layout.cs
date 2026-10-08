@@ -74,10 +74,13 @@ public sealed partial class MainForm
         var execution = BuildExecutionGroup();
         settingsArea.Controls.Add(connection, 0, 0);
         settingsArea.Controls.Add(execution, 1, 0);
+        var viewport = new BufferedPanel { Name = "ExecutionConfigurationViewport", Dock = DockStyle.Top, AutoScroll = true };
         var columns = 0;
         settingsArea.SizeChanged += (_, _) =>
         {
-            var count = settingsArea.ClientSize.Width * 96d / settingsArea.DeviceDpi >= 800 ? 2 : 1;
+            // Base the transition on the viewport width so its vertical scrollbar
+            // cannot change the threshold when resizing back to two columns.
+            var count = viewport.Width * 96d / settingsArea.DeviceDpi >= 740 ? 2 : 1;
             if (columns == count) return;
             columns = count;
             settingsArea.SuspendLayout();
@@ -90,7 +93,6 @@ public sealed partial class MainForm
             settingsArea.SetCellPosition(execution, new TableLayoutPanelCellPosition(count == 2 ? 1 : 0, count == 2 ? 0 : 1));
             settingsArea.ResumeLayout(true);
         };
-        var viewport = new BufferedPanel { Name = "ExecutionConfigurationViewport", Dock = DockStyle.Top, AutoScroll = true };
         viewport.Controls.Add(settingsArea);
         resultsControl.Dock = DockStyle.Fill;
         var note = new Label { Dock = DockStyle.Bottom, Height = Font.Height + 12, Padding = new Padding(3, 6, 3, 0),
@@ -329,7 +331,7 @@ public sealed partial class MainForm
 
     private GroupBox BuildConnectionGroup()
     {
-        var table = CreateSettingsTable(labelWidth: 145);
+        var table = CreateSettingsTable(labelWidth: 130);
         var row = 0;
         AddRow(table, row++, "Tipo de banco:", cmbDatabaseType);
         hostRow = AddRow(table, row++, "Servidor / host:", txtHost);
@@ -359,7 +361,7 @@ public sealed partial class MainForm
 
     private GroupBox BuildExecutionGroup()
     {
-        var table = CreateSettingsTable(labelWidth: 110);
+        var table = CreateSettingsTable(labelWidth: 90);
         chkContinuous.Text = "Execução contínua";
         chkBackground.Text = "Minimizar ao iniciar";
         numTests.Width = 110;
