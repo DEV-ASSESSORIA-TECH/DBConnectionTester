@@ -54,6 +54,9 @@ public sealed class SettingsPage : UserControl
         theme.Items.AddRange(Enum.GetValues<ApplicationTheme>().Cast<object>().ToArray());
         targetScope.Items.AddRange(new object[]
             { StorageScope.LocalUser, StorageScope.Portable, StorageScope.SharedMachine, StorageScope.Custom });
+        theme.FormattingEnabled = true;
+        theme.Format += (_, e) => e.Value = e.ListItem switch
+        { ApplicationTheme.Light => "Claro", ApplicationTheme.Dark => "Escuro", _ => "Sistema" };
         targetScope.SelectedIndex = 0;
 
         var root = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
@@ -67,7 +70,7 @@ public sealed class SettingsPage : UserControl
         settingsState.TextChanged += (_, _) => settingsState.Visible = settingsState.Text.Length > 0;
         LoadSettings(settings);
         theme.SelectedIndexChanged += (_, _) => UpdateEditState();
-        legacyEnabled.CheckedChanged += (_, _) => UpdateEditState();
+        legacyEnabled.CheckedChanged += (_, _) => { UpdateEditState(); UpdateOperationState(); };
         legacyDirectory.TextChanged += (_, _) => UpdateEditState();
 
         browseLegacy.Click += async (_, _) => await RunOperationAsync("Selecionando pasta…", () => Task.FromResult(BrowseLegacyDirectory()));
@@ -99,18 +102,23 @@ public sealed class SettingsPage : UserControl
     private GroupBox BuildAppearanceGroup()
     {
         var table = SettingsTable();
-        AddRow(table, 0, "Tema:", theme);
-        AddRow(table, 1, "Saída legada:", legacyEnabled);
-        var path = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
+        AddNote(table, 0, "Aparência", bold: true);
+        AddRow(table, 1, "Tema:", theme);
+        AddNote(table, 2, "Exportação automática", bold: true);
+        AddRow(table, 3, "CSV e TXT:", legacyEnabled);
+        var path = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = Padding.Empty };
         path.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         path.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        legacyDirectory.Dock = DockStyle.Fill;
+        legacyDirectory.Dock = DockStyle.Top;
         path.Controls.Add(legacyDirectory, 0, 0);
         path.Controls.Add(browseLegacy, 1, 0);
-        AddRow(table, 2, "Pasta CSV/TXT:", path);
-        table.Controls.Add(save, 1, 3);
-        table.Controls.Add(settingsState, 1, 4);
-        return Group("Aparência e saída contínua", table);
+        AddRow(table, 4, "Pasta de destino:", path);
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
+        save.Font = new Font(Font, FontStyle.Bold);
+        settingsState.Dock = DockStyle.None;
+        actions.Controls.AddRange(new Control[] { save, settingsState });
+        AddWide(table, 5, actions);
+        return Group("Preferências", table);
     }
 
     private GroupBox BuildStorageGroup()
@@ -243,6 +251,7 @@ public sealed class SettingsPage : UserControl
         var enabled = operationsEnabled && !IsBusy;
         foreach (var control in new Control[] { clone, create, useExisting, package, restore, save, openFolder,
             theme, legacyEnabled, legacyDirectory, browseLegacy, targetScope, includeExecutable }) control.Enabled = enabled;
+        legacyDirectory.Enabled = browseLegacy.Enabled = enabled && legacyEnabled.Checked;
         BusyChanged?.Invoke(IsBusy);
     }
 
@@ -328,7 +337,7 @@ public sealed class SettingsPage : UserControl
             legacyEnabled.Checked = settings.LegacyOutputEnabled;
             legacyDirectory.Text = settings.LegacyOutputDirectory;
         }
-        finally { loadingSettings = false; }
+        finally { loadingSettings = false; UpdateOperationState(); }
     }
 
     private bool BrowseLegacyDirectory()
@@ -339,24 +348,30 @@ public sealed class SettingsPage : UserControl
         return true;
     }
 
-    private static TableLayoutPanel SettingsTable()
-    {
-        var table = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, Padding = new Padding(8) };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        return table;
-    }
+    private static TableLayoutPanel SettingsTable() => UiLayout.Fields(140);
 
     private static void AddRow(TableLayoutPanel table, int row, string caption, Control value)
+        => UiLayout.AddField(table, row, caption, value);
+
+    private static void AddWide(TableLayoutPanel table, int row, Control control)
     {
-        table.Controls.Add(new Label { Text = caption, AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
-        value.Dock = DockStyle.Fill;
-        table.Controls.Add(value, 1, row);
+        table.RowCount = Math.Max(table.RowCount, row + 1);
+        while (table.RowStyles.Count <= row) table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        table.Controls.Add(control, 0, row);
+        table.SetColumnSpan(control, 2);
+    }
+
+    private static void AddNote(TableLayoutPanel table, int row, string text, bool bold = false)
+    {
+        var label = new Label { Text = text, Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(3, bold ? 8 : 4, 3, 6) };
+        if (bold) label.Font = new Font(table.Font, FontStyle.Bold);
+        AddWide(table, row, label);
     }
 
     private static GroupBox Group(string title, Control content)
     {
-        var group = new GroupBox { Text = title, Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(3, 4, 3, 12) };
+        var group = new GroupBox { Text = title, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(6, 20, 6, 6), Margin = new Padding(3, 4, 3, 12) };
         group.Controls.Add(content);
         return group;
     }
