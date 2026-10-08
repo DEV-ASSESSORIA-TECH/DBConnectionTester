@@ -6,7 +6,7 @@ namespace DBConnectionTester;
 internal static class Program
 {
     [STAThread]
-    private static async Task<int> Main(string[] args)
+    private static int Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
         try
@@ -15,28 +15,31 @@ internal static class Program
                     SharedMachineStorageSetup.CommandLineSwitch,
                     StringComparison.OrdinalIgnoreCase))
             {
-                await new SharedMachineStorageSetup().PrepareAsync();
+                Task.Run(() => new SharedMachineStorageSetup().PrepareAsync()).GetAwaiter().GetResult();
                 return 0;
             }
             if (args.Length == 1 && args[0].Equals(
                     SharedMachineStorageSetup.DirectoryCommandLineSwitch,
                     StringComparison.OrdinalIgnoreCase))
             {
-                await new SharedMachineStorageSetup().PrepareDirectoryAsync();
+                Task.Run(() => new SharedMachineStorageSetup().PrepareDirectoryAsync()).GetAwaiter().GetResult();
                 return 0;
             }
 
             var resolver = new StorageResolver(
                 StorageLocations.CreateDefault(),
                 new RegistryStoragePreferenceStore());
-            var resolution = await resolver.ResolveAsync(args);
+            // Keep the actual entry point and all dialogs on the original STA thread.
+            // Startup I/O runs without a UI synchronization context; the message loop starts below.
+            var resolution = Task.Run(() => resolver.ResolveAsync(args)).GetAwaiter().GetResult();
             var store = resolution.SelectedStore;
             if (resolution.RequiresSelection)
             {
                 using var selection = new StorageSelectionForm(resolution.Candidates);
                 if (selection.ShowDialog() != DialogResult.OK || selection.SelectedStore is null)
                     return 0;
-                store = await resolver.ActivateAsync(selection.SelectedStore, resolution.Candidates);
+                var selectedStore = selection.SelectedStore;
+                store = Task.Run(() => resolver.ActivateAsync(selectedStore, resolution.Candidates)).GetAwaiter().GetResult();
             }
 
             if (store is null)
@@ -45,13 +48,13 @@ internal static class Program
             try
             {
                 using var recoveryLease = RunWriteLease.Acquire(store);
-                await runRepository.RecoverInterruptedAsync();
+                Task.Run(() => runRepository.RecoverInterruptedAsync()).GetAwaiter().GetResult();
             }
             catch (RunAlreadyActiveException)
             {
                 // Outra instância está executando testes; esta ainda pode consultar o armazenamento.
             }
-            var settings = await new PersistentSettingsRepository(store).GetAsync();
+            var settings = Task.Run(() => new PersistentSettingsRepository(store).GetAsync()).GetAwaiter().GetResult();
             System.Windows.Forms.Application.Run(new MainForm(store, settings));
             return 0;
         }
