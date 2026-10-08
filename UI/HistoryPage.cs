@@ -60,6 +60,13 @@ public sealed class HistoryPage : UserControl
         IRunHistoryRepository history,
         IConnectionProfileRepository profilesRepository)
     {
+        UiStyle.SetRole(search, UiRole.PrimaryAction);
+        UiStyle.SetRole(exportFeedback, UiRole.Status);
+        UiStyle.SetRole(exportScope, UiRole.SecondaryText);
+        UiStyle.SetRole(chartRange, UiRole.SecondaryText);
+        UiStyle.SetRole(runPageLabel, UiRole.SecondaryText);
+        UiStyle.SetRole(cyclePageLabel, UiRole.SecondaryText);
+
         this.history = history;
         this.profilesRepository = profilesRepository;
         exporter = new RunExportService(history);

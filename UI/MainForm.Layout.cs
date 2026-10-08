@@ -233,7 +233,12 @@ public sealed partial class MainForm
             Font = regularFont;
         }
 
-        public void SetSelected(bool selected) => Font = selected ? selectedFont : regularFont;
+        public void SetSelected(bool selected)
+        {
+            UiStyle.SetRole(this, UiRole.Navigation);
+            UiStyle.SetState(this, selected ? UiState.Selected : UiState.Normal);
+            Font = selected ? selectedFont : regularFont;
+        }
 
         protected override void Dispose(bool disposing)
         {

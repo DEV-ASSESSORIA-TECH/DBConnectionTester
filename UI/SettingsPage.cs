@@ -59,6 +59,15 @@ public sealed class SettingsPage : UserControl
         IApplicationSettingsRepository settingsRepository,
         IStoragePreferenceStore preferences)
     {
+        UiStyle.SetRole(save, UiRole.PrimaryAction);
+        UiStyle.SetRole(cancelSwitch, UiRole.DestructiveAction);
+        UiStyle.SetRole(settingsState, UiRole.Status);
+        UiStyle.SetRole(operationStatus, UiRole.Status);
+        UiStyle.SetRole(pendingStorage, UiRole.Warning);
+        UiStyle.SetRole(bankInfo, UiRole.Status);
+        UiStyle.SetRole(copyDescription, UiRole.SecondaryText);
+        UiStyle.SetRole(bankDetails, UiRole.SecondaryText);
+
         this.store = store;
         currentSettings = settings;
         selectedBank = savedBank = store.Descriptor;
@@ -507,6 +516,7 @@ public sealed class SettingsPage : UserControl
     private static void AddNote(TableLayoutPanel table, int row, string text, bool bold = false)
     {
         var label = new Label { Text = text, Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(3, bold ? 6 : 3, 3, 4) };
+        UiStyle.SetRole(label, bold ? UiRole.Heading : UiRole.SecondaryText);
         if (bold) label.Font = new Font(table.Font, FontStyle.Bold);
         AddWide(table, row, label);
     }

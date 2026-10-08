@@ -89,6 +89,13 @@ public sealed partial class MainForm : Form
 
     public MainForm(SqliteApplicationStore applicationStore, ApplicationSettings applicationSettings)
     {
+        UiStyle.SetRole(btnTestOnce, UiRole.PrimaryAction);
+        UiStyle.SetRole(btnStart, UiRole.PrimaryAction);
+        UiStyle.SetRole(btnStop, UiRole.DestructiveAction);
+        UiStyle.SetRole(lblStatus, UiRole.Status);
+        UiStyle.SetRole(lblRunProgress, UiRole.SecondaryText);
+        UiStyle.SetRole(globalStatus, UiRole.SecondaryText);
+
         this.applicationStore = applicationStore;
         this.applicationSettings = applicationSettings;
         runCoordinator = CreateRunCoordinator(applicationSettings);

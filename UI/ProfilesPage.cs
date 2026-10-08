@@ -53,6 +53,14 @@ public sealed class ProfilesPage : UserControl
 
     public ProfilesPage(IConnectionProfileRepository repository)
     {
+        UiStyle.SetRole(save, UiRole.PrimaryAction);
+        UiStyle.SetRole(delete, UiRole.DestructiveAction);
+        UiStyle.SetRole(use, UiRole.PrimaryAction);
+        UiStyle.SetRole(profilesTitle, UiRole.Heading);
+        UiStyle.SetRole(editorTitle, UiRole.Heading);
+        UiStyle.SetRole(editorState, UiRole.Status);
+        UiStyle.SetRole(emptyProfiles, UiRole.SecondaryText);
+
         this.repository = repository;
         Dock = DockStyle.Fill;
         Padding = new Padding(20);
@@ -538,6 +546,7 @@ public sealed class ProfilesPage : UserControl
     {
         AddNote(table, row, title);
         var label = (Label)table.GetControlFromPosition(0, row)!;
+        UiStyle.SetRole(label, UiRole.Heading);
         label.Font = new Font(table.Font, FontStyle.Bold);
         label.Margin = new Padding(3, row == 0 ? 0 : 14, 3, 6);
     }
@@ -547,6 +556,7 @@ public sealed class ProfilesPage : UserControl
         table.RowCount = Math.Max(table.RowCount, row + 1);
         while (table.RowStyles.Count <= row) table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var label = new Label { Text = text, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 6, 3, 6) };
+        UiStyle.SetRole(label, UiRole.SecondaryText);
         table.Controls.Add(label, 0, row);
         table.SetColumnSpan(label, 2);
     }

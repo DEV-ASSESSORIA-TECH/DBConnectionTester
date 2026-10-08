@@ -15,6 +15,10 @@ public sealed class HomePage : UserControl
 
     public HomePage(IRecentRunHistoryRepository history)
     {
+        UiStyle.SetRole(statusValue, UiRole.Status);
+        UiStyle.SetRole(statusDetail, UiRole.SecondaryText);
+        UiStyle.SetRole(recentFeedback, UiRole.Status);
+
         this.history = history;
         Dock = DockStyle.Fill;
         AutoScroll = true;
@@ -31,6 +35,7 @@ public sealed class HomePage : UserControl
             Dock = DockStyle.Top, Margin = new Padding(3, 0, 3, 18)
         });
         var start = ActionButton("Nova execução");
+        UiStyle.SetRole(start, UiRole.PrimaryAction);
         start.Font = new Font(Font, FontStyle.Bold);
         start.Click += (_, _) => NewRunRequested?.Invoke(this, EventArgs.Empty);
         var profiles = ActionButton("Usar um perfil");

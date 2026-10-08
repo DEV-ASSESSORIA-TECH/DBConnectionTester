@@ -9,6 +9,8 @@ internal sealed class StorageSelectionForm : Form
 
     public StorageSelectionForm(IReadOnlyList<StoreDescriptor> candidates)
     {
+        UiStyle.SetRole(selectButton, UiRole.PrimaryAction);
+
         Text = "Selecionar armazenamento";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(760, 340);
