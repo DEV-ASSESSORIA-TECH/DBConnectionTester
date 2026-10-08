@@ -81,23 +81,30 @@ public sealed partial class MainForm
             settingsArea.SetCellPosition(execution, new TableLayoutPanelCellPosition(count == 2 ? 1 : 0, count == 2 ? 0 : 1));
             settingsArea.ResumeLayout(true);
         };
-        var split = new SplitContainer
-        {
-            Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, Size = new Size(900, 650),
-            SplitterDistance = 310, Panel1MinSize = 100, Panel2MinSize = 150
-        };
-        var viewport = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
+        var viewport = new BufferedPanel { Name = "ExecutionConfigurationViewport", Dock = DockStyle.Top, AutoScroll = true };
         viewport.Controls.Add(settingsArea);
-        split.Panel1.Controls.Add(viewport);
         resultsControl.Dock = DockStyle.Fill;
-        split.Panel2.Controls.Add(resultsControl);
         var note = new Label { Dock = DockStyle.Bottom, Height = Font.Height + 12, Padding = new Padding(3, 6, 3, 0),
             Text = "Credenciais ficam somente na memória. O histórico completo é salvo no banco local." };
-        // Dock the bounded action bar above the split instead of asking an
-        // AutoSize row to measure another TableLayoutPanel's preferred height.
-        root.Controls.Add(split);
+        var actions = BuildControlArea();
+        root.Controls.Add(resultsControl);
         root.Controls.Add(note);
-        root.Controls.Add(BuildControlArea());
+        root.Controls.Add(viewport);
+        root.Controls.Add(actions);
+        void UpdateConfigurationHeight()
+        {
+            var resultMinimum = 150 * root.DeviceDpi / 96;
+            var available = Math.Max(100 * root.DeviceDpi / 96, root.ClientSize.Height - actions.Height - note.Height - resultMinimum);
+            var height = Math.Min(settingsArea.Height + 6 * root.DeviceDpi / 96, available);
+            if (viewport.Height != height) viewport.Height = height;
+            var needsScroll = settingsArea.Height + 6 * root.DeviceDpi / 96 > available;
+            if (viewport.AutoScroll != needsScroll) viewport.AutoScroll = needsScroll;
+        }
+        settingsArea.SizeChanged += (_, _) => UpdateConfigurationHeight();
+        root.SizeChanged += (_, _) => UpdateConfigurationHeight();
+        actions.SizeChanged += (_, _) => UpdateConfigurationHeight();
+        root.DpiChangedAfterParent += (_, _) => UpdateConfigurationHeight();
+        UpdateConfigurationHeight();
         page.Controls.Add(root);
         return page;
     }
