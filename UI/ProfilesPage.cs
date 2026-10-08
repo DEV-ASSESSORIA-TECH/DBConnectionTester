@@ -31,6 +31,9 @@ public sealed class ProfilesPage : UserControl
     private Guid? selectedId;
     private ConnectionProfileDraft? editorBaseline;
     private bool decisionPending;
+    private bool justSaved;
+    private readonly Label editorTitle = new() { Text = "Novo perfil", AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 0, 3, 4) };
+    private readonly Label editorState = new() { AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 0, 3, 8), AccessibleName = "Estado da edição" };
     internal Func<string, DialogResult>? EditDecision;
     internal Action<string>? ErrorReporter;
     private bool loading;
@@ -88,12 +91,17 @@ public sealed class ProfilesPage : UserControl
         buttons.Controls.AddRange(new Control[] { save, use, delete });
         var viewport = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
         viewport.Controls.Add(editor);
-        var editorHost = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        var editorHost = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
         editorHost.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         editorHost.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        editorHost.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        editorHost.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         editorHost.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        editorHost.Controls.Add(buttons, 0, 0);
-        editorHost.Controls.Add(viewport, 0, 1);
+        editorTitle.Font = new Font(Font.FontFamily, 12, FontStyle.Bold);
+        editorHost.Controls.Add(editorTitle, 0, 0);
+        editorHost.Controls.Add(editorState, 0, 1);
+        editorHost.Controls.Add(buttons, 0, 2);
+        editorHost.Controls.Add(viewport, 0, 3);
 
         var split = new SplitContainer { Dock = DockStyle.Fill, Size = new Size(900, 650), SplitterDistance = 220,
             FixedPanel = FixedPanel.Panel1, Panel1MinSize = 80, Panel2MinSize = 140 };
@@ -147,7 +155,7 @@ public sealed class ProfilesPage : UserControl
         foreach (var control in new Control[] { name, databaseType, host, port, user, database, sqliteFile, authentication,
             odbcDriver, testCount, continuous, interval, timeout, dns, ping, tcp, databaseTest, background })
         {
-            void Changed(object? sender, EventArgs args) { if (!loading) UpdateEditState(); }
+            void Changed(object? sender, EventArgs args) { if (!loading) { justSaved = false; UpdateEditState(); } }
             if (control is TextBox text) text.TextChanged += Changed;
             else if (control is ComboBox combo) combo.SelectedIndexChanged += Changed;
             else if (control is NumericUpDown number) number.ValueChanged += Changed;
@@ -254,7 +262,9 @@ public sealed class ProfilesPage : UserControl
             var saved = await Task.Run(() => repository.SaveAsync(draft, request.Token), request.Token);
             if (!request.IsCurrent) return false;
             await LoadProfilesAsync(saved.ProfileId, request.Token);
-            return !IsDisposed && selectedId == saved.ProfileId && !HasUnsavedChanges;
+            var success = !IsDisposed && selectedId == saved.ProfileId && !HasUnsavedChanges;
+            if (success) { justSaved = true; UpdateEditState(); }
+            return success;
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
         catch (Exception exception) when (exception is ArgumentException or ApplicationStoreException)
@@ -290,7 +300,7 @@ public sealed class ProfilesPage : UserControl
         var wasLoading = loading;
         loading = true;
         editor.SuspendLayout();
-        try { update(); ApplyVisibility(); editorBaseline = ReadDraft(); }
+        try { justSaved = false; update(); ApplyVisibility(); editorBaseline = ReadDraft(); }
         finally { loading = wasLoading; editor.ResumeLayout(true); UpdateEditState(); }
     }
 
@@ -310,6 +320,9 @@ public sealed class ProfilesPage : UserControl
 
     private void UpdateEditState()
     {
+        editorTitle.Text = selectedId is null ? "Novo perfil" : (string.IsNullOrWhiteSpace(name.Text) ? "Editar perfil" : name.Text);
+        editorState.Text = HasUnsavedChanges ? "Alterações não salvas" : justSaved ? "Perfil salvo" : "";
+        editorState.Visible = editorState.Text.Length > 0;
         use.Enabled = editingEnabled && !refreshPending && !mutationPending && !decisionPending
             && (selectedId is not null || HasUnsavedChanges);
     }

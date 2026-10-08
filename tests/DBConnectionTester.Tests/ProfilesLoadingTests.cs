@@ -109,6 +109,8 @@ public sealed class ProfilesLoadingTests
         list.SelectedIndex = 0;
         Field<TextBox>(page, "host").Text = "edited-host";
         Assert.True(page.HasUnsavedChanges);
+        Assert.Equal("Alterações não salvas", Field<Label>(page, "editorState").Text);
+        Assert.Equal("Saved", Field<Label>(page, "editorTitle").Text);
         page.EditDecision = _ => DialogResult.Cancel;
         Field<Button>(page, "create").PerformClick();
         Assert.Equal("edited-host", Field<TextBox>(page, "host").Text);
@@ -125,6 +127,7 @@ public sealed class ProfilesLoadingTests
         page.EditDecision = _ => DialogResult.Cancel;
         list.SelectedIndex = 0;
         Assert.Null(list.SelectedItem);
+        Assert.Equal("Novo perfil", Field<Label>(page, "editorTitle").Text);
         Assert.Equal("New unsaved", Field<TextBox>(page, "name").Text);
     });
 
@@ -149,6 +152,7 @@ public sealed class ProfilesLoadingTests
         page.UseRequested += profile => used = profile;
         await (Task)typeof(ProfilesPage).GetMethod("UseSelectionAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(page, null)!;
         Assert.Equal(choice == DialogResult.Yes ? 1 : 0, writes);
+        Assert.Equal(choice == DialogResult.Yes ? "Perfil salvo" : choice == DialogResult.Cancel ? "Alterações não salvas" : "", Field<Label>(page, "editorState").Text);
         if (choice == DialogResult.Cancel)
         {
             Assert.Null(used);
