@@ -24,6 +24,8 @@ public sealed class SettingsPage : UserControl
     private readonly Button restore = new() { Text = "Restaurar pacote", AutoSize = true };
     private readonly Button openFolder = new() { Text = "Abrir pasta", AutoSize = true };
     private readonly CheckBox includeExecutable = new() { Text = "Incluir EXE single-file", AutoSize = true };
+    private readonly TextBox currentDatabasePath = new() { ReadOnly = true, AccessibleName = "Caminho do banco atual" };
+    private readonly Label storageSize = new() { AutoSize = true };
     private ApplicationSettings currentSettings;
     private bool operationsEnabled = true;
     private bool operationPending;
@@ -69,6 +71,7 @@ public sealed class SettingsPage : UserControl
         operationStatus.TextChanged += (_, _) => operationStatus.Visible = operationStatus.Text.Length > 0;
         settingsState.TextChanged += (_, _) => settingsState.Visible = settingsState.Text.Length > 0;
         LoadSettings(settings);
+        VisibleChanged += (_, _) => { if (Visible) RefreshStorageSize(); };
         theme.SelectedIndexChanged += (_, _) => UpdateEditState();
         legacyEnabled.CheckedChanged += (_, _) => { UpdateEditState(); UpdateOperationState(); };
         legacyDirectory.TextChanged += (_, _) => UpdateEditState();
@@ -121,25 +124,39 @@ public sealed class SettingsPage : UserControl
         return Group("Preferências", table);
     }
 
-    private GroupBox BuildStorageGroup()
+    private Control BuildStorageGroup()
     {
         var table = SettingsTable();
-        AddRow(table, 0, "Banco atual:", new Label { Text = store.Descriptor.DatabasePath, AutoSize = true });
-        AddRow(table, 1, "Identidade:", new Label { Text = store.Descriptor.StoreId.ToString("D"), AutoSize = true });
-        AddRow(table, 2, "Escopo:", new Label { Text = store.Descriptor.Scope.ToString(), AutoSize = true });
-        AddRow(table, 3, "Tamanho:", new Label { Text = FormatSize(new FileInfo(store.Descriptor.DatabasePath).Length), AutoSize = true });
-        AddRow(table, 4, "Novo escopo:", targetScope);
+        currentDatabasePath.Text = store.Descriptor.DatabasePath;
+        AddRow(table, 0, "Localização:", new Label { Text = ScopeName(store.Descriptor.Scope), AutoSize = true });
+        AddRow(table, 1, "Banco atual:", currentDatabasePath);
+        AddRow(table, 2, "Tamanho em disco:", storageSize);
+        RefreshStorageSize();
+        AddRow(table, 3, "Pasta do banco:", openFolder);
+        openFolder.Dock = DockStyle.None;
+        var detailsButton = new Button { Text = "Mostrar detalhes", AutoSize = true };
+        var details = new TextBox { ReadOnly = true, Text = store.Descriptor.StoreId.ToString("D"), Dock = DockStyle.Top, Visible = false,
+            AccessibleName = "Identidade do armazenamento", Margin = new Padding(3, 4, 3, 4) };
+        detailsButton.Click += (_, _) => { details.Visible = !details.Visible; detailsButton.Text = details.Visible ? "Ocultar detalhes" : "Mostrar detalhes"; };
+        AddWide(table, 4, detailsButton);
+        AddWide(table, 5, details);
+        var destination = SettingsTable();
+        AddRow(destination, 0, "Novo escopo:", targetScope);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        actions.Controls.AddRange(new Control[] { clone, create, useExisting, openFolder });
-        AddRow(table, 5, "Ações:", actions);
-        table.Controls.Add(new Label
+        actions.Controls.AddRange(new Control[] { clone, create, useExisting });
+        AddRow(destination, 1, "Ações:", actions);
+        destination.Controls.Add(new Label
         {
             Text = "A troca é ativada na próxima inicialização. Nenhum banco anterior é apagado ou mesclado.",
             AutoSize = true,
             Margin = new Padding(3, 10, 3, 6)
-        }, 0, 6);
-        table.SetColumnSpan(table.GetControlFromPosition(0, 6)!, 2);
-        return Group("Armazenamento", table);
+        }, 0, 2);
+        destination.SetColumnSpan(destination.GetControlFromPosition(0, 2)!, 2);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.Controls.Add(Group("Armazenamento atual", table));
+        layout.Controls.Add(Group("Trocar armazenamento", destination));
+        return layout;
     }
 
     private GroupBox BuildPackageGroup()
@@ -347,6 +364,26 @@ public sealed class SettingsPage : UserControl
         legacyDirectory.Text = dialog.SelectedPath;
         return true;
     }
+
+    private void RefreshStorageSize()
+    {
+        long bytes = 0;
+        foreach (var path in new[] { store.Descriptor.DatabasePath, store.Descriptor.DatabasePath + "-wal", store.Descriptor.DatabasePath + "-shm" })
+        {
+            try { var info = new FileInfo(path); if (info.Exists) bytes += info.Length; }
+            catch (IOException) { storageSize.Text = "Indisponível"; return; }
+            catch (UnauthorizedAccessException) { storageSize.Text = "Indisponível"; return; }
+        }
+        storageSize.Text = FormatSize(bytes);
+    }
+
+    private static string ScopeName(StorageScope scope) => scope switch
+    {
+        StorageScope.LocalUser => "Usuário atual",
+        StorageScope.Portable => "Portátil",
+        StorageScope.SharedMachine => "Compartilhado neste computador",
+        _ => "Pasta personalizada"
+    };
 
     private static TableLayoutPanel SettingsTable() => UiLayout.Fields(140);
 
