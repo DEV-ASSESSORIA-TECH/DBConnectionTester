@@ -22,8 +22,8 @@ public sealed class StatisticsDashboardControl : UserControl, IThemePaletteAware
 
     void IThemePaletteAware.ApplyPalette(ThemePalette palette)
     {
-        if (colors == palette.Metrics) return;
         colors = palette.Metrics;
+        // The generic theme pass also styles the label; restore its cached trend tone.
         ApplyTrendColor();
     }
 
@@ -38,6 +38,8 @@ public sealed class StatisticsDashboardControl : UserControl, IThemePaletteAware
 
     public StatisticsDashboardControl()
     {
+        Font = UiTypography.Body;
+        UiStyle.SetRole(this, UiRole.Card);
         UiStyle.SetRole(trendLabel, UiRole.Status);
         Dock = DockStyle.Fill;
         stageSelector.Items.AddRange(new object[]

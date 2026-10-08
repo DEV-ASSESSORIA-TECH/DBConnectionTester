@@ -5,10 +5,11 @@ namespace DBConnectionTester.UI;
 internal sealed class StorageSelectionForm : Form
 {
     private readonly ListView stores = new();
-    private readonly Button selectButton = new() { Text = "Usar selecionado", AutoSize = true, Enabled = false };
+    private readonly Button selectButton = new ThemedButton() { Text = "Usar selecionado", AutoSize = true, Enabled = false };
 
     public StorageSelectionForm(IReadOnlyList<StoreDescriptor> candidates)
     {
+        Font = UiTypography.Body;
         UiStyle.SetRole(selectButton, UiRole.PrimaryAction);
 
         Text = "Selecionar armazenamento";
@@ -35,7 +36,7 @@ internal sealed class StorageSelectionForm : Form
         stores.SelectedIndexChanged += (_, _) => selectButton.Enabled = stores.SelectedItems.Count == 1;
         stores.DoubleClick += (_, _) => AcceptSelection();
         selectButton.Click += (_, _) => AcceptSelection();
-        var cancelButton = new Button { Text = "Cancelar", AutoSize = true, DialogResult = DialogResult.Cancel };
+        var cancelButton = new ThemedButton { Text = "Cancelar", AutoSize = true, DialogResult = DialogResult.Cancel };
 
         var actions = new FlowLayoutPanel
         {

@@ -19,18 +19,18 @@ public sealed class HistoryPage : UserControl
     private readonly TextBox target = new();
     private readonly ComboBox status = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox diagnostic = new();
-    private readonly Button search = new() { Text = "Pesquisar", AutoSize = true };
+    private readonly Button search = new ThemedButton() { Text = "Pesquisar", AutoSize = true };
     private readonly DataGridView runs = new();
     private readonly DataGridView cycles = new();
     private readonly Label runPageLabel = new() { AutoSize = true };
     private readonly Label cyclePageLabel = new() { AutoSize = true };
-    private readonly Button previousRunPage = new() { Text = "Anterior", AutoSize = true };
-    private readonly Button nextRunPage = new() { Text = "Próxima", AutoSize = true };
-    private readonly Button previousCyclePage = new() { Text = "Anterior", AutoSize = true };
-    private readonly Button nextCyclePage = new() { Text = "Próxima", AutoSize = true };
+    private readonly Button previousRunPage = new ThemedButton() { Text = "Anterior", AutoSize = true };
+    private readonly Button nextRunPage = new ThemedButton() { Text = "Próxima", AutoSize = true };
+    private readonly Button previousCyclePage = new ThemedButton() { Text = "Anterior", AutoSize = true };
+    private readonly Button nextCyclePage = new ThemedButton() { Text = "Próxima", AutoSize = true };
     private readonly TextBox details = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
     private readonly LatencyTrendControl chart = new();
-    private readonly TabControl detailTabs = new() { Dock = DockStyle.Fill };
+    private readonly TabControl detailTabs = new ThemedTabControl() { Dock = DockStyle.Fill };
     private bool cyclesLoaded;
     private bool cyclesLoading;
     private bool chartDirty = true;
@@ -38,7 +38,7 @@ public sealed class HistoryPage : UserControl
     private readonly FlowLayoutPanel exportActions = new() { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
     private readonly Label exportScope = new() { AutoSize = true, Dock = DockStyle.Fill };
     private readonly Label exportFeedback = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, Visible = false };
-    private readonly Button openExportFolder = new() { Text = "Abrir pasta", AutoSize = true, Visible = false };
+    private readonly Button openExportFolder = new ThemedButton() { Text = "Abrir pasta", AutoSize = true, Visible = false };
     private readonly Label chartRange = new() { AutoSize = true, Dock = DockStyle.Fill };
     private readonly ToolTip exportHints = new();
     private bool exportInProgress;
@@ -60,6 +60,7 @@ public sealed class HistoryPage : UserControl
         IRunHistoryRepository history,
         IConnectionProfileRepository profilesRepository)
     {
+        Font = UiTypography.Body;
         UiStyle.SetRole(search, UiRole.PrimaryAction);
         UiStyle.SetRole(exportFeedback, UiRole.Status);
         UiStyle.SetRole(exportScope, UiRole.SecondaryText);
@@ -128,7 +129,7 @@ public sealed class HistoryPage : UserControl
         AddExportButton("CSV", RunExportFormat.Csv, "csv");
         AddExportButton("TXT", RunExportFormat.Text, "txt");
         AddExportButton("JSON", RunExportFormat.Json, "json");
-        var zip = new Button { Text = "Exportar ZIP", AutoSize = true };
+        var zip = new ThemedButton { Text = "Exportar ZIP", AutoSize = true };
         zip.Click += async (_, _) => await ExportZipAsync();
         exportActions.Controls.Add(zip);
         openExportFolder.Click += (_, _) => OpenExportFolder();
@@ -444,7 +445,7 @@ public sealed class HistoryPage : UserControl
 
     private void AddExportButton(string label, RunExportFormat format, string extension)
     {
-        var button = new Button { Text = "Exportar " + label, AutoSize = true };
+        var button = new ThemedButton { Text = "Exportar " + label, AutoSize = true };
         button.Click += async (_, _) => await ExportAsync(format, extension);
         exportActions.Controls.Add(button);
     }

@@ -17,7 +17,7 @@ public sealed partial class MainForm : Form
     private readonly ComboBox cmbSqlServerAuth = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox txtOdbcDriver = new() { Text = "SQL Anywhere 17" };
     private readonly TextBox txtSqliteFile = new();
-    private readonly Button btnBrowseSqlite = new() { Text = "Escolher...", AutoSize = true };
+    private readonly Button btnBrowseSqlite = new ThemedButton() { Text = "Escolher...", AutoSize = true };
     private readonly NumericUpDown numTests = new() { Minimum = 1, Maximum = 10_000_000, Value = 1000, ThousandsSeparator = true };
     private readonly CheckBox chkContinuous = new() { Text = "Execução contínua (até encerrar manualmente)", AutoSize = true };
     private readonly NumericUpDown numInterval = new() { Minimum = 0, Maximum = 3600, Value = 5, DecimalPlaces = 1, Increment = 0.5M };
@@ -27,12 +27,12 @@ public sealed partial class MainForm : Form
     private readonly CheckBox chkTcp = new() { Text = "TCP", Checked = true, AutoSize = true };
     private readonly CheckBox chkDatabase = new() { Text = "Banco + SELECT 1", Checked = true, AutoSize = true };
     private readonly CheckBox chkBackground = new() { Text = "Minimizar para a bandeja ao iniciar", AutoSize = true };
-    private readonly Button btnTestOnce = new() { Text = "Testar uma vez", AutoSize = true };
-    private readonly Button btnStart = new() { Text = "Iniciar teste", AutoSize = true };
-    private readonly Button btnStop = new() { Text = "Parar", AutoSize = true, Enabled = false };
-    private readonly Button btnOpenCsv = new() { Text = "Abrir CSV", AutoSize = true, Enabled = false };
-    private readonly Button btnOpenLog = new() { Text = "Abrir TXT", AutoSize = true, Enabled = false };
-    private readonly Button btnOpenFolder = new() { Text = "Abrir pasta", AutoSize = true };
+    private readonly Button btnTestOnce = new ThemedButton() { Text = "Testar uma vez", AutoSize = true };
+    private readonly Button btnStart = new ThemedButton() { Text = "Iniciar teste", AutoSize = true };
+    private readonly Button btnStop = new ThemedButton() { Text = "Parar", AutoSize = true, Enabled = false };
+    private readonly Button btnOpenCsv = new ThemedButton() { Text = "Abrir CSV", AutoSize = true, Enabled = false };
+    private readonly Button btnOpenLog = new ThemedButton() { Text = "Abrir TXT", AutoSize = true, Enabled = false };
+    private readonly Button btnOpenFolder = new ThemedButton() { Text = "Abrir pasta", AutoSize = true };
     private readonly Label lblStatus = new() { AutoSize = true, Text = "Pronto." };
     private readonly Label lblRunProgress = new();
     private readonly System.Windows.Forms.Timer elapsedTimer = new() { Interval = 1000 };
@@ -89,6 +89,7 @@ public sealed partial class MainForm : Form
 
     public MainForm(SqliteApplicationStore applicationStore, ApplicationSettings applicationSettings)
     {
+        Font = UiTypography.Body;
         UiStyle.SetRole(btnTestOnce, UiRole.PrimaryAction);
         UiStyle.SetRole(btnStart, UiRole.PrimaryAction);
         UiStyle.SetRole(btnStop, UiRole.DestructiveAction);

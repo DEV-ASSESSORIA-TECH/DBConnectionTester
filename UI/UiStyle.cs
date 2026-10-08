@@ -5,7 +5,7 @@ namespace DBConnectionTester.UI;
 public enum UiRole
 {
     Container, Card, Input, Text, Heading, SecondaryText,
-    NeutralAction, PrimaryAction, DestructiveAction, Navigation,
+    NeutralAction, PrimaryAction, DestructiveAction, Navigation, NavigationContainer,
     Status, Warning, Error, Success
 }
 
@@ -19,6 +19,7 @@ public static class UiStyle
         public UiRole Role;
         public UiState State;
         public ThemePalette? Palette;
+        public bool ButtonEventsBound;
     }
 
     private static readonly ConditionalWeakTable<Control, Metadata> metadata = new();
@@ -58,15 +59,21 @@ public static class UiStyle
             entry.Role = DefaultRole(control);
         }
         entry.Palette = palette;
+        if (control is Button && !entry.ButtonEventsBound)
+        {
+            entry.ButtonEventsBound = true;
+            control.EnabledChanged += (_, _) =>
+            {
+                if (entry.Palette is { } current) ThemeManager.ApplyControlColors(control, current);
+            };
+        }
     }
 
     private static void ApplyChangedRoleOrState(Control control, Metadata entry)
     {
-        // Existing themes have no role overrides: metadata changes cause no repaint.
+        // Update only this control; native Enabled styling and theme changes use the same palette.
         if (entry.Palette is not { Roles.IsEmpty: false } palette) return;
-        var colors = palette.ColorsFor(control);
-        control.BackColor = colors.Background;
-        control.ForeColor = colors.Foreground;
+        ThemeManager.ApplyControlColors(control, palette);
     }
 
     private static UiRole DefaultRole(Control control) => control switch

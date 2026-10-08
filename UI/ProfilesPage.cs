@@ -28,9 +28,9 @@ public sealed class ProfilesPage : UserControl
     private readonly CheckBox tcp = new() { Text = "TCP", Checked = true, AutoSize = true };
     private readonly CheckBox databaseTest = new() { Text = "Banco + SELECT 1", Checked = true, AutoSize = true };
     private readonly CheckBox background = new() { Text = "Minimizar ao iniciar", AutoSize = true };
-    private readonly Button save = new() { Text = "Salvar", AutoSize = true };
-    private readonly Button delete = new() { Text = "Excluir", AutoSize = true };
-    private readonly Button use = new() { Text = "Usar em nova execução", AutoSize = true };
+    private readonly Button save = new ThemedButton() { Text = "Salvar", AutoSize = true };
+    private readonly Button delete = new ThemedButton() { Text = "Excluir", AutoSize = true };
+    private readonly Button use = new ThemedButton() { Text = "Usar em nova execução", AutoSize = true };
     private Guid? selectedId;
     private ConnectionProfileDraft? editorBaseline;
     private bool decisionPending;
@@ -46,13 +46,14 @@ public sealed class ProfilesPage : UserControl
     private readonly LatestUiRequest refreshRequests = new();
     private readonly LatestUiRequest mutationRequests = new();
     private readonly Dictionary<Control, UiLayout.FieldRow> fields = [];
-    private readonly Button create = new() { Text = "Novo perfil", AutoSize = true };
+    private readonly Button create = new ThemedButton() { Text = "Novo perfil", AutoSize = true };
     private readonly TableLayoutPanel editor;
     private readonly List<CompactFieldPair> compactPairs = [];
 
 
     public ProfilesPage(IConnectionProfileRepository repository)
     {
+        Font = UiTypography.Body;
         UiStyle.SetRole(save, UiRole.PrimaryAction);
         UiStyle.SetRole(delete, UiRole.DestructiveAction);
         UiStyle.SetRole(use, UiRole.PrimaryAction);
@@ -68,7 +69,7 @@ public sealed class ProfilesPage : UserControl
         databaseType.DisplayMember = nameof(DatabaseProfile.DisplayName);
         authentication.Items.AddRange(Enum.GetValues<SqlServerAuthentication>().Cast<object>().ToArray());
 
-        editor = UiLayout.Fields(120);
+        editor = UiLayout.Fields(112);
         var row = 0;
         AddSection(editor, row++, "Identificação");
         AddRow(editor, row++, "Nome:", name);

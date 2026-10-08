@@ -34,6 +34,7 @@ public sealed class ResultsControl : UserControl, IThemePaletteAware
 
     public ResultsControl()
     {
+        Font = UiTypography.Body;
         Dock = DockStyle.Fill;
         MinimumSize = new Size(0, 150);
 
@@ -41,7 +42,7 @@ public sealed class ResultsControl : UserControl, IThemePaletteAware
         ConfigureStatisticsGrid();
         statisticsGrid.VisibleChanged += (_, _) => RenderStatistics();
 
-        var tabs = new TabControl { Dock = DockStyle.Fill };
+        var tabs = new ThemedTabControl { Dock = DockStyle.Fill };
         var recentTab = new TabPage("Ciclos recentes");
         var statisticsTab = new TabPage("Resumo estatístico");
         var trendTab = new TabPage("Tendência");
@@ -130,7 +131,7 @@ public sealed class ResultsControl : UserControl, IThemePaletteAware
         grid.BorderStyle = BorderStyle.Fixed3D;
         grid.EnableHeadersVisualStyles = false;
         grid.ColumnHeadersDefaultCellStyle.BackColor = colors.GridHeader;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font(grid.Font, FontStyle.Bold);
+        grid.ColumnHeadersDefaultCellStyle.Font = UiTypography.Emphasis;
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Cycle", HeaderText = "Ciclo", FillWeight = 48 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Time", HeaderText = "Horário", FillWeight = 72 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Dns", HeaderText = "DNS", FillWeight = 68 });
@@ -156,7 +157,7 @@ public sealed class ResultsControl : UserControl, IThemePaletteAware
         statisticsGrid.BorderStyle = BorderStyle.Fixed3D;
         statisticsGrid.EnableHeadersVisualStyles = false;
         statisticsGrid.ColumnHeadersDefaultCellStyle.BackColor = colors.GridHeader;
-        statisticsGrid.ColumnHeadersDefaultCellStyle.Font = new Font(statisticsGrid.Font, FontStyle.Bold);
+        statisticsGrid.ColumnHeadersDefaultCellStyle.Font = UiTypography.Emphasis;
         statisticsGrid.Columns.Add("Stage", "Etapa");
         statisticsGrid.Columns.Add("Success", "Resultados");
         statisticsGrid.Columns.Add("Rate", "Taxa");
@@ -168,7 +169,7 @@ public sealed class ResultsControl : UserControl, IThemePaletteAware
         statisticsGrid.Columns.Add("Streak", "Falhas seguidas");
         statisticsGrid.Columns.Add("MaxStreak", "Maior sequência");
         statisticsGrid.Columns.Add("SinceFailure", "Desde última falha");
-        statisticsGrid.Columns[0].DefaultCellStyle.Font = new Font(statisticsGrid.Font, FontStyle.Bold);
+        statisticsGrid.Columns[0].DefaultCellStyle.Font = UiTypography.Emphasis;
         statisticsGrid.Columns[1].FillWeight = 130;
         statisticsGrid.Columns[10].FillWeight = 135;
 
@@ -187,6 +188,7 @@ public sealed class ResultsControl : UserControl, IThemePaletteAware
             row.Cells[8].Value = "0";
             row.Cells[9].Value = "0";
             row.Cells[10].Value = "Nunca";
+            SetRowAppearance(row, failure: false);
         }
     }
 

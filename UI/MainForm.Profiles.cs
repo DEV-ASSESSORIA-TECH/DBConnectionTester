@@ -5,7 +5,7 @@ namespace DBConnectionTester.UI;
 public sealed partial class MainForm
 {
     private readonly ComboBox executionProfile = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 250, AccessibleName = "Perfil da execução" };
-    private readonly Button manageProfiles = new() { Text = "Gerenciar perfis", AutoSize = true };
+    private readonly Button manageProfiles = new ThemedButton() { Text = "Gerenciar perfis", AutoSize = true };
     private readonly Label executionProfileState = new() { Text = "Configuração modificada", AutoSize = true, Visible = false, Margin = new Padding(8, 6, 3, 0) };
     private bool syncingExecutionProfile;
     private bool applyingExecutionProfile;
@@ -43,11 +43,12 @@ public sealed partial class MainForm
         };
         void FitHeight()
         {
-            var height = flow.GetPreferredSize(new Size(Math.Max(1, area.ClientSize.Width), 0)).Height + 6 * area.DeviceDpi / 96;
+            var height = flow.GetPreferredSize(new Size(Math.Max(1, area.ClientSize.Width), 0)).Height;
             if (area.Height != height) area.Height = height;
         }
         area.SizeChanged += (_, _) => FitHeight();
         flow.FontChanged += (_, _) => FitHeight();
+        manageProfiles.SizeChanged += (_, _) => FitHeight();
         executionProfileState.VisibleChanged += (_, _) => FitHeight();
         area.DpiChangedAfterParent += (_, _) => FitHeight();
         FitHeight();

@@ -133,6 +133,7 @@ public sealed class ExecutionLayoutTests
                                 }
                                 else Assert.True(connection.Bottom <= execution.Top);
                                 var quantity = Descendants(execution).OfType<Label>().Single(label => label.Text == "Quantidade:");
+                                Assert.True(quantity.Height <= quantity.Font.Height + 6, $"Quantity label wraps: {quantity.Bounds}");
                                 var quantityPosition = quantity.PointToScreen(Point.Empty).Y;
                                 var inputPosition = Field<NumericUpDown>(form, "numTests").PointToScreen(Point.Empty).Y;
                                 Assert.InRange(Math.Abs(quantityPosition - inputPosition), 0, 4);

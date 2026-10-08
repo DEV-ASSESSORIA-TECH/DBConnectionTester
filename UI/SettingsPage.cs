@@ -15,14 +15,14 @@ public sealed class SettingsPage : UserControl
     private readonly ComboBox theme = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly CheckBox legacyEnabled = new() { Text = "Gravar CSV e TXT durante a execução", AutoSize = true };
     private readonly TextBox legacyDirectory = new();
-    private readonly Button browseLegacy = new() { Text = "Escolher...", AutoSize = true };
-    private readonly Button save = new() { Text = "Salvar configurações", AutoSize = true };
-    private readonly Button clone = new() { Text = "Copiar banco atual…", AutoSize = true };
-    private readonly Button create = new() { Text = "Criar banco vazio…", AutoSize = true };
-    private readonly Button useExisting = new() { Text = "Escolher…", AutoSize = true };
-    private readonly Button package = new() { Text = "Criar pacote portátil", AutoSize = true };
-    private readonly Button restore = new() { Text = "Restaurar pacote", AutoSize = true };
-    private readonly Button openFolder = new() { Text = "Abrir pasta", AutoSize = true };
+    private readonly Button browseLegacy = new ThemedButton() { Text = "Escolher...", AutoSize = true };
+    private readonly Button save = new ThemedButton() { Text = "Salvar configurações", AutoSize = true };
+    private readonly Button clone = new ThemedButton() { Text = "Copiar banco atual…", AutoSize = true };
+    private readonly Button create = new ThemedButton() { Text = "Criar banco vazio…", AutoSize = true };
+    private readonly Button useExisting = new ThemedButton() { Text = "Escolher…", AutoSize = true };
+    private readonly Button package = new ThemedButton() { Text = "Criar pacote portátil", AutoSize = true };
+    private readonly Button restore = new ThemedButton() { Text = "Restaurar pacote", AutoSize = true };
+    private readonly Button openFolder = new ThemedButton() { Text = "Abrir pasta", AutoSize = true };
     private readonly CheckBox includeExecutable = new() { Text = "Incluir aplicativo", AutoSize = true };
     private readonly TextBox currentDatabasePath = new() { ReadOnly = true, AccessibleName = "Caminho do banco atual" };
     private readonly Label bankDetails = new() { AutoSize = true, Dock = DockStyle.Top, Visible = false };
@@ -30,8 +30,8 @@ public sealed class SettingsPage : UserControl
     private readonly Label storageSize = new() { AutoSize = true };
     private readonly Label bankInfo = new() { AutoSize = true, Dock = DockStyle.Top };
     private readonly CheckBox copyPreferences = new() { Text = "Copiar preferências atuais para o banco selecionado", AutoSize = true };
-    private readonly Button discard = new() { Text = "Descartar alterações", AutoSize = true };
-    private readonly Button cancelSwitch = new() { Text = "Cancelar troca pendente", AutoSize = true, Visible = false };
+    private readonly Button discard = new ThemedButton() { Text = "Descartar alterações", AutoSize = true };
+    private readonly Button cancelSwitch = new ThemedButton() { Text = "Cancelar troca pendente", AutoSize = true, Visible = false };
     private StoreDescriptor selectedBank;
     private StoreDescriptor savedBank;
     private bool savedCopyPreferences;
@@ -59,6 +59,7 @@ public sealed class SettingsPage : UserControl
         IApplicationSettingsRepository settingsRepository,
         IStoragePreferenceStore preferences)
     {
+        Font = UiTypography.Body;
         UiStyle.SetRole(save, UiRole.PrimaryAction);
         UiStyle.SetRole(settingsState, UiRole.Status);
         UiStyle.SetRole(operationStatus, UiRole.Status);
@@ -186,7 +187,7 @@ public sealed class SettingsPage : UserControl
         path.Controls.Add(useExisting, 1, 0);
         AddRow(table, 0, "Caminho:", path);
         AddWide(table, 1, bankInfo);
-        var detailsButton = new Button { Text = "Mostrar detalhes", AutoSize = true };
+        var detailsButton = new ThemedButton { Text = "Mostrar detalhes", AutoSize = true };
         var details = bankDetails;
         detailsButton.Click += (_, _) =>
         {
@@ -535,7 +536,7 @@ public sealed class SettingsPage : UserControl
 
     private static GroupBox Group(string title, Control content)
     {
-        var group = new GroupBox { Text = title, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        var group = new ThemedGroupBox { Text = title, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Padding = new Padding(6, 3, 6, 18), Margin = new Padding(3, 4, 3, 12) };
         group.Controls.Add(content);
         return group;

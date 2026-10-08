@@ -1,6 +1,6 @@
 namespace DBConnectionTester.UI;
 
-/// <summary>Current metric colors, kept unchanged until the visual theme is redesigned.</summary>
+/// <summary>Metric tokens shared by results and chart; theme palettes override these standalone defaults.</summary>
 public sealed record MetricColors
 {
     public Color GridBackground { get; init; } = SystemColors.Window;

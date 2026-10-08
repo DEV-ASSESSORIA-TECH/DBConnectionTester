@@ -129,6 +129,7 @@ public sealed partial class MainForm
         }
         if (summary.Stopped)
         {
+            UiStyle.SetState(lblStatus, UiState.Warning);
             lblStatus.Text = $"Teste interrompido. {summary.Completed:N0} verificações gravadas.";
             homePage.UpdateRunStatus(lblStatus.Text);
             trayStatus.Text = $"Interrompido - {summary.Completed:N0} testes";
@@ -140,6 +141,7 @@ public sealed partial class MainForm
         lblStatus.Text = string.IsNullOrWhiteSpace(summary.CsvPath)
             ? $"Concluído. {summary.Completed:N0} verificações salvas no histórico."
             : $"Concluído. Histórico salvo | CSV: {Path.GetFileName(summary.CsvPath)} | TXT: {Path.GetFileName(summary.TxtPath)}";
+        if (warnings.Count > 0) UiStyle.SetState(lblStatus, UiState.Warning);
         if (warnings.Count > 0)
             lblStatus.Text += $" | {warnings.Count} aviso(s) de saída";
         homePage.UpdateRunStatus(lblStatus.Text);

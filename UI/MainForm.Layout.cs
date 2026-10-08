@@ -34,11 +34,15 @@ public sealed partial class MainForm
             btnStart.Enabled = btnTestOnce.Enabled = canStart;
         };
         settingsPage.StorageSelected += descriptor =>
-            globalStatus.Text = descriptor.StoreId == applicationStore.Descriptor.StoreId &&
-                string.Equals(descriptor.DatabasePath, applicationStore.Descriptor.DatabasePath, StringComparison.OrdinalIgnoreCase)
-                ? $"Banco atual: {SettingsPage.ScopeName(applicationStore.Descriptor.Scope)}"
+        {
+            var current = descriptor.StoreId == applicationStore.Descriptor.StoreId &&
+                string.Equals(descriptor.DatabasePath, applicationStore.Descriptor.DatabasePath, StringComparison.OrdinalIgnoreCase);
+            UiStyle.SetState(globalStatus, current ? UiState.Normal : UiState.Warning);
+            globalStatus.Text = current ? $"Banco atual: {SettingsPage.ScopeName(applicationStore.Descriptor.Scope)}"
                 : "Troca pendente — reinicie para aplicar.";
+        };
 
+        UiStyle.SetRole(navigation, UiRole.NavigationContainer);
         var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176));
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -96,7 +100,7 @@ public sealed partial class MainForm
         };
         viewport.Controls.Add(settingsArea);
         resultsControl.Dock = DockStyle.Fill;
-        var note = new Label { Dock = DockStyle.Bottom, Height = Font.Height + 12, Padding = new Padding(3, 6, 3, 0),
+        var note = new Label { Dock = DockStyle.Bottom, Height = Font.Height + 8, Padding = new Padding(3, 6, 3, 0),
             Text = "Credenciais ficam somente na memória. O histórico completo é salvo no banco local." };
         var actions = BuildControlArea();
         var progress = BuildProgressArea();
@@ -129,7 +133,7 @@ public sealed partial class MainForm
                     }
                 }
                 var requiredHeight = columns == 2 ? Math.Max(connectionHeight, executionHeight) : connectionHeight + executionHeight;
-                var resultMinimum = 180 * root.DeviceDpi / 96;
+                var resultMinimum = 188 * root.DeviceDpi / 96;
                 var available = Math.Max(100 * root.DeviceDpi / 96, root.ClientSize.Height - actions.Height - profileArea.Height - progress.Height - note.Height - resultMinimum);
                 var height = Math.Min(requiredHeight, available);
                 if (viewport.Height != height) viewport.Height = height;
@@ -221,7 +225,7 @@ public sealed partial class MainForm
         else ActivatePage();
     }
 
-    private sealed class NavigationButton : Button
+    private sealed class NavigationButton : ThemedButton
     {
         private readonly Font regularFont;
         private readonly Font selectedFont;
@@ -229,8 +233,8 @@ public sealed partial class MainForm
         public NavigationButton()
         {
             UiStyle.SetRole(this, UiRole.Navigation);
-            regularFont = new Font(Font, FontStyle.Regular);
-            selectedFont = new Font(Font, FontStyle.Bold);
+            regularFont = new Font(UiTypography.Body, FontStyle.Regular);
+            selectedFont = new Font(UiTypography.Body, FontStyle.Bold);
             Font = regularFont;
         }
 
@@ -338,7 +342,7 @@ public sealed partial class MainForm
 
     private GroupBox BuildConnectionGroup()
     {
-        var table = CreateSettingsTable(labelWidth: 120);
+        var table = CreateSettingsTable(labelWidth: 110);
         var row = 0;
         AddRow(table, row++, "Tipo de banco:", cmbDatabaseType);
         hostRow = AddRow(table, row++, "Servidor / host:", txtHost);
@@ -368,7 +372,7 @@ public sealed partial class MainForm
 
     private GroupBox BuildExecutionGroup()
     {
-        var table = CreateSettingsTable(labelWidth: 80);
+        var table = CreateSettingsTable(labelWidth: 88);
         chkContinuous.Text = "Execução contínua";
         chkBackground.Text = "Minimizar ao iniciar";
         numTests.Width = 110;
@@ -424,8 +428,8 @@ public sealed partial class MainForm
             FlowDirection = FlowDirection.LeftToRight,
             Margin = Padding.Empty
         };
-        btnTestOnce.Font = new Font(btnTestOnce.Font, FontStyle.Bold);
-        btnStart.Font = new Font(btnStart.Font, FontStyle.Bold);
+        btnTestOnce.Font = UiTypography.Emphasis;
+        btnStart.Font = UiTypography.Emphasis;
         buttons.Controls.AddRange(new Control[]
         {
             btnTestOnce, btnStart, btnStop, btnOpenCsv, btnOpenLog, btnOpenFolder
@@ -443,7 +447,7 @@ public sealed partial class MainForm
                 measuredActions = key;
                 actionsHeight = buttons.GetPreferredSize(new Size(key.Item1, 0)).Height;
             }
-            var height = actionsHeight + 8 * area.DeviceDpi / 96;
+            var height = actionsHeight;
             if (area.Height != height) area.Height = height;
         }
         // Invalidate the measurement when button content changes (e.g. DPI scaling).
@@ -451,6 +455,7 @@ public sealed partial class MainForm
         {
             button.TextChanged += (_, _) => { measuredActions = null; UpdateHeight(); };
             button.FontChanged += (_, _) => { measuredActions = null; UpdateHeight(); };
+            button.PaddingChanged += (_, _) => { measuredActions = null; UpdateHeight(); };
         }
         area.SizeChanged += (_, _) => UpdateHeight();
         area.FontChanged += (_, _) => UpdateHeight();
@@ -509,7 +514,7 @@ public sealed partial class MainForm
 
     private static GroupBox CreateGroup(string title, Control content)
     {
-        var group = new GroupBox
+        var group = new ThemedGroupBox
         {
             Text = title,
             Dock = DockStyle.Top,

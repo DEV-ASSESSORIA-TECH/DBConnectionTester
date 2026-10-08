@@ -10,25 +10,31 @@ namespace DBConnectionTester.Tests;
 public sealed class ThemeFoundationTests
 {
     [Fact]
-    public Task SemanticRolesKeepCurrentColorsInAllExistingThemes() => UiStyleTests.OnUiThread(() =>
+    public Task SemanticRolesUseModernPaletteAndPreserveGeometryAcrossThemeChanges() => UiStyleTests.OnUiThread(() =>
     {
-        foreach (var theme in Enum.GetValues<ApplicationTheme>())
+        using var form = new Form();
+        using var button = new ThemedButton { Text = "Salvar", AutoSize = true };
+        form.Controls.Add(button);
+        foreach (var theme in new[] { ApplicationTheme.Light, ApplicationTheme.Dark })
         {
             var palette = ThemeManager.PaletteFor(theme);
-            using var form = new Form();
-            using var button = new Button { Bounds = new Rectangle(10, 10, 100, 30) };
-            form.Controls.Add(button);
+            UiStyle.SetRole(button, UiRole.PrimaryAction);
+            ThemeManager.ApplyPalette(form, palette);
+            Assert.Equal(palette.Accent, button.BackColor);
+            Assert.Equal(Color.White, button.ForeColor);
+            Assert.True(button.Height >= 32);
+            UiStyle.SetRole(button, UiRole.DestructiveAction);
+            Assert.NotEqual(palette.Accent, button.BackColor);
+            UiStyle.SetRole(button, UiRole.NeutralAction);
+            Assert.Equal(palette.SurfaceAlternative, button.BackColor);
+            Assert.Equal(palette.Text, button.ForeColor);
             var bounds = button.Bounds;
-            foreach (var role in new[] { UiRole.PrimaryAction, UiRole.DestructiveAction, UiRole.NeutralAction, UiRole.Navigation })
-            {
-                UiStyle.SetRole(button, role);
-                ThemeManager.ApplyPalette(form, palette);
-                Assert.Equal(palette.SurfaceAlternative, button.BackColor);
-                Assert.Equal(palette.Text, button.ForeColor);
-                Assert.Equal(bounds, button.Bounds);
-            }
-            Assert.Equal(Color.FromArgb(255, 242, 242), palette.Metrics.FailureBackground);
-            Assert.Equal(Color.FromArgb(55, 105, 155), palette.Metrics.Series);
+            ThemeManager.ApplyPalette(form, palette);
+            Assert.Equal(bounds, button.Bounds);
+            button.Enabled = false;
+            Assert.Equal(palette.DisabledBackground, button.BackColor);
+            Assert.Equal(palette.DisabledText, button.ForeColor);
+            button.Enabled = true;
         }
     });
 
@@ -42,7 +48,7 @@ public sealed class ThemeFoundationTests
         UiStyle.SetState(primary, UiState.Busy);
         var palette = ThemeManager.PaletteFor(ApplicationTheme.Light);
         palette = palette with { Roles = palette.Roles
-            .Add((UiRole.PrimaryAction, UiState.Normal), new(Color.Blue, Color.White))
+            .SetItem((UiRole.PrimaryAction, UiState.Normal), new(Color.Blue, Color.White))
             .Add((UiRole.PrimaryAction, UiState.Busy), new(Color.Gold, Color.Black))
             .Add((UiRole.NeutralAction, UiState.Error), new(Color.Red, Color.White)) };
         ThemeManager.ApplyPalette(root, palette);
@@ -76,6 +82,9 @@ public sealed class ThemeFoundationTests
         Assert.Same(snapshot, typeof(ResultsControl).GetField("latestStatistics", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(results));
         Assert.All(grids, grid => Assert.Equal(Color.Magenta, grid.Rows[0].DefaultCellStyle.BackColor));
         Assert.Equal(2, grids.Length);
+        results.ResetResults();
+        var statisticsGrid = grids.Single(grid => grid.Columns.Contains("Median"));
+        Assert.All(statisticsGrid.Rows.Cast<DataGridViewRow>(), row => Assert.Equal(palette.Metrics.NormalStatisticsBackground, row.DefaultCellStyle.BackColor));
         form.Close();
     });
 

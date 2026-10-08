@@ -11,10 +11,11 @@ public sealed class HomePage : UserControl
     private readonly Label statusDetail = new() { AutoSize = true, Dock = DockStyle.Top, Text = "O andamento da execução aparece aqui durante o teste." };
     private readonly Label recentFeedback = new() { AutoSize = true, Dock = DockStyle.Top, Text = "Carregando últimas execuções…" };
     private readonly DataGridView recentRuns = new();
-    private readonly Button retry = new() { Text = "Tentar novamente", AutoSize = true, Visible = false };
+    private readonly Button retry = new ThemedButton() { Text = "Tentar novamente", AutoSize = true, Visible = false };
 
     public HomePage(IRecentRunHistoryRepository history)
     {
+        Font = UiTypography.Body;
         UiStyle.SetRole(statusValue, UiRole.Status);
         UiStyle.SetRole(statusDetail, UiRole.SecondaryText);
         UiStyle.SetRole(recentFeedback, UiRole.Status);
@@ -148,7 +149,7 @@ public sealed class HomePage : UserControl
         base.Dispose(disposing);
     }
 
-    private static Button ActionButton(string text) => new() { Text = text, AutoSize = true, Padding = new Padding(8, 4, 8, 4) };
+    private static Button ActionButton(string text) => new ThemedButton() { Text = text, AutoSize = true, Padding = new Padding(8, 4, 8, 4) };
     private static TableLayoutPanel VerticalTable()
     {
         var table = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1 };
@@ -157,7 +158,7 @@ public sealed class HomePage : UserControl
     }
     private static GroupBox Group(string title, Control content)
     {
-        var group = new GroupBox
+        var group = new ThemedGroupBox
         {
             Text = title, Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Padding = new Padding(10, 8, 10, 14), Margin = new Padding(3, 0, 3, 16)
