@@ -71,6 +71,7 @@ public sealed class HistoryPage : UserControl
         nextCyclePage.Click += async (_, _) => { if (cyclePage < cyclePages) { cyclePage++; await LoadCyclesAsync(); } };
         runs.SelectionChanged += async (_, _) => await LoadSelectedRunAsync();
         chartStage.SelectedIndexChanged += (_, _) => UpdateChart();
+        chart.VisibleChanged += (_, _) => UpdateChart();
         AddExportButton("CSV", RunExportFormat.Csv, "csv");
         AddExportButton("TXT", RunExportFormat.Text, "txt");
         AddExportButton("JSON", RunExportFormat.Json, "json");
@@ -230,6 +231,7 @@ public sealed class HistoryPage : UserControl
 
     private void UpdateChart()
     {
+        if (!chart.Visible) return;
         var stageName = chartStage.SelectedItem as string ?? "DatabaseConnect";
         var points = visibleCycles.Select(cycle =>
         {

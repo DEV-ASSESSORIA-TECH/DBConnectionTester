@@ -67,6 +67,7 @@ public sealed class StatisticsDashboardControl : UserControl
         layout.Controls.Add(metrics, 0, 1);
         layout.Controls.Add(chart, 0, 2);
         Controls.Add(layout);
+        VisibleChanged += (_, _) => RefreshDashboard();
         ResetDashboard();
     }
 
@@ -103,6 +104,7 @@ public sealed class StatisticsDashboardControl : UserControl
 
     private void RefreshDashboard()
     {
+        if (!Visible) return;
         if (stageSelector.SelectedItem is not StageOption option)
             return;
 

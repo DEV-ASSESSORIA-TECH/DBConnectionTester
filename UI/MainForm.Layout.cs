@@ -104,7 +104,7 @@ public sealed partial class MainForm
 
     private Button CreateNavigationButton(string title, UserControl page)
     {
-        var button = new Button
+        var button = new NavigationButton
         {
             Text = title,
             Width = 150,
@@ -119,6 +119,7 @@ public sealed partial class MainForm
         return button;
     }
 
+    private NavigationButton? activeNavigationButton;
     private UserControl? activePage;
     private void ShowPage(string title, UserControl page)
     {
@@ -126,14 +127,36 @@ public sealed partial class MainForm
         pageHost.SuspendLayout();
         try
         {
-            foreach (var item in navigationButtons)
-                item.Value.Font = new Font(item.Value.Font, item.Key == title ? FontStyle.Bold : FontStyle.Regular);
+            activeNavigationButton?.SetSelected(false);
+            activeNavigationButton = (NavigationButton)navigationButtons[title];
+            activeNavigationButton.SetSelected(true);
             if (activePage is not null) activePage.Visible = false;
             activePage = page;
             page.Visible = true;
             page.BringToFront();
         }
         finally { pageHost.ResumeLayout(true); }
+    }
+
+    private sealed class NavigationButton : Button
+    {
+        private readonly Font regularFont;
+        private readonly Font selectedFont;
+
+        public NavigationButton()
+        {
+            regularFont = new Font(Font, FontStyle.Regular);
+            selectedFont = new Font(Font, FontStyle.Bold);
+            Font = regularFont;
+        }
+
+        public void SetSelected(bool selected) => Font = selected ? selectedFont : regularFont;
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if (disposing) { regularFont.Dispose(); selectedFont.Dispose(); }
+        }
     }
 
     internal void NavigateTo(string title)

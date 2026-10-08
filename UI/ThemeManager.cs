@@ -42,6 +42,7 @@ public static class ThemeManager
         ApplyControl(form, palette, theme == ApplicationTheme.Dark);
         form.BackColor = palette.Window;
         form.ForeColor = palette.Text;
+        form.Invalidate(true);
     }
 
     private static void ApplyControl(Control control, ThemePalette palette, bool dark)
@@ -82,6 +83,6 @@ public static class ThemeManager
 
         foreach (Control child in control.Controls)
             ApplyControl(child, palette, dark);
-        control.Invalidate(true);
+
     }
 }

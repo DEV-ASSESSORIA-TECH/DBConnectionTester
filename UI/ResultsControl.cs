@@ -14,6 +14,7 @@ public sealed class ResultsControl : UserControl
     private readonly DataGridView grid = new();
     private readonly DataGridView statisticsGrid = new();
     private readonly StatisticsDashboardControl statisticsDashboard = new();
+    private RunStatisticsSnapshot? latestStatistics;
 
     public ResultsControl()
     {
@@ -37,6 +38,7 @@ public sealed class ResultsControl : UserControl
 
         ConfigureGrid();
         ConfigureStatisticsGrid();
+        statisticsGrid.VisibleChanged += (_, _) => RenderStatistics();
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
         var recentTab = new TabPage("Ciclos recentes");
@@ -80,12 +82,19 @@ public sealed class ResultsControl : UserControl
 
     public void UpdateStatistics(RunStatisticsSnapshot statistics)
     {
+        latestStatistics = statistics;
+        RenderStatistics();
+        statisticsDashboard.UpdateStatistics(statistics);
+    }
+
+    private void RenderStatistics()
+    {
+        if (!statisticsGrid.Visible || latestStatistics is not { } statistics) return;
         UpdateStatisticsRow(0, statistics.Dns);
         UpdateStatisticsRow(1, statistics.Ping);
         UpdateStatisticsRow(2, statistics.Tcp);
         UpdateStatisticsRow(3, statistics.DatabaseConnect);
         UpdateStatisticsRow(4, statistics.DatabaseQuery);
-        statisticsDashboard.UpdateStatistics(statistics);
     }
 
     public void AddCycle(TestCycleResult cycle)
@@ -189,6 +198,7 @@ public sealed class ResultsControl : UserControl
 
     private void ResetStatistics()
     {
+        latestStatistics = null;
         foreach (DataGridViewRow row in statisticsGrid.Rows)
         {
             for (var column = 1; column <= 7; column++)
