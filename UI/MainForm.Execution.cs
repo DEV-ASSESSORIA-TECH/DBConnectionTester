@@ -8,7 +8,7 @@ public sealed partial class MainForm
 {
     private async Task StartAsync(bool singleRun)
     {
-        if (runCoordinator.IsRunning)
+        if (runCoordinator.IsRunning || settingsPage.IsBusy)
             return;
 
         var settings = TryBuildSettings();
@@ -201,6 +201,7 @@ public sealed partial class MainForm
     {
         if (!runCoordinator.IsRunning)
         {
+            if (settingsPage.IsBusy) { e.Cancel = true; exitRequested = false; return; }
             if (profileCloseApproved || (!profilesPage.HasUnsavedChanges && !profilesPage.IsBusy) || e.CloseReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing) return;
             e.Cancel = true;
             if (profileClosePending) return;
@@ -242,8 +243,8 @@ public sealed partial class MainForm
         var active = state is RunUiState.Running or RunUiState.Stopping;
         var stopping = state == RunUiState.Stopping;
         SetConfigurationEnabled(!active);
-        btnTestOnce.Enabled = !active;
-        btnStart.Enabled = !active;
+        btnTestOnce.Enabled = !active && !settingsPage.IsBusy;
+        btnStart.Enabled = !active && !settingsPage.IsBusy;
         btnStop.Enabled = active && !stopping;
         trayStop.Enabled = active && !stopping;
         profilesPage.SetEditingEnabled(!active);

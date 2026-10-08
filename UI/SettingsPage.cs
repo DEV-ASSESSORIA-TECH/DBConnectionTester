@@ -25,6 +25,13 @@ public sealed class SettingsPage : UserControl
     private readonly Button openFolder = new() { Text = "Abrir pasta", AutoSize = true };
     private readonly CheckBox includeExecutable = new() { Text = "Incluir EXE single-file", AutoSize = true };
     private ApplicationSettings currentSettings;
+    private bool operationsEnabled = true;
+    private bool operationPending;
+    private readonly Label operationStatus = new() { AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 4, 3, 8) };
+    internal Action<string, string, bool>? MessageReporter;
+    public event Action<bool>? BusyChanged;
+    internal bool IsBusy => operationPending;
+
 
     public SettingsPage(
         SqliteApplicationStore store,
@@ -46,6 +53,7 @@ public sealed class SettingsPage : UserControl
 
         var root = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
         root.Controls.Add(new Label { Text = "Configurações", AutoSize = true, Font = new Font(Font.FontFamily, 20, FontStyle.Bold), Margin = new Padding(3, 3, 3, 16) });
+        root.Controls.Add(operationStatus);
         root.Controls.Add(BuildAppearanceGroup());
         root.Controls.Add(BuildStorageGroup());
         root.Controls.Add(BuildPackageGroup());
@@ -59,7 +67,11 @@ public sealed class SettingsPage : UserControl
         useExisting.Click += async (_, _) => await UseExistingAsync();
         package.Click += async (_, _) => await CreatePackageAsync();
         restore.Click += async (_, _) => await RestorePackageAsync();
-        openFolder.Click += (_, _) => Process.Start(new ProcessStartInfo("explorer.exe", Path.GetDirectoryName(store.Descriptor.DatabasePath)!) { UseShellExecute = true });
+        openFolder.Click += async (_, _) => await RunOperationAsync("Abrindo pasta…", () =>
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", Path.GetDirectoryName(store.Descriptor.DatabasePath)!) { UseShellExecute = true });
+            return Task.FromResult(true);
+        });
     }
 
     public event Action<ApplicationSettings>? SettingsSaved;
@@ -70,7 +82,8 @@ public sealed class SettingsPage : UserControl
 
     public void SetOperationsEnabled(bool enabled)
     {
-        clone.Enabled = create.Enabled = useExisting.Enabled = package.Enabled = restore.Enabled = save.Enabled = enabled;
+        operationsEnabled = enabled;
+        UpdateOperationState();
     }
 
     private GroupBox BuildAppearanceGroup()
@@ -119,42 +132,28 @@ public sealed class SettingsPage : UserControl
         return Group("Pacote portátil", panel);
     }
 
-    private async Task SaveAsync()
+    internal Task<bool> SaveAsync() => RunOperationAsync("Salvando configurações…", async () =>
     {
-        try
-        {
-            var settings = new ApplicationSettings(
-                theme.SelectedItem is ApplicationTheme selected ? selected : ApplicationTheme.System,
-                legacyEnabled.Checked,
-                legacyDirectory.Text.Trim());
-            await settingsRepository.SaveAsync(settings);
-            currentSettings = settings;
-            SettingsSaved?.Invoke(settings);
-        }
-        catch (Exception exception) when (exception is ArgumentException or ApplicationStoreException)
-        {
-            MessageBox.Show(this, exception.Message, "Configurações", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
+        var settings = new ApplicationSettings(SelectedTheme, legacyEnabled.Checked, legacyDirectory.Text.Trim());
+        await Task.Run(() => settingsRepository.SaveAsync(settings));
+        currentSettings = settings;
+        SettingsSaved?.Invoke(settings);
+        operationStatus.Text = "Configurações salvas.";
+        return true;
+    });
 
-    private async Task CreateOrCloneAsync(bool copyCurrent)
+    private Task<bool> CreateOrCloneAsync(bool copyCurrent) => RunOperationAsync(
+        copyCurrent ? "Copiando armazenamento…" : "Criando armazenamento…", async () =>
     {
-        try
-        {
-            var scope = targetScope.SelectedItem is StorageScope selected ? selected : StorageScope.LocalUser;
-            var directory = await ResolveTargetDirectoryAsync(scope);
-            if (directory is null)
-                return;
-            var selectedStore = copyCurrent
-                ? await migration.CloneAsync(store, directory, scope)
-                : await migration.CreateEmptyAsync(directory, scope);
-            Activate(selectedStore.Descriptor);
-        }
-        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or ApplicationStoreException)
-        {
-            MessageBox.Show(this, exception.Message, "Armazenamento", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
+        var scope = targetScope.SelectedItem is StorageScope selected ? selected : StorageScope.LocalUser;
+        var directory = await ResolveTargetDirectoryAsync(scope);
+        if (directory is null) return false;
+        var selectedStore = await Task.Run(() => copyCurrent
+            ? migration.CloneAsync(store, directory, scope)
+            : migration.CreateEmptyAsync(directory, scope));
+        await ActivateAsync(selectedStore.Descriptor);
+        return true;
+    });
 
     private async Task<string?> ResolveTargetDirectoryAsync(StorageScope scope)
     {
@@ -175,63 +174,87 @@ public sealed class SettingsPage : UserControl
         return Path.GetDirectoryName(databasePath);
     }
 
-    private async Task UseExistingAsync()
+    private Task<bool> UseExistingAsync() => RunOperationAsync("Verificando armazenamento…", async () =>
     {
         using var dialog = new OpenFileDialog { Filter = "Banco do DB Connection Tester (data.db)|data.db|SQLite (*.db)|*.db" };
-        if (dialog.ShowDialog(this) != DialogResult.OK)
-            return;
-        try
-        {
-            var selected = await StorageMigrationService.UseExistingAsync(dialog.FileName);
-            Activate(selected.Descriptor);
-        }
-        catch (Exception exception) when (exception is ApplicationStoreException or IOException)
-        {
-            MessageBox.Show(this, exception.Message, "Armazenamento", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
+        if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+        var path = dialog.FileName;
+        var selected = await Task.Run(() => StorageMigrationService.UseExistingAsync(path));
+        await ActivateAsync(selected.Descriptor);
+        return true;
+    });
 
-    private async Task CreatePackageAsync()
+    private Task<bool> CreatePackageAsync() => RunOperationAsync("Criando pacote portátil…", async () =>
     {
         using var dialog = new SaveFileDialog { Filter = "Pacote portátil (*.zip)|*.zip", FileName = $"DBConnectionTester-portable-{DateTime.Now:yyyyMMdd}.zip" };
-        if (dialog.ShowDialog(this) != DialogResult.OK)
-            return;
-        try
-        {
-            await new PortablePackageService(store).CreateAsync(dialog.FileName, includeExecutable.Checked);
-            MessageBox.Show(this, "Pacote portátil criado com sucesso.", "Pacote portátil", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (Exception exception) when (exception is IOException or InvalidOperationException or ApplicationStoreException)
-        {
-            MessageBox.Show(this, exception.Message, "Pacote portátil", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
+        if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+        var path = dialog.FileName;
+        var include = includeExecutable.Checked;
+        await Task.Run(() => new PortablePackageService(store).CreateAsync(path, include));
+        ReportMessage("Pacote portátil criado com sucesso.", "Pacote portátil", false);
+        return true;
+    });
 
-    private async Task RestorePackageAsync()
+    private Task<bool> RestorePackageAsync() => RunOperationAsync("Restaurando pacote…", async () =>
     {
         using var source = new OpenFileDialog { Filter = "Pacote portátil (*.zip)|*.zip" };
-        if (source.ShowDialog(this) != DialogResult.OK)
-            return;
+        if (source.ShowDialog(this) != DialogResult.OK) return false;
         using var destination = new FolderBrowserDialog { Description = "Escolha uma pasta vazia para restaurar o pacote" };
-        if (destination.ShowDialog(this) != DialogResult.OK)
-            return;
+        if (destination.ShowDialog(this) != DialogResult.OK) return false;
+        var path = source.FileName;
+        var directory = destination.SelectedPath;
+        var restored = await Task.Run(() => new PortablePackageService(store).RestoreAsync(path, directory));
+        await ActivateAsync(restored.Store);
+        return true;
+    });
+
+    private async Task ActivateAsync(StoreDescriptor descriptor)
+    {
+        await Task.Run(() => preferences.Write(new StoragePreference(descriptor.StoreId, descriptor.DatabasePath, descriptor.Scope, null)));
+        StorageSelected?.Invoke(descriptor);
+        ReportMessage("O armazenamento foi selecionado. Reinicie o aplicativo para concluir a troca.", "Armazenamento", false);
+    }
+
+    private void UpdateOperationState()
+    {
+        var enabled = operationsEnabled && !IsBusy;
+        foreach (var control in new Control[] { clone, create, useExisting, package, restore, save, openFolder,
+            theme, legacyEnabled, legacyDirectory, browseLegacy, targetScope, includeExecutable }) control.Enabled = enabled;
+        BusyChanged?.Invoke(IsBusy);
+    }
+
+    internal async Task<bool> RunOperationAsync(string status, Func<Task<bool>> operation)
+    {
+        if (!operationsEnabled || IsBusy || IsDisposed) return false;
+        operationPending = true;
+        operationStatus.Text = status;
+        UpdateOperationState();
         try
         {
-            var restored = await new PortablePackageService(store).RestoreAsync(source.FileName, destination.SelectedPath);
-            Activate(restored.Store);
+            var result = await operation();
+            if (!IsDisposed && operationStatus.Text == status) operationStatus.Text = result ? "Operação concluída." : "Operação cancelada.";
+            return result;
         }
-        catch (Exception exception) when (exception is IOException or InvalidDataException or ApplicationStoreException)
+        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException or ApplicationStoreException)
         {
-            MessageBox.Show(this, exception.Message, "Restaurar pacote", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (!IsDisposed)
+            {
+                operationStatus.Text = "Não foi possível concluir a operação.";
+                ReportMessage(exception.Message, "Configurações", true);
+            }
+            return false;
+        }
+        finally
+        {
+            operationPending = false;
+            if (!IsDisposed) UpdateOperationState();
         }
     }
 
-    private void Activate(StoreDescriptor descriptor)
+    private void ReportMessage(string message, string title, bool error)
     {
-        preferences.Write(new StoragePreference(descriptor.StoreId, descriptor.DatabasePath, descriptor.Scope, null));
-        StorageSelected?.Invoke(descriptor);
-        MessageBox.Show(this, "O armazenamento foi selecionado. Reinicie o aplicativo para concluir a troca.",
-            "Armazenamento", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        if (MessageReporter is { } reporter) reporter(message, title, error);
+        else MessageBox.Show(this, message, title, MessageBoxButtons.OK, error ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
     }
 
     private void LoadSettings(ApplicationSettings settings)

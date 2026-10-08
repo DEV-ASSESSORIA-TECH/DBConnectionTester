@@ -27,6 +27,11 @@ public sealed partial class MainForm
         profilesPage.UseRequested += ApplyProfile;
         profilesPage.ProfilesChanged += SetExecutionProfiles;
         settingsPage.SettingsSaved += ApplyApplicationSettings;
+        settingsPage.BusyChanged += busy =>
+        {
+            var canStart = !busy && runUiState is not (RunUiState.Running or RunUiState.Stopping);
+            btnStart.Enabled = btnTestOnce.Enabled = canStart;
+        };
         settingsPage.StorageSelected += descriptor =>
             globalStatus.Text = $"Próxima inicialização: {descriptor.Scope} · {descriptor.DatabasePath}";
 

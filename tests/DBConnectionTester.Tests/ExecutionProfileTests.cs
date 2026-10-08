@@ -102,6 +102,22 @@ public sealed class ExecutionProfileTests
                         Assert.Equal(2, selector.Items.Count);
                         Assert.Equal("override", Field<TextBox>(form, "txtHost").Text);
                         Assert.Null(Field<Guid?>(form, "selectedProfileId"));
+                        var settingsPage = Field<SettingsPage>(form, "settingsPage");
+                        var releaseSettings = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                        var settingsWork = settingsPage.RunOperationAsync("Working", async () => { await releaseSettings.Task; return true; });
+                        try
+                        {
+                            Assert.False(Field<Button>(form, "btnStart").Enabled);
+                            Assert.False(Field<Button>(form, "btnTestOnce").Enabled);
+                            var start = (Task)typeof(MainForm).GetMethod("StartAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(form, new object[] { true })!;
+                            await start;
+                            Assert.Equal("Idle", Field<object>(form, "runUiState").ToString());
+                            form.Close();
+                            Assert.False(form.IsDisposed);
+                        }
+                        finally { releaseSettings.TrySetResult(); }
+                        Assert.True(await settingsWork);
+                        Assert.True(Field<Button>(form, "btnStart").Enabled);
                         finished.TrySetResult();
                     }
                     catch (Exception error) { finished.TrySetException(error); }
