@@ -7,6 +7,9 @@ public sealed class ProfilesPage : UserControl
 {
     private readonly IConnectionProfileRepository repository;
     private readonly ListBox profiles = new() { Dock = DockStyle.Fill, DisplayMember = nameof(SavedConnectionProfile.Name) };
+    private readonly Label profilesTitle = new() { Text = "Perfis · 0", AutoSize = true, Margin = new Padding(3, 3, 3, 10) };
+    private readonly Label emptyProfiles = new() { Text = "Carregando perfis…", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, AccessibleName = "Lista de perfis vazia" };
+    private readonly ToolTip profileTip = new();
     private readonly TextBox name = new();
     private readonly ComboBox databaseType = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox host = new();
@@ -21,10 +24,10 @@ public sealed class ProfilesPage : UserControl
     private readonly NumericUpDown interval = new() { Minimum = 0, Maximum = 3600, DecimalPlaces = 1, Value = 5 };
     private readonly NumericUpDown timeout = new() { Minimum = 1, Maximum = 120, Value = 5 };
     private readonly CheckBox dns = new() { Text = "DNS", Checked = true, AutoSize = true };
-    private readonly CheckBox ping = new() { Text = "Ping", Checked = true, AutoSize = true };
+    private readonly CheckBox ping = new() { Text = "Ping / ICMP", Checked = true, AutoSize = true };
     private readonly CheckBox tcp = new() { Text = "TCP", Checked = true, AutoSize = true };
-    private readonly CheckBox databaseTest = new() { Text = "Banco", Checked = true, AutoSize = true };
-    private readonly CheckBox background = new() { Text = "Iniciar na bandeja", AutoSize = true };
+    private readonly CheckBox databaseTest = new() { Text = "Banco + SELECT 1", Checked = true, AutoSize = true };
+    private readonly CheckBox background = new() { Text = "Minimizar ao iniciar", AutoSize = true };
     private readonly Button save = new() { Text = "Salvar", AutoSize = true };
     private readonly Button delete = new() { Text = "Excluir", AutoSize = true };
     private readonly Button use = new() { Text = "Usar em nova execução", AutoSize = true };
@@ -62,11 +65,11 @@ public sealed class ProfilesPage : UserControl
         AddSection(editor, row++, "Identificação");
         AddRow(editor, row++, "Nome:", name);
         AddSection(editor, row++, "Conexão");
-        AddRow(editor, row++, "Tipo:", databaseType);
-        AddRow(editor, row++, "Servidor:", host);
+        AddRow(editor, row++, "Tipo de banco:", databaseType);
+        AddRow(editor, row++, "Servidor / host:", host);
         AddRow(editor, row++, "Porta:", port);
         AddRow(editor, row++, "Usuário:", user);
-        AddRow(editor, row++, "Banco:", database);
+        AddRow(editor, row++, "Banco (opcional):", database);
         AddRow(editor, row++, "Arquivo SQLite:", sqliteFile);
         AddRow(editor, row++, "Autenticação SQL Server:", authentication);
         AddRow(editor, row++, "Driver ODBC:", odbcDriver);
@@ -78,8 +81,8 @@ public sealed class ProfilesPage : UserControl
         AddRow(editor, row++, "Timeout (s):", timeout);
         var layers = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         layers.Controls.AddRange(new Control[] { dns, ping, tcp, databaseTest });
-        AddRow(editor, row++, "Camadas:", layers);
-        AddRow(editor, row++, "Comportamento:", background);
+        AddRow(editor, row++, "Etapas:", layers);
+        AddRow(editor, row++, "Ao iniciar:", background);
         editor.RowCount = row;
         compactPairs.Add(new CompactFieldPair(editor, fields[host], fields[port], 110));
         compactPairs.Add(new CompactFieldPair(editor, fields[interval], fields[timeout], 90));
@@ -122,11 +125,24 @@ public sealed class ProfilesPage : UserControl
         var listPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3 };
         listPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         listPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        listPanel.Controls.Add(new Label { Text = "Perfis", AutoSize = true, Font = new Font(Font.FontFamily, 20, FontStyle.Bold), Margin = new Padding(3, 3, 3, 14) });
+        profilesTitle.Font = new Font(Font.FontFamily, 14, FontStyle.Bold);
+        listPanel.Controls.Add(profilesTitle);
         listPanel.RowStyles.Insert(1, new RowStyle(SizeType.AutoSize));
         listPanel.Controls.Add(create, 0, 1);
         create.Margin = new Padding(3, 0, 3, 10);
-        listPanel.Controls.Add(profiles, 0, 2);
+        var listHost = new BufferedPanel { Dock = DockStyle.Fill };
+        listHost.Controls.Add(profiles);
+        listHost.Controls.Add(emptyProfiles);
+        emptyProfiles.BringToFront();
+        listPanel.Controls.Add(listHost, 0, 2);
+        profiles.MouseMove += (_, e) =>
+        {
+            var index = profiles.IndexFromPoint(e.Location);
+            var text = index >= 0 && profiles.Items[index] is SavedConnectionProfile item
+                && TextRenderer.MeasureText(item.Name, profiles.Font).Width > profiles.ClientSize.Width - 8 ? item.Name : "";
+            if (profileTip.GetToolTip(profiles) != text) profileTip.SetToolTip(profiles, text);
+        };
+        profiles.MouseLeave += (_, _) => profileTip.SetToolTip(profiles, "");
         split.Panel1.Padding = new Padding(0, 0, 12, 0);
         split.Panel1.Controls.Add(listPanel);
         split.Panel2.Controls.Add(editorHost);
@@ -202,6 +218,9 @@ public sealed class ProfilesPage : UserControl
                 SetListSelection(selected);
                 LoadSelection();
             }
+            profilesTitle.Text = $"Perfis · {items.Count}";
+            emptyProfiles.Text = "Nenhum perfil salvo.\nClique em Novo perfil para criar.";
+            emptyProfiles.Visible = items.Count == 0;
             ProfilesChanged?.Invoke(items);
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
@@ -220,7 +239,7 @@ public sealed class ProfilesPage : UserControl
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { refreshRequests.Dispose(); mutationRequests.Dispose(); }
+        if (disposing) { refreshRequests.Dispose(); mutationRequests.Dispose(); profileTip.Dispose(); }
         base.Dispose(disposing);
     }
 
