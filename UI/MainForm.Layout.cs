@@ -274,10 +274,15 @@ public sealed partial class MainForm
         {
             Dock = DockStyle.Top,
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
             RowCount = 3,
             Margin = new Padding(0, 6, 0, 6)
         };
+        // Keep each row at its content height; the split below owns the remaining space.
+        area.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        area.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        area.RowStyles.Add(new RowStyle(SizeType.Absolute, lblStatus.Font.Height * 2 + 8));
 
         var buttons = new FlowLayoutPanel
         {
@@ -295,12 +300,9 @@ public sealed partial class MainForm
 
         progressBar.Margin = new Padding(3, 8, 3, 3);
         lblStatus.Margin = new Padding(4, 4, 4, 0);
+        lblStatus.AutoSize = false;
+        lblStatus.Dock = DockStyle.Fill;
         area.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        area.SizeChanged += (_, _) =>
-        {
-            var width = Math.Max(1, area.ClientSize.Width - 8);
-            if (lblStatus.MaximumSize.Width != width) lblStatus.MaximumSize = new Size(width, 0);
-        };
         area.Controls.Add(buttons, 0, 0);
         area.Controls.Add(progressBar, 0, 1);
         area.Controls.Add(lblStatus, 0, 2);
