@@ -81,7 +81,7 @@ public sealed partial class MainForm
         {
             // Base the transition on the viewport width so its vertical scrollbar
             // cannot change the threshold when resizing back to two columns.
-            var count = viewport.Width * 96d / settingsArea.DeviceDpi >= 740 ? 2 : 1;
+            var count = viewport.Width * 96d / settingsArea.DeviceDpi >= 680 ? 2 : 1;
             if (columns == count) return;
             columns = count;
             settingsArea.SuspendLayout();
@@ -332,7 +332,7 @@ public sealed partial class MainForm
 
     private GroupBox BuildConnectionGroup()
     {
-        var table = CreateSettingsTable(labelWidth: 130);
+        var table = CreateSettingsTable(labelWidth: 120);
         var row = 0;
         AddRow(table, row++, "Tipo de banco:", cmbDatabaseType);
         hostRow = AddRow(table, row++, "Servidor / host:", txtHost);
@@ -362,7 +362,7 @@ public sealed partial class MainForm
 
     private GroupBox BuildExecutionGroup()
     {
-        var table = CreateSettingsTable(labelWidth: 90);
+        var table = CreateSettingsTable(labelWidth: 80);
         chkContinuous.Text = "Execução contínua";
         chkBackground.Text = "Minimizar ao iniciar";
         numTests.Width = 110;
@@ -392,6 +392,8 @@ public sealed partial class MainForm
         AddRow(table, 1, "Tempos:", Flow(Timing("Intervalo:", numInterval), Timing("Timeout:", numTimeout)));
         AddRow(table, 2, "Etapas:", Flow(chkDns, chkPing, chkTcp, chkDatabase));
         AddRow(table, 3, "Ao iniciar:", chkBackground);
+        // Multi-line option rows keep their captions aligned with the first input.
+        foreach (var label in table.Controls.OfType<Label>()) label.Anchor = AnchorStyles.Top | AnchorStyles.Left;
         return CreateGroup("Execução", table);
     }
 

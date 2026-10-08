@@ -37,6 +37,8 @@ public sealed class ExecutionLayoutTests
                             await Task.Delay(80);
                             Descendants(home).OfType<Button>().Single(button => button.Text == buttonText).PerformClick();
                             Assert.True(Field<UserControl>(form, targetPage).Visible);
+                            if (targetPage == "profilesPage")
+                                Assert.Equal(Orientation.Vertical, Descendants(Field<UserControl>(form, targetPage)).OfType<SplitContainer>().Single().Orientation);
                         }
                         form.NavigateTo("Nova execução");
                         var bar = Field<ProgressBar>(form, "progressBar");
@@ -116,20 +118,24 @@ public sealed class ExecutionLayoutTests
                         {
                             Field<ComboBox>(form, "cmbDatabaseType").SelectedItem = DatabaseProfiles.Get(databaseType);
                             Field<ComboBox>(form, "cmbSqlServerAuth").SelectedItem = SqlServerAuthentication.SqlLogin;
-                            foreach (var width in new[] { 1000, 980, 960, 950, 946, 945, 940, 930, 920, 940, 945, 946, 950, 960, 1000 })
+                            foreach (var width in new[] { 1000, 950, 920, 900, 886, 885, 870, 850, 885, 886, 900, 1000 })
                             {
                                 form.ClientSize = new Size(width, 750);
                                 await Task.Delay(80);
                                 var settingsArea = (TableLayoutPanel)connection.Parent!;
                                 // These widths bracket the transition and exercise the newly reclaimed space.
-                                if (width >= 946) Assert.Equal(2, settingsArea.ColumnCount);
-                                if (width <= 945) Assert.Equal(1, settingsArea.ColumnCount);
+                                if (width >= 886) Assert.Equal(2, settingsArea.ColumnCount);
+                                if (width <= 885) Assert.Equal(1, settingsArea.ColumnCount);
                                 if (settingsArea.ColumnCount == 2)
                                 {
                                     Assert.Equal(connection.Top, execution.Top);
                                     Assert.True(connection.Right <= execution.Left);
                                 }
                                 else Assert.True(connection.Bottom <= execution.Top);
+                                var quantity = Descendants(execution).OfType<Label>().Single(label => label.Text == "Quantidade:");
+                                var quantityPosition = quantity.PointToScreen(Point.Empty).Y;
+                                var inputPosition = Field<NumericUpDown>(form, "numTests").PointToScreen(Point.Empty).Y;
+                                Assert.InRange(Math.Abs(quantityPosition - inputPosition), 0, 4);
                                 foreach (var flow in Descendants(execution).OfType<FlowLayoutPanel>())
                                     foreach (Control child in flow.Controls)
                                         if (child.Visible)
