@@ -142,6 +142,14 @@ public sealed class ProfilesPage : UserControl
     }
 
     public event Action<SavedConnectionProfile>? UseRequested;
+    public event Action<IReadOnlyList<SavedConnectionProfile>>? ProfilesChanged;
+
+    public void SelectProfile(Guid? id)
+    {
+        var item = profiles.Items.Cast<SavedConnectionProfile>().FirstOrDefault(p => p.ProfileId == id);
+        if (item is null) ClearEditor();
+        else profiles.SelectedItem = item;
+    }
 
     public Task RefreshAsync(CancellationToken token = default) => LoadProfilesAsync(null, token);
 
@@ -165,6 +173,7 @@ public sealed class ProfilesPage : UserControl
             var selected = items.FirstOrDefault(item => item.ProfileId == selectId);
             if (selected is null) ClearEditor();
             else profiles.SelectedItem = selected;
+            ProfilesChanged?.Invoke(items);
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
         catch (ApplicationStoreException) when (!request.IsCurrent) { }

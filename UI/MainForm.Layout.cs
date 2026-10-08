@@ -25,6 +25,7 @@ public sealed partial class MainForm
         homePage.NewRunRequested += (_, _) => ShowPage("Nova execução", executionPage);
         homePage.HistoryRequested += (_, _) => ShowPage("Histórico", historyPage);
         profilesPage.UseRequested += ApplyProfile;
+        profilesPage.ProfilesChanged += SetExecutionProfiles;
         settingsPage.SettingsSaved += ApplyApplicationSettings;
         settingsPage.StorageSelected += descriptor =>
             globalStatus.Text = $"Próxima inicialização: {descriptor.Scope} · {descriptor.DatabasePath}";
@@ -88,10 +89,12 @@ public sealed partial class MainForm
             Text = "Credenciais ficam somente na memória. O histórico completo é salvo no banco local." };
         var actions = BuildControlArea();
         var progress = BuildProgressArea();
+        var profileArea = BuildProfileArea();
         root.Controls.Add(resultsControl);
         root.Controls.Add(note);
         root.Controls.Add(progress);
         root.Controls.Add(viewport);
+        root.Controls.Add(profileArea);
         root.Controls.Add(actions);
         var updatingConfigurationHeight = false;
         void UpdateConfigurationHeight()
@@ -115,8 +118,8 @@ public sealed partial class MainForm
                     }
                 }
                 var requiredHeight = columns == 2 ? Math.Max(connectionHeight, executionHeight) : connectionHeight + executionHeight;
-                var resultMinimum = 200 * root.DeviceDpi / 96;
-                var available = Math.Max(100 * root.DeviceDpi / 96, root.ClientSize.Height - actions.Height - progress.Height - note.Height - resultMinimum);
+                var resultMinimum = 180 * root.DeviceDpi / 96;
+                var available = Math.Max(100 * root.DeviceDpi / 96, root.ClientSize.Height - actions.Height - profileArea.Height - progress.Height - note.Height - resultMinimum);
                 var height = Math.Min(requiredHeight, available);
                 if (viewport.Height != height) viewport.Height = height;
                 var needsScroll = requiredHeight > available;
@@ -144,6 +147,7 @@ public sealed partial class MainForm
         settingsArea.SizeChanged += (_, _) => ScheduleConfigurationHeight();
         root.SizeChanged += (_, _) => ScheduleConfigurationHeight();
         actions.SizeChanged += (_, _) => ScheduleConfigurationHeight();
+        profileArea.SizeChanged += (_, _) => ScheduleConfigurationHeight();
         progress.SizeChanged += (_, _) => ScheduleConfigurationHeight();
         root.DpiChangedAfterParent += (_, _) => ScheduleConfigurationHeight();
         page.VisibleChanged += (_, _) => { if (page.Visible) ScheduleConfigurationHeight(); };
@@ -252,27 +256,38 @@ public sealed partial class MainForm
 
     private void ApplyProfile(SavedConnectionProfile profile)
     {
-        cmbDatabaseType.SelectedItem = DatabaseProfiles.All.First(item => item.Type == profile.DatabaseType);
-        txtHost.Text = profile.Host;
-        if (profile.Port is int value)
-            numPort.Value = value;
-        txtUser.Text = profile.UserName;
-        txtPassword.Clear();
-        txtDatabase.Text = profile.DatabaseName;
-        txtSqliteFile.Text = profile.SqliteFile;
-        cmbSqlServerAuth.SelectedItem = profile.SqlServerAuthentication;
-        txtOdbcDriver.Text = profile.OdbcDriver;
-        numTests.Value = profile.ExecutionDefaults.TestCount;
-        chkContinuous.Checked = profile.ExecutionDefaults.Continuous;
-        numInterval.Value = (decimal)profile.ExecutionDefaults.IntervalSeconds;
-        numTimeout.Value = profile.ExecutionDefaults.TimeoutSeconds;
-        chkDns.Checked = profile.ExecutionDefaults.Dns;
-        chkPing.Checked = profile.ExecutionDefaults.Ping;
-        chkTcp.Checked = profile.ExecutionDefaults.Tcp;
-        chkDatabase.Checked = profile.ExecutionDefaults.DatabaseTest;
-        chkBackground.Checked = profile.ExecutionDefaults.StartInBackground;
-        selectedProfileId = profile.ProfileId;
-        ApplyDatabaseType(resetPort: false);
+        if (!configurationEnabled) return;
+        applyingExecutionProfile = true;
+        executionPage.SuspendLayout();
+        try
+        {
+            cmbDatabaseType.SelectedItem = DatabaseProfiles.All.First(item => item.Type == profile.DatabaseType);
+            txtHost.Text = profile.Host;
+            if (profile.Port is int value)
+                numPort.Value = value;
+            txtUser.Text = profile.UserName;
+            txtPassword.Clear();
+            txtDatabase.Text = profile.DatabaseName;
+            txtSqliteFile.Text = profile.SqliteFile;
+            cmbSqlServerAuth.SelectedItem = profile.SqlServerAuthentication;
+            txtOdbcDriver.Text = profile.OdbcDriver;
+            numTests.Value = profile.ExecutionDefaults.TestCount;
+            chkContinuous.Checked = profile.ExecutionDefaults.Continuous;
+            numInterval.Value = (decimal)profile.ExecutionDefaults.IntervalSeconds;
+            numTimeout.Value = profile.ExecutionDefaults.TimeoutSeconds;
+            chkDns.Checked = profile.ExecutionDefaults.Dns;
+            chkPing.Checked = profile.ExecutionDefaults.Ping;
+            chkTcp.Checked = profile.ExecutionDefaults.Tcp;
+            chkDatabase.Checked = profile.ExecutionDefaults.DatabaseTest;
+            chkBackground.Checked = profile.ExecutionDefaults.StartInBackground;
+            selectedProfileId = profile.ProfileId;
+            ApplyDatabaseType(resetPort: false);
+            appliedProfileVersion = profile;
+            appliedProfileSnapshot = ExecutionProfileSnapshot();
+            SyncExecutionProfileSelection(addAppliedIfMissing: true);
+        }
+        finally { applyingExecutionProfile = false; executionPage.ResumeLayout(true); }
+        UpdateExecutionProfileState();
         ShowPage("Nova execução", executionPage);
         if (txtPassword.Visible && txtPassword.Enabled) txtPassword.Focus();
     }
@@ -519,7 +534,6 @@ public sealed partial class MainForm
     {
         cmbDatabaseType.SelectedIndexChanged += (_, _) =>
         {
-            selectedProfileId = null;
             ApplyDatabaseType(resetPort: true);
         };
         cmbSqlServerAuth.SelectedIndexChanged += (_, _) => ApplyCredentialVisibility();
@@ -536,6 +550,7 @@ public sealed partial class MainForm
         trayOpenLog.Click += (_, _) => OpenFile(currentTxtPath);
         trayStop.Click += (_, _) => RequestStop();
         trayExit.Click += (_, _) => RequestExit();
+        TrackExecutionProfileChanges();
         FormClosing += OnFormClosing;
         FormClosed += (_, _) =>
         {

@@ -61,7 +61,7 @@ public sealed class ExecutionLayoutTests
                             Assert.True(connection.PointToScreen(Point.Empty).Y >= viewport.PointToScreen(Point.Empty).Y);
                             Assert.True(progress.PointToScreen(Point.Empty).Y >= viewport.PointToScreen(Point.Empty).Y + viewport.Height);
                             Assert.True(results.PointToScreen(Point.Empty).Y >= progress.PointToScreen(Point.Empty).Y + progress.Height);
-                            Assert.True(results.Height >= 190);
+                            Assert.True(results.Height >= 170);
                             var statisticsGrid = Descendants(results).OfType<DataGridView>().Single(g => g.Columns.Contains("Median"));
                             Assert.True(statisticsGrid.GetRowDisplayRectangle(4, false).Bottom <= statisticsGrid.ClientSize.Height);
                             Snapshot(form, $"execution-{size.Width}x{size.Height}-running");

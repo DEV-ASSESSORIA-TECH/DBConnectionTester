@@ -275,6 +275,8 @@ public sealed partial class MainForm
     private void SetConfigurationEnabled(bool enabled)
     {
         configurationEnabled = enabled;
+        executionProfile.Enabled = enabled;
+        manageProfiles.Enabled = enabled;
         foreach (var control in new Control[]
                  {
                      cmbDatabaseType, txtHost, numPort, cmbSqlServerAuth, txtUser, txtPassword, txtDatabase,
