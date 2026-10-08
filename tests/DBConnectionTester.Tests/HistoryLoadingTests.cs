@@ -1,3 +1,5 @@
+using System.Drawing;
+using DBConnectionTester.Services.Export;
 using System.Reflection;
 using System.Windows.Forms;
 using DBConnectionTester.Models;
@@ -190,6 +192,156 @@ public sealed class HistoryLoadingTests
         Assert.Equal(2, queries);
     });
 
+    [Theory]
+    [InlineData("csv", false)]
+    [InlineData("txt", false)]
+    [InlineData("json", false)]
+    [InlineData("zip", false)]
+    [InlineData("csv", true)]
+    public Task ExportKeepsUiResponsivePreventsDuplicatesAndSurvivesSelectionChanges(string extension, bool runningSelection) => RunUi(async (page, repository) =>
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "DBCT-export-ui", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        using var release = new ManualResetEventSlim();
+        var started = Signal();
+        var uiThread = Environment.CurrentManagedThreadId;
+        if (runningSelection) repository.B = repository.B with { Status = PersistedRunStatus.Running, TerminationReason = null, FinishedAt = null };
+        repository.Cycles = (id, request) =>
+        {
+            Assert.Equal(repository.A.RunId, id);
+            Assert.NotEqual(uiThread, Environment.CurrentManagedThreadId);
+            started.TrySetResult();
+            if (!release.Wait(TimeSpan.FromSeconds(5))) throw new TimeoutException();
+            return Task.FromResult(new PagedResult<PersistedCycle>([new(1, DateTimeOffset.Now, "", "", "", "", 0, [])], 1, 1, request.PageSize));
+        };
+        Task? exporting = null;
+        try
+        {
+            await page.RefreshAsync();
+            var runGrid = Field<DataGridView>(page, "runs");
+            Assert.Equal("Concluída", runGrid.Rows[0].Cells["Status"].Value);
+            Assert.Equal(DatabaseProfiles.Get(DatabaseType.MySqlMariaDb).DisplayName, runGrid.Rows[0].Cells["Type"].Value);
+            Assert.Contains("Quantidade de testes concluída", Field<TextBox>(page, "details").Text);
+            var exporter = Field<RunExportService>(page, "exporter");
+            var destination = Path.Combine(directory, "run." + extension);
+            Func<Task<RunExportResult>> action = extension == "zip"
+                ? () => exporter.ExportZipAsync(repository.A.RunId, destination)
+                : () => exporter.ExportAsync(repository.A.RunId, extension switch { "csv" => RunExportFormat.Csv, "txt" => RunExportFormat.Text, _ => RunExportFormat.Json }, destination);
+            exporting = StartExport(page, action);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(uiThread, Environment.CurrentManagedThreadId);
+            Assert.Contains("Exportando", Field<Label>(page, "exportFeedback").Text);
+            var actions = Field<FlowLayoutPanel>(page, "exportActions");
+            Assert.All(actions.Controls.OfType<Button>(), b => Assert.False(b.Enabled));
+            var duplicateCalled = false;
+            await StartExport(page, () => { duplicateCalled = true; return Task.FromResult(new RunExportResult(repository.B.RunId, [])); });
+            Assert.False(duplicateCalled);
+            runGrid.ClearSelection();
+            runGrid.Rows[1].Selected = true;
+            await WaitUntil(() => Field<RunHistoryDetails?>(page, "selectedDetails")?.Run.RunId == repository.B.RunId);
+            Assert.Contains("B", Field<Label>(page, "exportScope").Text);
+            Assert.All(actions.Controls.OfType<Button>(), b => Assert.False(b.Enabled));
+            release.Set();
+            await exporting;
+            Assert.True(new FileInfo(destination).Length > 0);
+            Assert.Contains("Exportação concluída", Field<Label>(page, "exportFeedback").Text);
+            Assert.True(Field<Button>(page, "openExportFolder").Visible);
+            Assert.True(Field<Button>(page, "openExportFolder").Enabled);
+            Assert.All(actions.Controls.OfType<Button>().Where(b => b.Text != "Abrir pasta"), b => Assert.Equal(!runningSelection, b.Enabled));
+        }
+        finally
+        {
+            release.Set();
+            if (exporting is not null) await exporting;
+            Directory.Delete(directory, true);
+        }
+    });
+
+    [Fact]
+    public Task ExportFailureRestoresButtonsAndDoesNotOfferFolder() => RunUi(async (page, repository) =>
+    {
+        await page.RefreshAsync();
+        await StartExport(page, () => Task.FromException<RunExportResult>(new UnauthorizedAccessException("Sem permissão para salvar.")));
+        Assert.Contains("Sem permissão", Field<Label>(page, "exportFeedback").Text);
+        Assert.False(Field<Button>(page, "openExportFolder").Visible);
+        Assert.All(Field<FlowLayoutPanel>(page, "exportActions").Controls.OfType<Button>().Where(b => b.Text != "Abrir pasta"), b => Assert.True(b.Enabled));
+    });
+
+    [Fact]
+    public Task ClosingHistoryWhileExportingDoesNotUpdateDisposedControls() => RunUi(async (page, repository) =>
+    {
+        await page.RefreshAsync();
+        var started = Signal();
+        var release = Signal();
+        var exporting = StartExport(page, async () =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return new RunExportResult(repository.A.RunId, [Path.Combine(Path.GetTempPath(), "run.json")]);
+        });
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            page.Dispose();
+        }
+        finally { release.TrySetResult(); }
+        await exporting;
+    });
+
+    [Fact]
+    public Task HistorySeparatesPaginationAndExportsAtNarrowWidthsAndExplainsChartScope() => RunUi(async (page, repository) =>
+    {
+        var latency = new PersistedStageResult("Dns", StepStatus.Success, 5, "", null, null, null, null, null, null, null, null, null, null);
+        repository.Cycles = (_, request) => Task.FromResult(new PagedResult<PersistedCycle>(
+            [new(1, DateTimeOffset.Now, "", "", "", "", 0, [latency]), new(100, DateTimeOffset.Now, "", "", "", "", 0, [latency])], 250, request.PageNumber, request.PageSize));
+        await page.RefreshAsync();
+        var form = page.FindForm()!;
+        var previous = Field<Button>(page, "previousRunPage");
+        var next = Field<Button>(page, "nextRunPage");
+        var count = Field<Label>(page, "runPageLabel");
+        var scope = Field<Label>(page, "exportScope");
+        var actions = Field<FlowLayoutPanel>(page, "exportActions");
+        foreach (var size in new[] { new Size(650, 570), new Size(840, 600), new Size(1100, 850), new Size(650, 570) })
+        {
+            form.ClientSize = size;
+            await Task.Delay(40);
+            int Top(Control c) => c.PointToScreen(Point.Empty).Y;
+            Assert.True(Math.Abs(Top(count) + count.Height / 2 - (Top(previous) + previous.Height / 2)) <= 2);
+            Assert.True(Top(scope) > Top(next) + next.Height);
+            Assert.True(Top(actions) >= Top(scope) + scope.Height);
+            foreach (Control child in actions.Controls)
+                if (child.Visible) Assert.True(child.Right <= actions.ClientSize.Width && child.Bottom <= actions.ClientSize.Height);
+            var tabs = Field<TabControl>(page, "detailTabs");
+            Assert.True(Top(tabs) >= Top(actions) + actions.Height);
+            SaveSnapshot(form, $"history-actions-{size.Width}x{size.Height}");
+            Assert.True(tabs.Height >= 90, $"Details height {tabs.Height} at {size}; actions {actions.Bounds}, scope {scope.Bounds}");
+        }
+        Field<TabControl>(page, "detailTabs").SelectedIndex = 2;
+        await WaitUntil(() => Field<Label>(page, "chartRange").Text.Contains("250"));
+        Assert.Contains("1 a 100 de 250", Field<Label>(page, "chartRange").Text);
+        Assert.Contains("execução inteira", Field<Label>(page, "chartRange").Text);
+        Assert.Contains("DNS", Field<ComboBox>(page, "chartStage").SelectedItem!.ToString());
+        SaveSnapshot(form, "history-chart-scope");
+        Field<TabControl>(page, "detailTabs").SelectedIndex = 0;
+        await StartExport(page, () => Task.FromResult(new RunExportResult(repository.A.RunId, [Path.Combine(Path.GetTempPath(), $"run-{repository.A.RunId:D}.json")])));
+        await Task.Delay(40);
+        SaveSnapshot(form, "history-export-success-narrow");
+        Assert.True(Field<TabControl>(page, "detailTabs").Height >= 120, $"Details: {Field<TabControl>(page, "detailTabs").Bounds}; feedback: {Field<Label>(page, "exportFeedback").Bounds}; actions: {actions.Parent!.Bounds}");
+    });
+
+    private static Task StartExport(HistoryPage page, Func<Task<RunExportResult>> action) =>
+        (Task)typeof(HistoryPage).GetMethod("RunExportAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(page, [action])!;
+
+    private static void SaveSnapshot(Form form, string name)
+    {
+        var output = Environment.GetEnvironmentVariable("DBCT_UI_SNAPSHOT_DIR");
+        if (output is null) return;
+        Directory.CreateDirectory(output);
+        using var bitmap = new Bitmap(form.Width, form.Height);
+        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+        bitmap.Save(Path.Combine(output, name + ".png"));
+    }
+
     private static void ShowCycles(HistoryPage page)
     {
         var cycleTab = (TabPage)Field<DataGridView>(page, "cycles").Parent!.Parent!;
@@ -237,7 +389,7 @@ public sealed class HistoryLoadingTests
     private sealed class Repository : IRunHistoryRepository, IConnectionProfileRepository
     {
         public RunHistoryItem A { get; } = Item("A");
-        public RunHistoryItem B { get; } = Item("B");
+        public RunHistoryItem B { get; set; } = Item("B");
         public Func<RunHistoryFilter, PageRequest, Task<PagedResult<RunHistoryItem>>>? Search;
         public Func<Guid, Task<RunHistoryDetails?>>? Details;
         public Func<Guid, PageRequest, Task<PagedResult<PersistedCycle>>>? Cycles;

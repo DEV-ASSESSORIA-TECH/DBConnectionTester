@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.ComponentModel;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services.Export;
 using DBConnectionTester.Services.Storage;
@@ -33,7 +35,14 @@ public sealed class HistoryPage : UserControl
     private bool cyclesLoading;
     private bool chartDirty = true;
     private readonly ComboBox chartStage = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly FlowLayoutPanel exportActions = new() { Dock = DockStyle.Fill, AutoSize = true };
+    private readonly FlowLayoutPanel exportActions = new() { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+    private readonly Label exportScope = new() { AutoSize = true, Dock = DockStyle.Fill };
+    private readonly Label exportFeedback = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, Visible = false };
+    private readonly Button openExportFolder = new() { Text = "Abrir pasta", AutoSize = true, Visible = false };
+    private readonly Label chartRange = new() { AutoSize = true, Dock = DockStyle.Fill };
+    private readonly ToolTip exportHints = new();
+    private bool exportInProgress;
+    private string? lastExportPath;
     private RunHistoryDetails? selectedDetails;
     private IReadOnlyList<PersistedCycle> visibleCycles = [];
     private int runPage = 1;
@@ -59,19 +68,45 @@ public sealed class HistoryPage : UserControl
         ConfigureRunsGrid();
         ConfigureCyclesGrid();
         status.DataSource = new[] { new StatusChoice("Todos", null) }
-            .Concat(Enum.GetValues<PersistedRunStatus>().Select(value => new StatusChoice(value.ToString(), value))).ToList();
-        chartStage.DataSource = new[] { "Dns", "Ping", "Tcp", "DatabaseConnect", "DatabaseQuery" };
+            .Concat(Enum.GetValues<PersistedRunStatus>().Select(value => new StatusChoice(StatusText(value), value))).ToList();
+        chartStage.DataSource = new[] { "Dns", "Ping", "Tcp", "DatabaseConnect", "DatabaseQuery" }
+            .Select(value => new StageChoice(StageText(value), value)).ToArray();
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1 };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 235));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.Controls.Add(BuildFilters(), 0, 0);
+        var filters = BuildFilters();
+        var runActions = BuildRunPager();
+        root.Controls.Add(filters, 0, 0);
         root.Controls.Add(runs, 0, 1);
-        root.Controls.Add(BuildRunPager(), 0, 2);
+        root.Controls.Add(runActions, 0, 2);
         root.Controls.Add(BuildDetails(), 0, 3);
         Controls.Add(root);
+
+        // Preserve room for details when wrapped actions or feedback need another line.
+        var sizingPending = false;
+        void ScheduleRunsHeight()
+        {
+            if (!root.IsHandleCreated || root.IsDisposed || sizingPending) return;
+            sizingPending = true;
+            root.BeginInvoke(() =>
+            {
+                sizingPending = false;
+                if (root.IsDisposed) return;
+                var scale = root.DeviceDpi / 96f;
+                var available = root.ClientSize.Height - filters.Height - filters.Margin.Vertical
+                    - runActions.Height - runActions.Margin.Vertical - detailTabs.Margin.Vertical - 180 * scale;
+                var height = Math.Clamp(available, 140 * scale, 235 * scale);
+                if (Math.Abs(root.RowStyles[1].Height - height) > 0.5f) root.RowStyles[1].Height = height;
+            });
+        }
+        root.HandleCreated += (_, _) => ScheduleRunsHeight();
+        root.SizeChanged += (_, _) => ScheduleRunsHeight();
+        filters.SizeChanged += (_, _) => ScheduleRunsHeight();
+        runActions.SizeChanged += (_, _) => ScheduleRunsHeight();
+        root.DpiChangedAfterParent += (_, _) => ScheduleRunsHeight();
 
         search.Click += async (_, _) => await HandleRunsLoadAsync(1);
         previousRunPage.Click += async (_, _) => await HandleRunsLoadAsync(Math.Max(1, runPage - 1));
@@ -89,6 +124,8 @@ public sealed class HistoryPage : UserControl
         var zip = new Button { Text = "Exportar ZIP", AutoSize = true };
         zip.Click += async (_, _) => await ExportZipAsync();
         exportActions.Controls.Add(zip);
+        openExportFolder.Click += (_, _) => OpenExportFolder();
+        exportActions.Controls.Add(openExportFolder);
         ClearDetails();
     }
 
@@ -152,7 +189,7 @@ public sealed class HistoryPage : UserControl
         if (disposing)
         {
             refreshRequests.Dispose(); runsRequests.Dispose();
-            detailsRequests.Dispose(); cyclesRequests.Dispose();
+            detailsRequests.Dispose(); cyclesRequests.Dispose(); exportHints.Dispose();
         }
         base.Dispose(disposing);
     }
@@ -171,11 +208,36 @@ public sealed class HistoryPage : UserControl
 
     private Control BuildRunPager()
     {
-        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        panel.Controls.Add(previousRunPage);
-        panel.Controls.Add(nextRunPage);
-        panel.Controls.Add(runPageLabel);
-        panel.Controls.Add(exportActions);
+        var pager = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
+        pager.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        pager.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        pager.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        runPageLabel.Anchor = AnchorStyles.Left;
+        runPageLabel.Margin = new Padding(8, 0, 3, 0);
+        pager.Controls.Add(previousRunPage, 0, 0);
+        pager.Controls.Add(nextRunPage, 1, 0);
+        pager.Controls.Add(runPageLabel, 2, 0);
+
+        var exports = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 8, 0, 6) };
+        exportScope.Dock = exportActions.Dock = exportFeedback.Dock = DockStyle.None;
+        exports.Controls.AddRange([exportScope, exportActions, exportFeedback]);
+        void FitExportWidth()
+        {
+            var width = Math.Max(1, exports.ClientSize.Width - 6);
+            var maximum = new Size(width, 0);
+            if (exportScope.MaximumSize != maximum) exportScope.MaximumSize = maximum;
+            if (exportActions.MaximumSize != maximum) exportActions.MaximumSize = maximum;
+            exportFeedback.Size = new Size(width, exportFeedback.Font.Height + 6);
+        }
+        exports.SizeChanged += (_, _) => FitExportWidth();
+        exportFeedback.FontChanged += (_, _) => FitExportWidth();
+        var panel = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, RowCount = 2 };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.Controls.Add(pager, 0, 0);
+        panel.Controls.Add(exports, 0, 1);
         return panel;
     }
 
@@ -194,12 +256,14 @@ public sealed class HistoryPage : UserControl
         cycleLayout.Controls.Add(pager, 0, 1);
         cycleTab.Controls.Add(cycleLayout);
         var graphTab = new TabPage("Gráfico");
-        var graphLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        var graphLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1 };
+        graphLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        graphLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         graphLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         graphLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var selector = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         selector.Controls.Add(LabelFor("Etapa")); selector.Controls.Add(chartStage);
-        graphLayout.Controls.Add(selector); graphLayout.Controls.Add(chart, 0, 1);
+        graphLayout.Controls.Add(selector, 0, 0); graphLayout.Controls.Add(chartRange, 0, 1); graphLayout.Controls.Add(chart, 0, 2);
         graphTab.Controls.Add(graphLayout);
         tabs.TabPages.AddRange(new[] { overview, cycleTab, graphTab });
         return tabs;
@@ -235,8 +299,8 @@ public sealed class HistoryPage : UserControl
             {
                 runs.Rows.Clear();
                 foreach (var item in result.Items)
-                    runs.Rows.Add(item.RunId, item.StartedAt.ToLocalTime().ToString("g"), item.ProfileName ?? "—", item.DatabaseType,
-                        item.Target, item.Status, item.CompletedCycles, item.FailureMessage ?? "");
+                    runs.Rows.Add(item.RunId, item.StartedAt.ToLocalTime().ToString("g"), item.ProfileName ?? "—", DatabaseProfiles.Get(item.DatabaseType).DisplayName,
+                        item.Target, StatusText(item.Status), item.CompletedCycles, item.FailureMessage ?? "");
                 if (runs.Rows.Count > 0) runs.Rows[0].Selected = true;
             }
             finally { runs.ResumeLayout(); bindingRuns = false; }
@@ -309,9 +373,12 @@ public sealed class HistoryPage : UserControl
                 if (firstDiagnostic is not null)
                     cycles.Rows[rowIndex].Cells[7].ToolTipText = string.Join(Environment.NewLine,
                         cycle.Stages.Where(item => item.DiagnosticCode is not null)
-                            .Select(item => $"{item.Stage} [{item.DiagnosticCode}] {item.UserMessage}\n{item.TechnicalMessage}"));
+                            .Select(item => $"{StageText(item.Stage)} [{item.DiagnosticCode}] {item.UserMessage}\n{item.TechnicalMessage}"));
             }
             cyclePageLabel.Text = $"Página {cyclePage} de {Math.Max(1, cyclePages)} · {result.TotalItems:N0} ciclos";
+            chartRange.Text = result.Items.Count == 0
+                ? "Nenhum ciclo nesta página."
+                : $"Ciclos {result.Items[0].Number:N0} a {result.Items[^1].Number:N0} de {result.TotalItems:N0} · página {cyclePage} de {Math.Max(1, cyclePages)}. Mediana e P95: execução inteira.";
             UpdateChart();
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
@@ -333,15 +400,15 @@ public sealed class HistoryPage : UserControl
         var run = selectedDetails.Run;
         var lines = new List<string>
         {
-            $"RunId: {run.RunId:D}", $"Estado: {run.Status} · {run.TerminationReason}",
+            $"RunId: {run.RunId:D}", $"Estado: {StatusText(run.Status)} · {ReasonText(run.TerminationReason)}",
             $"Início: {run.StartedAt.ToLocalTime():F}", $"Fim: {(run.FinishedAt?.ToLocalTime().ToString("F") ?? "N/A")}",
-            $"Destino: {run.DatabaseType} · {run.Target}", $"Máquina: {run.MachineName} · Versão: {run.ApplicationVersion}",
+            $"Destino: {DatabaseProfiles.Get(run.DatabaseType).DisplayName} · {run.Target}", $"Máquina: {run.MachineName} · Versão: {run.ApplicationVersion}",
             $"Ciclos persistidos: {run.CompletedCycles:N0}"
         };
         if (!string.IsNullOrWhiteSpace(run.FailureMessage)) lines.Add("Falha: " + run.FailureMessage);
         lines.Add(""); lines.Add("Resumo por etapa:");
         lines.AddRange(selectedDetails.StageSummaries.Select(item =>
-            $"  {item.Stage}: {item.Statistics.Successes:N0}/{item.Statistics.Attempts:N0} OK · " +
+            $"  {StageText(item.Stage)}: {item.Statistics.Successes:N0}/{item.Statistics.Attempts:N0} OK · " +
             $"falhas {item.Statistics.Failures:N0} · média {FormatMs(item.Statistics.AverageMs)} · P95 {FormatMs(item.Statistics.P95Ms)}"));
         if (selectedDetails.Warnings.Count > 0)
         {
@@ -349,15 +416,16 @@ public sealed class HistoryPage : UserControl
             lines.AddRange(selectedDetails.Warnings.Select(item => $"  [{item.Code}] {item.Message}"));
         }
         details.Lines = lines.ToArray();
-        foreach (Control control in exportActions.Controls)
-            control.Enabled = run.Status != PersistedRunStatus.Running;
+        exportScope.Text = $"Exportar execução selecionada inteira · {run.StartedAt.ToLocalTime():g} · {run.Target} · {CycleCountText(run.CompletedCycles)}";
+        exportHints.SetToolTip(exportScope, $"Execução {run.RunId:D}. Inclui todos os ciclos, independentemente da página exibida.");
+        UpdateExportActions();
     }
 
     private void UpdateChart()
     {
         if (!chart.Visible || !chartDirty) return;
         chartDirty = false;
-        var stageName = chartStage.SelectedItem as string ?? "DatabaseConnect";
+        var stageName = (chartStage.SelectedItem as StageChoice)?.Value ?? "DatabaseConnect";
         var points = visibleCycles.Select(cycle =>
         {
             var stage = cycle.Stages.FirstOrDefault(item => item.Stage == stageName);
@@ -376,8 +444,8 @@ public sealed class HistoryPage : UserControl
 
     private async Task ExportAsync(RunExportFormat format, string extension)
     {
-        if (selectedDetails is null) return;
-        var runId = selectedDetails.Run.RunId;
+        if (!CanExport) return;
+        var runId = selectedDetails!.Run.RunId;
         using var dialog = new SaveFileDialog { Filter = $"{extension.ToUpperInvariant()} (*.{extension})|*.{extension}", FileName = $"run-{runId:D}.{extension}" };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         var destination = dialog.FileName;
@@ -386,26 +454,70 @@ public sealed class HistoryPage : UserControl
 
     private async Task ExportZipAsync()
     {
-        if (selectedDetails is null) return;
-        var runId = selectedDetails.Run.RunId;
+        if (!CanExport) return;
+        var runId = selectedDetails!.Run.RunId;
         using var dialog = new SaveFileDialog { Filter = "ZIP (*.zip)|*.zip", FileName = $"run-{runId:D}.zip" };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         var destination = dialog.FileName;
         await RunExportAsync(() => exporter.ExportZipAsync(runId, destination));
     }
 
+    private bool CanExport => !exportInProgress && selectedDetails is { Run.Status: not PersistedRunStatus.Running };
+
+    private void UpdateExportActions()
+    {
+        foreach (Control control in exportActions.Controls)
+            if (control != openExportFolder) control.Enabled = CanExport;
+        openExportFolder.Enabled = !exportInProgress && lastExportPath is not null;
+    }
+
     private async Task RunExportAsync(Func<Task<RunExportResult>> action)
     {
+        if (exportInProgress || IsDisposed) return;
+        exportInProgress = true;
+        lastExportPath = null;
+        openExportFolder.Visible = false;
+        exportFeedback.Text = selectedDetails is { } selected
+            ? $"Exportando execução de {selected.Run.StartedAt.ToLocalTime():g} · {selected.Run.Target}…"
+            : "Exportando…";
+        exportFeedback.Visible = true;
+        exportHints.SetToolTip(exportFeedback, null);
+        UpdateExportActions();
         try
         {
             var result = await Task.Run(action);
-            if (!IsDisposed)
-                MessageBox.Show(this, $"Exportação concluída:\n{result.Files[0]}", "Histórico", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (IsDisposed) return;
+            lastExportPath = result.Files[0];
+            exportFeedback.Text = $"Exportação concluída: {Path.GetFileName(lastExportPath)}";
+            exportHints.SetToolTip(exportFeedback, lastExportPath);
+            exportHints.SetToolTip(openExportFolder, Path.GetDirectoryName(lastExportPath));
+            openExportFolder.Visible = true;
         }
-        catch (Exception exception) when (exception is IOException or ApplicationStoreException or KeyNotFoundException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ApplicationStoreException or KeyNotFoundException)
         {
             if (!IsDisposed)
-                MessageBox.Show(this, exception.Message, "Exportação", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            {
+                exportFeedback.Text = "Falha na exportação: " + exception.Message;
+                exportHints.SetToolTip(exportFeedback, exception.Message);
+            }
+        }
+        finally
+        {
+            exportInProgress = false;
+            if (!IsDisposed) UpdateExportActions();
+        }
+    }
+
+    private void OpenExportFolder()
+    {
+        if (exportInProgress || lastExportPath is null) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(Path.GetDirectoryName(lastExportPath)!) { UseShellExecute = true });
+        }
+        catch (Exception exception) when (exception is Win32Exception or IOException or UnauthorizedAccessException)
+        {
+            exportFeedback.Text = "Não foi possível abrir a pasta: " + exception.Message;
         }
     }
 
@@ -415,7 +527,9 @@ public sealed class HistoryPage : UserControl
         cyclesLoaded = cyclesLoading = false; chartDirty = true;
         cyclePage = 1; cyclePages = 0; cyclePageLabel.Text = "";
         previousCyclePage.Enabled = nextCyclePage.Enabled = false;
-        foreach (Control control in exportActions.Controls) control.Enabled = false;
+        exportScope.Text = "Selecione uma execução para exportar todos os seus ciclos.";
+        chartRange.Text = "Selecione uma execução para visualizar os ciclos.";
+        UpdateExportActions();
     }
 
     private void ConfigureRunsGrid()
@@ -443,6 +557,30 @@ public sealed class HistoryPage : UserControl
 
     private static Label LabelFor(string text) => new() { Text = text + ":", AutoSize = true, Margin = new Padding(8, 7, 2, 0) };
     private static string FormatMs(double? value) => value is null ? "N/A" : $"{value:0.0} ms";
+    private static string CycleCountText(long count) => $"{count:N0} {(count == 1 ? "ciclo" : "ciclos")}";
+    private static string StatusText(PersistedRunStatus value) => value switch
+    {
+        PersistedRunStatus.Running => "Em execução",
+        PersistedRunStatus.Completed => "Concluída",
+        PersistedRunStatus.Stopped => "Parada",
+        PersistedRunStatus.Failed => "Falhou",
+        PersistedRunStatus.Interrupted => "Interrompida",
+        _ => value.ToString()
+    };
+    private static string ReasonText(RunTerminationReason? value) => value switch
+    {
+        RunTerminationReason.PlannedCountCompleted => "Quantidade de testes concluída",
+        RunTerminationReason.StoppedByUser => "Parada pelo usuário",
+        RunTerminationReason.ExecutionFailed => "Falha na execução",
+        RunTerminationReason.ProcessInterrupted => "Aplicativo interrompido",
+        _ => "Em andamento"
+    };
+    private static string StageText(string value) => value switch
+    {
+        "Dns" => "DNS", "Ping" => "Ping / ICMP", "Tcp" => "TCP",
+        "DatabaseConnect" => "Conexão DB", "DatabaseQuery" => "SELECT 1", _ => value
+    };
+    private sealed record StageChoice(string Text, string Value) { public override string ToString() => Text; }
     private sealed record StatusChoice(string Text, PersistedRunStatus? Value) { public override string ToString() => Text; }
     private sealed record ProfileChoice(string Text, Guid? Id) { public override string ToString() => Text; }
 }
