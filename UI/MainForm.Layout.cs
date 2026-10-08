@@ -68,7 +68,7 @@ public sealed partial class MainForm
         var columns = 0;
         settingsArea.SizeChanged += (_, _) =>
         {
-            var count = settingsArea.ClientSize.Width * 96d / settingsArea.DeviceDpi >= 900 ? 2 : 1;
+            var count = settingsArea.ClientSize.Width * 96d / settingsArea.DeviceDpi >= 820 ? 2 : 1;
             if (columns == count) return;
             columns = count;
             settingsArea.SuspendLayout();
@@ -275,24 +275,36 @@ public sealed partial class MainForm
 
     private GroupBox BuildExecutionGroup()
     {
-        var table = CreateSettingsTable(labelWidth: 170);
-        var row = 0;
-        AddRow(table, row++, "Quantidade de testes:", numTests);
-        AddRow(table, row++, "Modo de execução:", chkContinuous);
-        AddRow(table, row++, "Intervalo entre testes:", WithSuffix(numInterval, "segundos"));
-        AddRow(table, row++, "Timeout por etapa:", WithSuffix(numTimeout, "segundos"));
-
-        var layers = new FlowLayoutPanel
+        var table = CreateSettingsTable(labelWidth: 110);
+        chkContinuous.Text = "Execução contínua";
+        chkBackground.Text = "Minimizar ao iniciar";
+        numTests.Width = 110;
+        numInterval.Width = numTimeout.Width = 75;
+        var hints = new ToolTip();
+        Disposed += (_, _) => hints.Dispose();
+        hints.SetToolTip(chkContinuous, "Executa até você clicar em Parar; a quantidade é ignorada.");
+        hints.SetToolTip(chkBackground, "Minimiza o aplicativo para a bandeja ao iniciar a execução.");
+        hints.SetToolTip(numInterval, "Tempo de espera entre os ciclos, em segundos.");
+        hints.SetToolTip(numTimeout, "Tempo limite de cada etapa, em segundos.");
+        FlowLayoutPanel Flow(params Control[] controls)
         {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true
-        };
-        layers.Controls.AddRange(new Control[] { chkDns, chkPing, chkTcp, chkDatabase });
-        AddRow(table, row++, "Camadas:", layers);
-        AddRow(table, row, "Comportamento:", chkBackground);
-
+            var panel = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = Padding.Empty };
+            panel.Controls.AddRange(controls);
+            return panel;
+        }
+        Control Timing(string caption, Control input)
+        {
+            var panel = Flow(new Label { Text = caption, AutoSize = true, Margin = new Padding(0, 6, 3, 0) },
+                input, new Label { Text = "s", AutoSize = true, Margin = new Padding(3, 6, 6, 0) });
+            panel.Dock = DockStyle.None;
+            panel.WrapContents = false;
+            panel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            return panel;
+        }
+        AddRow(table, 0, "Quantidade:", Flow(numTests, chkContinuous));
+        AddRow(table, 1, "Tempos:", Flow(Timing("Intervalo:", numInterval), Timing("Timeout:", numTimeout)));
+        AddRow(table, 2, "Etapas:", Flow(chkDns, chkPing, chkTcp, chkDatabase));
+        AddRow(table, 3, "Ao iniciar:", chkBackground);
         return CreateGroup("Execução", table);
     }
 
@@ -371,6 +383,7 @@ public sealed partial class MainForm
             Text = title,
             Dock = DockStyle.Top,
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = new Padding(4)
         };
         group.Controls.Add(content);
