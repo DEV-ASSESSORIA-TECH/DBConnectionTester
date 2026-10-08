@@ -26,6 +26,9 @@ public sealed class SettingsPage : UserControl
     private readonly CheckBox includeExecutable = new() { Text = "Incluir EXE single-file", AutoSize = true };
     private readonly TextBox currentDatabasePath = new() { ReadOnly = true, AccessibleName = "Caminho do banco atual" };
     private readonly Label storageSize = new() { AutoSize = true };
+    private readonly TextBox targetPath = new() { ReadOnly = true, AccessibleName = "Destino previsto" };
+    private readonly Label targetDescription = new() { AutoSize = true, Dock = DockStyle.Top };
+    private readonly Label pendingStorage = new() { AutoSize = true, Dock = DockStyle.Top, Visible = false, Margin = new Padding(3, 10, 3, 6) };
     private ApplicationSettings currentSettings;
     private bool operationsEnabled = true;
     private bool operationPending;
@@ -59,7 +62,10 @@ public sealed class SettingsPage : UserControl
         theme.FormattingEnabled = true;
         theme.Format += (_, e) => e.Value = e.ListItem switch
         { ApplicationTheme.Light => "Claro", ApplicationTheme.Dark => "Escuro", _ => "Sistema" };
-        targetScope.SelectedIndex = 0;
+        targetScope.FormattingEnabled = true;
+        targetScope.Format += (_, e) => e.Value = e.ListItem is StorageScope scope ? ScopeName(scope) : "";
+        targetScope.SelectedItem = store.Descriptor.Scope;
+        targetScope.SelectedIndexChanged += (_, _) => UpdateTargetDescription();
 
         var root = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
         root.Controls.Add(new Label { Text = "Configurações", AutoSize = true, Font = new Font(Font.FontFamily, 20, FontStyle.Bold), Margin = new Padding(3, 3, 3, 16) });
@@ -68,6 +74,7 @@ public sealed class SettingsPage : UserControl
         root.Controls.Add(BuildStorageGroup());
         root.Controls.Add(BuildPackageGroup());
         Controls.Add(root);
+        UpdateTargetDescription();
         operationStatus.TextChanged += (_, _) => operationStatus.Visible = operationStatus.Text.Length > 0;
         settingsState.TextChanged += (_, _) => settingsState.Visible = settingsState.Text.Length > 0;
         LoadSettings(settings);
@@ -141,17 +148,14 @@ public sealed class SettingsPage : UserControl
         AddWide(table, 4, detailsButton);
         AddWide(table, 5, details);
         var destination = SettingsTable();
-        AddRow(destination, 0, "Novo escopo:", targetScope);
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        actions.Controls.AddRange(new Control[] { clone, create, useExisting });
-        AddRow(destination, 1, "Ações:", actions);
-        destination.Controls.Add(new Label
-        {
-            Text = "A troca é ativada na próxima inicialização. Nenhum banco anterior é apagado ou mesclado.",
-            AutoSize = true,
-            Margin = new Padding(3, 10, 3, 6)
-        }, 0, 2);
-        destination.SetColumnSpan(destination.GetControlFromPosition(0, 2)!, 2);
+        AddRow(destination, 0, "Localização de destino:", targetScope);
+        AddRow(destination, 1, "Destino previsto:", targetPath);
+        AddWide(destination, 2, targetDescription);
+        AddWide(destination, 3, StorageAction(clone, "Copia histórico, perfis e configurações para o destino vazio."));
+        AddWide(destination, 4, StorageAction(create, "Cria um banco sem histórico ou perfis, com configurações padrão."));
+        AddWide(destination, 5, StorageAction(useExisting, "Escolhe um banco compatível já existente; a localização acima não se aplica."));
+        AddNote(destination, 6, "A troca será aplicada após reiniciar. O banco atual é preservado.");
+        AddWide(destination, 7, pendingStorage);
         var layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.Controls.Add(Group("Armazenamento atual", table));
@@ -259,6 +263,8 @@ public sealed class SettingsPage : UserControl
     private async Task ActivateAsync(StoreDescriptor descriptor)
     {
         await Task.Run(() => preferences.Write(new StoragePreference(descriptor.StoreId, descriptor.DatabasePath, descriptor.Scope, null)));
+        pendingStorage.Text = $"Será usado após reiniciar: {ScopeName(descriptor.Scope)}\n{descriptor.DatabasePath}";
+        pendingStorage.Visible = true;
         StorageSelected?.Invoke(descriptor);
         ReportMessage("O armazenamento foi selecionado. Reinicie o aplicativo para concluir a troca.", "Armazenamento", false);
     }
@@ -363,6 +369,38 @@ public sealed class SettingsPage : UserControl
         if (dialog.ShowDialog(this) != DialogResult.OK) return false;
         legacyDirectory.Text = dialog.SelectedPath;
         return true;
+    }
+
+    private void UpdateTargetDescription()
+    {
+        var scope = targetScope.SelectedItem is StorageScope selected ? selected : StorageScope.LocalUser;
+        var locations = StorageLocations.CreateDefault();
+        targetPath.Text = scope switch
+        {
+            StorageScope.LocalUser => locations.LocalDatabasePath,
+            StorageScope.SharedMachine => locations.SharedDatabasePath,
+            StorageScope.Portable => locations.PortableDatabasePath,
+            _ => "A pasta será escolhida ao copiar ou criar o banco."
+        };
+        targetDescription.Text = scope switch
+        {
+            StorageScope.SharedMachine => "Disponível aos usuários deste computador. Pode solicitar autorização do Windows.",
+            StorageScope.Portable => "O banco fica na pasta do aplicativo, para uso portátil.",
+            StorageScope.Custom => "Escolha uma pasta vazia para criar ou copiar o armazenamento.",
+            _ => "O banco fica na pasta de dados do seu usuário do Windows."
+        };
+        if (scope != StorageScope.Custom && string.Equals(Path.GetFullPath(targetPath.Text), store.Descriptor.DatabasePath, StringComparison.OrdinalIgnoreCase))
+            targetDescription.Text += " Este é o banco atual; escolha outro destino para copiar ou criar.";
+    }
+
+    private static Control StorageAction(Button button, string description)
+    {
+        var table = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Margin = new Padding(3, 5, 3, 5) };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        button.Dock = DockStyle.None;
+        table.Controls.Add(button, 0, 0);
+        table.Controls.Add(new Label { Text = description, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(3, 2, 3, 2) }, 0, 1);
+        return table;
     }
 
     private void RefreshStorageSize()
