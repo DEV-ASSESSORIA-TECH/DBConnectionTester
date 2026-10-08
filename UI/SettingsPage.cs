@@ -11,6 +11,7 @@ public sealed class SettingsPage : UserControl
     private readonly IApplicationSettingsRepository settingsRepository;
     private readonly IStoragePreferenceStore preferences;
     private readonly StorageMigrationService migration = new();
+    private readonly Control[] layoutContainers;
     private readonly ComboBox theme = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly CheckBox legacyEnabled = new() { Text = "Gravar CSV e TXT durante a execução", AutoSize = true };
     private readonly TextBox legacyDirectory = new();
@@ -96,6 +97,27 @@ public sealed class SettingsPage : UserControl
             Process.Start(new ProcessStartInfo("explorer.exe", Path.GetDirectoryName(store.Descriptor.DatabasePath)!) { UseShellExecute = true });
             return Task.FromResult(true);
         });
+        layoutContainers = LayoutContainers(this).ToArray();
+    }
+
+    // Visibility changes otherwise remeasure each nested AutoSize container repeatedly.
+    // Keep native layout active after the batch so resize, DPI and wrapped text still update.
+    internal void BatchLayout(Action change)
+    {
+        foreach (var container in layoutContainers) container.SuspendLayout();
+        try { change(); }
+        finally
+        {
+            for (var index = layoutContainers.Length - 1; index >= 0; index--)
+                layoutContainers[index].ResumeLayout(true);
+        }
+    }
+
+    private static IEnumerable<Control> LayoutContainers(Control root)
+    {
+        if (root is UserControl or GroupBox or TableLayoutPanel or FlowLayoutPanel) yield return root;
+        foreach (Control child in root.Controls)
+            foreach (var container in LayoutContainers(child)) yield return container;
     }
 
     public event Action<ApplicationSettings>? SettingsSaved;

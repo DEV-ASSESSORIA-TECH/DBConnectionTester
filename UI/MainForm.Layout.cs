@@ -195,18 +195,24 @@ public sealed partial class MainForm
             }
             finally { profileNavigationPending = false; }
         }
-        pageHost.SuspendLayout();
-        try
+        void ActivatePage()
         {
-            activeNavigationButton?.SetSelected(false);
-            activeNavigationButton = (NavigationButton)navigationButtons[title];
-            activeNavigationButton.SetSelected(true);
-            if (activePage is not null) activePage.Visible = false;
-            activePage = page;
-            page.Visible = true;
-            page.BringToFront();
+            pageHost.SuspendLayout();
+            try
+            {
+                activeNavigationButton?.SetSelected(false);
+                activeNavigationButton = (NavigationButton)navigationButtons[title];
+                activeNavigationButton.SetSelected(true);
+                if (activePage is not null) activePage.Visible = false;
+                activePage = page;
+                page.Visible = true;
+                page.BringToFront();
+            }
+            finally { pageHost.ResumeLayout(true); }
         }
-        finally { pageHost.ResumeLayout(true); }
+        if (ReferenceEquals(page, settingsPage) || ReferenceEquals(activePage, settingsPage))
+            settingsPage.BatchLayout(ActivatePage);
+        else ActivatePage();
     }
 
     private sealed class NavigationButton : Button

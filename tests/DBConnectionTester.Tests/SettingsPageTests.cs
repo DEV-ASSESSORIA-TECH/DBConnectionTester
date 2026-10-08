@@ -207,6 +207,33 @@ public sealed class SettingsPageTests
         }
     });
 
+    [Fact]
+    public Task VisibilityBatchReducesLayoutAndAlwaysRestoresResize() => RunUi(async (page, _, form) =>
+    {
+        var layouts = 0;
+        foreach (var control in Descendants(page).Prepend(page)) control.Layout += (_, _) => layouts++;
+        page.Visible = false;
+        layouts = 0;
+        page.Visible = true;
+        var normal = layouts;
+        page.Visible = false;
+        layouts = 0;
+        page.BatchLayout(() => page.Visible = true);
+        Assert.True(layouts < normal, $"Normal: {normal}; agrupado: {layouts}");
+        Assert.Throws<InvalidOperationException>(() => page.BatchLayout(() => throw new InvalidOperationException("Probe")));
+        var path = Field<TextBox>(page, "currentDatabasePath");
+        var originalWidth = path.Width;
+        form.Width -= 200;
+        await Task.Delay(30);
+        Assert.True(path.Width < originalWidth);
+        form.Width += 200;
+        await Task.Delay(30);
+        Assert.True(path.Width >= originalWidth);
+        Field<CheckBox>(page, "legacyEnabled").Checked = true;
+        Assert.True(Field<TextBox>(page, "legacyDirectory").Enabled);
+        Assert.True(page.HasUnsavedChanges);
+    });
+
     private static IEnumerable<Control> Descendants(Control control)
     {
         foreach (Control child in control.Controls) { yield return child; foreach (var descendant in Descendants(child)) yield return descendant; }
