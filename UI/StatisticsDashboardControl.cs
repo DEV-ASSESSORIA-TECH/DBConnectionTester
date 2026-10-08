@@ -1,5 +1,4 @@
 using System.Drawing.Drawing2D;
-using System.ComponentModel;
 using DBConnectionTester.Models;
 
 namespace DBConnectionTester.UI;
@@ -10,12 +9,6 @@ public sealed class StatisticsDashboardControl : UserControl
 
     private readonly ComboBox stageSelector = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150 };
     private readonly Label trendLabel = new() { AutoSize = true, Anchor = AnchorStyles.Left };
-    private readonly MetricTile successRateTile = new("Taxa de sucesso");
-    private readonly MetricTile medianTile = new("Mediana");
-    private readonly MetricTile p95Tile = new("P95");
-    private readonly MetricTile maximumTile = new("Máximo");
-    private readonly MetricTile streakTile = new("Falhas seguidas");
-    private readonly MetricTile lastFailureTile = new("Última falha");
     private readonly LatencyTrendControl chart = new();
     private readonly Dictionary<MetricStage, List<TrendPoint>> histories =
         Enum.GetValues<MetricStage>().ToDictionary(stage => stage, _ => new List<TrendPoint>());
@@ -50,23 +43,11 @@ public sealed class StatisticsDashboardControl : UserControl
         trendLabel.Margin = new Padding(14, 6, 0, 0);
         toolbar.Controls.Add(trendLabel);
 
-        var metrics = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 1 };
-        for (var index = 0; index < 6; index++)
-            metrics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 6));
-        metrics.Controls.Add(successRateTile, 0, 0);
-        metrics.Controls.Add(medianTile, 1, 0);
-        metrics.Controls.Add(p95Tile, 2, 0);
-        metrics.Controls.Add(maximumTile, 3, 0);
-        metrics.Controls.Add(streakTile, 4, 0);
-        metrics.Controls.Add(lastFailureTile, 5, 0);
-
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(4) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Padding = new Padding(4) };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.Controls.Add(toolbar, 0, 0);
-        layout.Controls.Add(metrics, 0, 1);
-        layout.Controls.Add(chart, 0, 2);
+        layout.Controls.Add(chart, 0, 1);
         Controls.Add(layout);
         VisibleChanged += (_, _) => RefreshDashboard();
         ResetDashboard();
@@ -113,25 +94,15 @@ public sealed class StatisticsDashboardControl : UserControl
             return;
 
         var statistics = SelectStatistics(option.Stage);
-        if (statistics is not null) lastFailureTile.Value = FormatElapsed(statistics.TimeSinceLastFailure(DateTimeOffset.Now));
         if (!dashboardDirty) return;
         dashboardDirty = false;
         if (statistics is null)
         {
-            foreach (var tile in MetricTiles())
-                tile.Value = "—";
             trendLabel.Text = "Aguardando dados";
             trendLabel.ForeColor = SystemColors.GrayText;
             chart.SetData(Array.Empty<TrendPoint>(), null, null);
             return;
         }
-
-        successRateTile.Value = statistics.SuccessRate is null ? "—" : $"{statistics.SuccessRate:0.0}%";
-        medianTile.Value = FormatLatency(statistics.MedianMs);
-        p95Tile.Value = FormatLatency(statistics.P95Ms);
-        maximumTile.Value = FormatLatency(statistics.MaximumMs);
-        streakTile.Value = statistics.ConsecutiveFailures.ToString("N0");
-        lastFailureTile.Value = FormatElapsed(statistics.TimeSinceLastFailure(DateTimeOffset.Now));
 
         if (statistics.ConsecutiveFailures > 0)
         {
@@ -167,32 +138,6 @@ public sealed class StatisticsDashboardControl : UserControl
             _ => latestStatistics.DatabaseQuery
         };
 
-    private IEnumerable<MetricTile> MetricTiles()
-    {
-        yield return successRateTile;
-        yield return medianTile;
-        yield return p95Tile;
-        yield return maximumTile;
-        yield return streakTile;
-        yield return lastFailureTile;
-    }
-
-    private static string FormatLatency(double? milliseconds) =>
-        milliseconds is null ? "—" : $"{milliseconds:0.0} ms";
-
-    private static string FormatElapsed(TimeSpan? elapsed)
-    {
-        if (elapsed is null)
-            return "Nunca";
-        if (elapsed.Value.TotalSeconds < 60)
-            return $"{elapsed.Value.TotalSeconds:0} s";
-        if (elapsed.Value.TotalMinutes < 60)
-            return $"{elapsed.Value.TotalMinutes:0.0} min";
-        if (elapsed.Value.TotalHours < 24)
-            return $"{elapsed.Value.TotalHours:0.0} h";
-        return $"{elapsed.Value.TotalDays:0.0} d";
-    }
-
     private sealed record StageOption(string Name, MetricStage Stage)
     {
         public override string ToString() => Name;
@@ -209,43 +154,6 @@ internal enum MetricStage
 }
 
 internal readonly record struct TrendPoint(long Cycle, StepStatus Status, long ElapsedMs);
-
-internal sealed class MetricTile : Panel
-{
-    private readonly Label valueLabel;
-
-    public MetricTile(string caption)
-    {
-        Dock = DockStyle.Fill;
-        Margin = new Padding(3);
-        Padding = new Padding(6, 4, 6, 4);
-        BorderStyle = BorderStyle.FixedSingle;
-        BackColor = Color.FromArgb(247, 248, 250);
-        var captionLabel = new Label
-        {
-            Text = caption,
-            Dock = DockStyle.Top,
-            Height = 18,
-            ForeColor = SystemColors.GrayText,
-            TextAlign = ContentAlignment.MiddleCenter
-        };
-        valueLabel = new Label
-        {
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Font = new Font(Font, FontStyle.Bold)
-        };
-        Controls.Add(valueLabel);
-        Controls.Add(captionLabel);
-    }
-
-    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public string Value
-    {
-        get => valueLabel.Text;
-        set => valueLabel.Text = value;
-    }
-}
 
 internal sealed class LatencyTrendControl : Control
 {
@@ -273,11 +181,21 @@ internal sealed class LatencyTrendControl : Control
     {
         base.OnPaint(e);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        var area = new Rectangle(38, 18, Math.Max(1, Width - 48), Math.Max(1, Height - 34));
+        var successful = points.Where(point => point.Status == StepStatus.Success).ToArray();
+        var maximum = Math.Max(1d, new[]
+        {
+            successful.Length == 0 ? 0 : successful.Max(point => (double)point.ElapsedMs),
+            median ?? 0,
+            p95 ?? 0
+        }.Max() * 1.1);
+        var labelHeight = Font.Height + 4;
+        var axisWidth = TextRenderer.MeasureText($"{maximum:0} ms", Font).Width + 6;
+        var area = new Rectangle(axisWidth, labelHeight + 6,
+            Math.Max(1, Width - axisWidth - 12), Math.Max(1, Height - labelHeight * 2 - 12));
+        if (Width <= axisWidth + 12 || Height <= labelHeight * 2 + 12) return;
         using var borderPen = new Pen(Color.FromArgb(220, 224, 229));
         e.Graphics.DrawRectangle(borderPen, area);
 
-        var successful = points.Where(point => point.Status == StepStatus.Success).ToArray();
         if (successful.Length == 0)
         {
             TextRenderer.DrawText(e.Graphics, "Sem latências para exibir", Font, area,
@@ -285,15 +203,21 @@ internal sealed class LatencyTrendControl : Control
             return;
         }
 
-        var maximum = Math.Max(1d, new[]
+        using var gridPen = new Pen(Color.FromArgb(220, 224, 229)) { DashStyle = DashStyle.Dot };
+        e.Graphics.DrawLine(gridPen, area.Left, area.Top + area.Height / 2f, area.Right, area.Top + area.Height / 2f);
+        DrawReference(e.Graphics, area, maximum, median, Color.FromArgb(65, 120, 180));
+        DrawReference(e.Graphics, area, maximum, p95, Color.FromArgb(220, 135, 45));
+        // Keep reference labels outside the plot so nearby percentiles cannot overlap.
+        var legendX = area.Left;
+        foreach (var reference in new[] { ("Mediana", median, Color.FromArgb(65, 120, 180)), ("P95", p95, Color.FromArgb(220, 135, 45)) })
         {
-            successful.Max(point => (double)point.ElapsedMs),
-            median ?? 0,
-            p95 ?? 0
-        }.Max() * 1.1);
-
-        DrawReference(e.Graphics, area, maximum, median, Color.FromArgb(65, 120, 180), "Mediana");
-        DrawReference(e.Graphics, area, maximum, p95, Color.FromArgb(220, 135, 45), "P95");
+            if (reference.Item2 is null) continue;
+            var text = $"{reference.Item1}: {reference.Item2:0.0} ms";
+            var width = TextRenderer.MeasureText(text, Font).Width;
+            TextRenderer.DrawText(e.Graphics, text, Font, new Rectangle(legendX, 0, Math.Max(0, area.Right - legendX), labelHeight),
+                reference.Item3, TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+            legendX += width + 16;
+        }
 
         using var linePen = new Pen(Color.FromArgb(55, 105, 155), 2);
         using var successBrush = new SolidBrush(Color.FromArgb(55, 105, 155));
@@ -329,17 +253,23 @@ internal sealed class LatencyTrendControl : Control
             }
         }
 
-        TextRenderer.DrawText(e.Graphics, $"{maximum:0} ms", Font, new Point(0, area.Top - 7), SystemColors.GrayText);
-        TextRenderer.DrawText(e.Graphics, "0", Font, new Point(16, area.Bottom - 8), SystemColors.GrayText);
+        TextRenderer.DrawText(e.Graphics, $"{maximum:0} ms", Font, new Point(0, area.Top - Font.Height / 2), SystemColors.GrayText);
+        TextRenderer.DrawText(e.Graphics, "0", Font, new Point(axisWidth - TextRenderer.MeasureText("0", Font).Width - 6, area.Bottom - Font.Height / 2), SystemColors.GrayText);
+        if (points.Count > 0)
+        {
+            var axis = new Rectangle(area.Left, area.Bottom + 4, area.Width, labelHeight);
+            TextRenderer.DrawText(e.Graphics, $"Ciclo {points[0].Cycle}", Font, axis, SystemColors.GrayText, TextFormatFlags.Left);
+            if (points.Count > 1)
+                TextRenderer.DrawText(e.Graphics, $"Ciclo {points[^1].Cycle}", Font, axis, SystemColors.GrayText, TextFormatFlags.Right);
+        }
     }
 
-    private void DrawReference(Graphics graphics, Rectangle area, double maximum, double? value, Color color, string label)
+    private void DrawReference(Graphics graphics, Rectangle area, double maximum, double? value, Color color)
     {
         if (value is null)
             return;
         var y = area.Bottom - (float)(value.Value / maximum * area.Height);
         using var pen = new Pen(color) { DashStyle = DashStyle.Dash };
         graphics.DrawLine(pen, area.Left, y, area.Right, y);
-        TextRenderer.DrawText(graphics, label, Font, new Point(area.Right - 55, (int)y - 14), color);
     }
 }

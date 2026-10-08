@@ -91,6 +91,54 @@ public sealed class ExecutionLayoutTests
                             await Task.Delay(30);
                             Assert.True(results.Height >= 140);
                         }
+                        var execution = Descendants(form).OfType<GroupBox>().Single(c => c.Text == "Execução");
+                        foreach (var databaseType in new[] { DatabaseType.MySqlMariaDb, DatabaseType.SqlServer })
+                        {
+                            Field<ComboBox>(form, "cmbDatabaseType").SelectedItem = DatabaseProfiles.Get(databaseType);
+                            foreach (var width in new[] { 1040, 1020, 1010, 1000, 990, 1040 })
+                            {
+                                form.ClientSize = new Size(width, 750);
+                                await Task.Delay(80);
+                                var settingsArea = (TableLayoutPanel)connection.Parent!;
+                                // These widths bracket the transition and exercise the newly reclaimed space.
+                                if (width >= 1010) Assert.Equal(2, settingsArea.ColumnCount);
+                                if (width <= 1000) Assert.Equal(1, settingsArea.ColumnCount);
+                                if (settingsArea.ColumnCount == 2)
+                                {
+                                    Assert.Equal(connection.Top, execution.Top);
+                                    Assert.True(connection.Right <= execution.Left);
+                                }
+                                else Assert.True(connection.Bottom <= execution.Top);
+                                foreach (var flow in Descendants(execution).OfType<FlowLayoutPanel>())
+                                    foreach (Control child in flow.Controls)
+                                        if (child.Visible)
+                                        {
+                                            Assert.True(child.Right <= flow.ClientSize.Width, $"{child.Text}: {child.Bounds} outside {flow.ClientSize}");
+                                            Assert.True(child.Bottom <= flow.ClientSize.Height);
+                                        }
+                                Snapshot(form, $"execution-breakpoint-{databaseType}-{width}");
+                            }
+                        }
+                        results.ResetResults();
+                        for (var number = 1; number <= 50; number++)
+                            results.AddCycle(cycle with
+                            {
+                                Number = number,
+                                Dns = new DnsResult(StepStatus.Success, "127.0.0.1", number == 1 ? 73 : number % 7, null)
+                            });
+                        var trendStage = stage with { MedianMs = 3, P95Ms = 6, MaximumMs = 73 };
+                        results.UpdateStatistics(new(trendStage, stage, stage, stage, stage));
+                        tabs.SelectedIndex = 2;
+                        foreach (var size in new[] { new Size(1040, 600), new Size(800, 600), new Size(1680, 950) })
+                        {
+                            form.ClientSize = size;
+                            await Task.Delay(80);
+                            var dashboard = Descendants(results).OfType<StatisticsDashboardControl>().Single();
+                            var chart = Descendants(dashboard).Single(c => c.GetType().Name == "LatencyTrendControl");
+                            Assert.DoesNotContain(Descendants(dashboard), c => c.GetType().Name == "MetricTile");
+                            Assert.True(chart.Height >= dashboard.ClientSize.Height - 50);
+                            Snapshot(form, $"execution-trend-{size.Width}x{size.Height}");
+                        }
                     }
                     catch (Exception error) { failure = error; }
                     finally { form.Close(); }
