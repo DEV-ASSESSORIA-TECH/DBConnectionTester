@@ -21,6 +21,7 @@ public sealed class StatisticsDashboardControl : UserControl
         Enum.GetValues<MetricStage>().ToDictionary(stage => stage, _ => new List<TrendPoint>());
 
     private RunStatisticsSnapshot? latestStatistics;
+    private bool dashboardDirty = true;
 
     public StatisticsDashboardControl()
     {
@@ -33,7 +34,7 @@ public sealed class StatisticsDashboardControl : UserControl
             new StageOption("Conexão DB", MetricStage.DatabaseConnect),
             new StageOption("SELECT 1", MetricStage.DatabaseQuery)
         });
-        stageSelector.SelectedIndexChanged += (_, _) => RefreshDashboard();
+        stageSelector.SelectedIndexChanged += (_, _) => { dashboardDirty = true; RefreshDashboard(); };
         stageSelector.SelectedIndex = 0;
 
         var toolbar = new FlowLayoutPanel
@@ -74,6 +75,7 @@ public sealed class StatisticsDashboardControl : UserControl
     public void ResetDashboard()
     {
         latestStatistics = null;
+        dashboardDirty = true;
         foreach (var history in histories.Values)
             history.Clear();
         RefreshDashboard();
@@ -81,6 +83,7 @@ public sealed class StatisticsDashboardControl : UserControl
 
     public void AddCycle(TestCycleResult cycle)
     {
+        dashboardDirty = true;
         AddPoint(MetricStage.Dns, cycle.Number, cycle.Dns.Status, cycle.Dns.ElapsedMs);
         AddPoint(MetricStage.Ping, cycle.Number, cycle.Ping.Status, cycle.Ping.ElapsedMs);
         AddPoint(MetricStage.Tcp, cycle.Number, cycle.Tcp.Status, cycle.Tcp.ElapsedMs);
@@ -90,6 +93,7 @@ public sealed class StatisticsDashboardControl : UserControl
 
     public void UpdateStatistics(RunStatisticsSnapshot statistics)
     {
+        if (latestStatistics != statistics) dashboardDirty = true;
         latestStatistics = statistics;
         RefreshDashboard();
     }
@@ -109,6 +113,9 @@ public sealed class StatisticsDashboardControl : UserControl
             return;
 
         var statistics = SelectStatistics(option.Stage);
+        if (statistics is not null) lastFailureTile.Value = FormatElapsed(statistics.TimeSinceLastFailure(DateTimeOffset.Now));
+        if (!dashboardDirty) return;
+        dashboardDirty = false;
         if (statistics is null)
         {
             foreach (var tile in MetricTiles())

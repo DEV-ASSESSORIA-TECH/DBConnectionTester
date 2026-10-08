@@ -28,6 +28,10 @@ public sealed class HistoryPage : UserControl
     private readonly Button nextCyclePage = new() { Text = "Próxima", AutoSize = true };
     private readonly TextBox details = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
     private readonly LatencyTrendControl chart = new();
+    private readonly TabControl detailTabs = new() { Dock = DockStyle.Fill };
+    private bool cyclesLoaded;
+    private bool cyclesLoading;
+    private bool chartDirty = true;
     private readonly ComboBox chartStage = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly FlowLayoutPanel exportActions = new() { Dock = DockStyle.Fill, AutoSize = true };
     private RunHistoryDetails? selectedDetails;
@@ -75,7 +79,9 @@ public sealed class HistoryPage : UserControl
         previousCyclePage.Click += async (_, _) => await HandleLoadAsync(() => LoadCyclesAsync(Math.Max(1, cyclePage - 1)));
         nextCyclePage.Click += async (_, _) => await HandleLoadAsync(() => LoadCyclesAsync(cyclePage + 1));
         runs.SelectionChanged += async (_, _) => await HandleLoadAsync(LoadSelectedRunAsync);
-        chartStage.SelectedIndexChanged += (_, _) => UpdateChart();
+        detailTabs.SelectedIndexChanged += async (_, _) => await HandleLoadAsync(EnsureCyclesAsync);
+        VisibleChanged += async (_, _) => await HandleLoadAsync(EnsureCyclesAsync);
+        chartStage.SelectedIndexChanged += (_, _) => { chartDirty = true; UpdateChart(); };
         chart.VisibleChanged += (_, _) => UpdateChart();
         AddExportButton("CSV", RunExportFormat.Csv, "csv");
         AddExportButton("TXT", RunExportFormat.Text, "txt");
@@ -175,7 +181,7 @@ public sealed class HistoryPage : UserControl
 
     private Control BuildDetails()
     {
-        var tabs = new TabControl { Dock = DockStyle.Fill };
+        var tabs = detailTabs;
         var overview = new TabPage("Detalhes e diagnósticos");
         overview.Controls.Add(details);
         var cycleTab = new TabPage("Ciclos");
@@ -262,10 +268,17 @@ public sealed class HistoryPage : UserControl
             if (!request.IsCurrent) return;
             selectedDetails = result;
             RenderDetails();
-            await LoadCyclesAsync(1);
+            await EnsureCyclesAsync();
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
         catch (ApplicationStoreException) when (!request.IsCurrent) { }
+    }
+
+    private Task EnsureCyclesAsync()
+    {
+        if (!Visible || detailTabs.SelectedIndex == 0 || selectedDetails is null || cyclesLoaded || cyclesLoading)
+            return Task.CompletedTask;
+        return LoadCyclesAsync(cyclePage);
     }
 
     private async Task LoadCyclesAsync(int requestedPage)
@@ -273,11 +286,14 @@ public sealed class HistoryPage : UserControl
         if (selectedDetails is null || IsDisposed) return;
         var runId = selectedDetails.Run.RunId;
         using var request = cyclesRequests.Start();
+        cyclesLoading = true;
         previousCyclePage.Enabled = nextCyclePage.Enabled = false;
         try
         {
             var result = await Task.Run(() => history.GetCyclesAsync(runId, new PageRequest(requestedPage, CyclesPageSize), request.Token), request.Token);
             if (!request.IsCurrent || selectedDetails?.Run.RunId != runId) return;
+            cyclesLoaded = true;
+            chartDirty = true;
             cyclePage = requestedPage;
             visibleCycles = result.Items;
             cyclePages = result.TotalPages;
@@ -304,6 +320,7 @@ public sealed class HistoryPage : UserControl
         {
             if (request.IsCurrent)
             {
+                cyclesLoading = false;
                 previousCyclePage.Enabled = cyclePage > 1;
                 nextCyclePage.Enabled = cyclePage < cyclePages;
             }
@@ -338,7 +355,8 @@ public sealed class HistoryPage : UserControl
 
     private void UpdateChart()
     {
-        if (!chart.Visible) return;
+        if (!chart.Visible || !chartDirty) return;
+        chartDirty = false;
         var stageName = chartStage.SelectedItem as string ?? "DatabaseConnect";
         var points = visibleCycles.Select(cycle =>
         {
@@ -394,6 +412,7 @@ public sealed class HistoryPage : UserControl
     private void ClearDetails()
     {
         selectedDetails = null; visibleCycles = []; details.Clear(); cycles.Rows.Clear(); chart.SetData([], null, null);
+        cyclesLoaded = cyclesLoading = false; chartDirty = true;
         cyclePage = 1; cyclePages = 0; cyclePageLabel.Text = "";
         previousCyclePage.Enabled = nextCyclePage.Enabled = false;
         foreach (Control control in exportActions.Controls) control.Enabled = false;

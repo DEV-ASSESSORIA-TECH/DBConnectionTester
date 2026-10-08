@@ -327,13 +327,26 @@ public sealed partial class MainForm
         area.Controls.Add(buttons, 0, 0);
         area.Controls.Add(progressBar, 0, 1);
         area.Controls.Add(lblStatus, 0, 2);
+        (int Width, Font Font, int Dpi)? measuredActions = null;
+        var actionsHeight = 0;
         void UpdateHeight()
         {
             var statusHeight = lblStatus.Font.Height * 2 + 8;
-            area.RowStyles[2].Height = statusHeight;
-            var actionsHeight = buttons.GetPreferredSize(new Size(Math.Max(1, area.ClientSize.Width), 0)).Height;
+            if (area.RowStyles[2].Height != statusHeight) area.RowStyles[2].Height = statusHeight;
+            var key = (Math.Max(1, area.ClientSize.Width), buttons.Font, area.DeviceDpi);
+            if (measuredActions != key)
+            {
+                measuredActions = key;
+                actionsHeight = buttons.GetPreferredSize(new Size(key.Item1, 0)).Height;
+            }
             var height = actionsHeight + progressBar.Height + progressBar.Margin.Vertical + statusHeight;
             if (area.Height != height) area.Height = height;
+        }
+        // Invalidate the measurement when button content changes (e.g. DPI scaling).
+        foreach (Control button in buttons.Controls)
+        {
+            button.TextChanged += (_, _) => { measuredActions = null; UpdateHeight(); };
+            button.FontChanged += (_, _) => { measuredActions = null; UpdateHeight(); };
         }
         area.SizeChanged += (_, _) => UpdateHeight();
         area.FontChanged += (_, _) => UpdateHeight();

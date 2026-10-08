@@ -47,6 +47,7 @@ public sealed class HistoryLoadingTests
     [InlineData(true)]
     public Task OlderSelectionCannotReplaceDetailsOrCycles(bool blockCycles) => RunUi(async (page, repository) =>
     {
+        ShowCycles(page);
         var started = Signal();
         var release = Signal();
         repository.Details = async id =>
@@ -113,8 +114,8 @@ public sealed class HistoryLoadingTests
         await page.RefreshAsync();
         if (cyclePager)
         {
-            var cycleTab = (TabPage)Field<DataGridView>(page, "cycles").Parent!.Parent!;
-            ((TabControl)cycleTab.Parent!).SelectedTab = cycleTab;
+            ShowCycles(page);
+            await WaitUntil(() => Field<Button>(page, "nextCyclePage").Enabled);
         }
         var next = Field<Button>(page, cyclePager ? "nextCyclePage" : "nextRunPage");
         var label = Field<Label>(page, cyclePager ? "cyclePageLabel" : "runPageLabel");
@@ -154,6 +155,46 @@ public sealed class HistoryLoadingTests
         }
         finally { release.TrySetResult(); }
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task CyclesAreLoadedOnDemandAndReusedAcrossTabs(bool empty) => RunUi(async (page, repository) =>
+    {
+        var queries = 0;
+        repository.Cycles = (_, request) =>
+        {
+            Interlocked.Increment(ref queries);
+            var cycle = new PersistedCycle(1, DateTimeOffset.Now, "", "", "", "", 0, []);
+            return Task.FromResult(new PagedResult<PersistedCycle>(empty ? [] : [cycle], empty ? 0 : 1, request.PageNumber, 100));
+        };
+        await page.RefreshAsync();
+        Assert.Equal(0, queries);
+        ShowCycles(page);
+        await WaitUntil(() => Field<Label>(page, "cyclePageLabel").Text.Length > 0);
+        var tabs = (TabControl)Field<DataGridView>(page, "cycles").Parent!.Parent!.Parent!;
+        tabs.SelectedIndex = 0;
+        tabs.SelectedIndex = 2;
+        var chart = Field<Control>(page, "chart");
+        var pointsField = chart.GetType().GetField("points", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var points = pointsField.GetValue(chart);
+        tabs.SelectedIndex = 0;
+        tabs.SelectedIndex = 2;
+        Assert.Same(points, pointsField.GetValue(chart));
+        page.Visible = false;
+        page.Visible = true;
+        await Task.Delay(30);
+        Assert.Equal(1, queries);
+        Assert.Equal(empty ? 0 : 1, Field<DataGridView>(page, "cycles").Rows.Count);
+        await page.RefreshAsync();
+        Assert.Equal(2, queries);
+    });
+
+    private static void ShowCycles(HistoryPage page)
+    {
+        var cycleTab = (TabPage)Field<DataGridView>(page, "cycles").Parent!.Parent!;
+        ((TabControl)cycleTab.Parent!).SelectedTab = cycleTab;
+    }
 
     private static async Task WaitUntil(Func<bool> predicate)
     {

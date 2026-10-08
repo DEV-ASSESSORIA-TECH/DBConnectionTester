@@ -15,6 +15,7 @@ public sealed class ResultsControl : UserControl
     private readonly DataGridView statisticsGrid = new();
     private readonly StatisticsDashboardControl statisticsDashboard = new();
     private RunStatisticsSnapshot? latestStatistics;
+    private bool statisticsDirty;
 
     public ResultsControl()
     {
@@ -82,6 +83,7 @@ public sealed class ResultsControl : UserControl
 
     public void UpdateStatistics(RunStatisticsSnapshot statistics)
     {
+        if (latestStatistics != statistics) statisticsDirty = true;
         latestStatistics = statistics;
         RenderStatistics();
         statisticsDashboard.UpdateStatistics(statistics);
@@ -90,6 +92,11 @@ public sealed class ResultsControl : UserControl
     private void RenderStatistics()
     {
         if (!statisticsGrid.Visible || latestStatistics is not { } statistics) return;
+        var stages = new[] { statistics.Dns, statistics.Ping, statistics.Tcp, statistics.DatabaseConnect, statistics.DatabaseQuery };
+        for (var i = 0; i < stages.Length; i++)
+            statisticsGrid.Rows[i].Cells[10].Value = FormatElapsed(stages[i].TimeSinceLastFailure(DateTimeOffset.Now));
+        if (!statisticsDirty) return;
+        statisticsDirty = false;
         UpdateStatisticsRow(0, statistics.Dns);
         UpdateStatisticsRow(1, statistics.Ping);
         UpdateStatisticsRow(2, statistics.Tcp);
@@ -199,6 +206,7 @@ public sealed class ResultsControl : UserControl
     private void ResetStatistics()
     {
         latestStatistics = null;
+        statisticsDirty = false;
         foreach (DataGridViewRow row in statisticsGrid.Rows)
         {
             for (var column = 1; column <= 7; column++)
