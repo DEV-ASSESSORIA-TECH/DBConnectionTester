@@ -180,6 +180,40 @@ public sealed class ProfilesLoadingTests
         Assert.True(Field<Button>(page, "save").Enabled);
     });
 
+    [Fact]
+    public Task CompactFieldsAdaptWithoutOverlapAndHideForSqlite() => RunUi(async (page, _, form) =>
+    {
+        await page.RefreshAsync();
+        Field<ListBox>(page, "profiles").SelectedIndex = 0;
+        var host = Field<TextBox>(page, "host");
+        var port = Field<NumericUpDown>(page, "port");
+        foreach (var size in new[] { new System.Drawing.Size(1300, 850), new System.Drawing.Size(640, 620), new System.Drawing.Size(1000, 760) })
+        {
+            form.ClientSize = size;
+            await Task.Delay(40);
+            var editor = Field<TableLayoutPanel>(page, "editor");
+            var compact = editor.Width * 96d / editor.DeviceDpi >= 650;
+            Assert.Equal(compact, ReferenceEquals(host.Parent, port.Parent) && host.Parent != editor);
+            if (compact) Assert.True(host.Right <= port.Left);
+            Assert.True(host.Width > 100);
+            var output = Environment.GetEnvironmentVariable("DBCT_UI_SNAPSHOT_DIR");
+            if (output is not null)
+            {
+                Directory.CreateDirectory(output);
+                using var image = new System.Drawing.Bitmap(form.Width, form.Height);
+                form.DrawToBitmap(image, new System.Drawing.Rectangle(System.Drawing.Point.Empty, form.Size));
+                image.Save(Path.Combine(output, $"profiles-{size.Width}x{size.Height}.png"));
+            }
+        }
+        Field<ComboBox>(page, "databaseType").SelectedItem = DatabaseProfiles.Get(DatabaseType.Sqlite);
+        Assert.False(host.Visible);
+        Assert.False(port.Visible);
+        Assert.True(Field<TextBox>(page, "sqliteFile").Visible);
+        Field<ComboBox>(page, "databaseType").SelectedItem = DatabaseProfiles.Get(DatabaseType.MySqlMariaDb);
+        Assert.True(host.Visible);
+        Assert.True(port.Visible);
+    });
+
     private static Task RunUi(Func<ProfilesPage, Repository, Form, Task> action)
     {
         var finished = Signal();

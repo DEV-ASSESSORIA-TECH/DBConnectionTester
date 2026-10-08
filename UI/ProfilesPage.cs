@@ -42,6 +42,7 @@ public sealed class ProfilesPage : UserControl
     private readonly Dictionary<Control, UiLayout.FieldRow> fields = [];
     private readonly Button create = new() { Text = "Novo perfil", AutoSize = true };
     private readonly TableLayoutPanel editor;
+    private readonly List<CompactFieldPair> compactPairs = [];
 
 
     public ProfilesPage(IConnectionProfileRepository repository)
@@ -77,6 +78,9 @@ public sealed class ProfilesPage : UserControl
         AddRow(editor, row++, "Camadas:", layers);
         AddRow(editor, row++, "Comportamento:", background);
         editor.RowCount = row;
+        compactPairs.Add(new CompactFieldPair(editor, fields[host], fields[port], 110));
+        compactPairs.Add(new CompactFieldPair(editor, fields[interval], fields[timeout], 90));
+        editor.SizeChanged += (_, _) => UpdateCompactFields();
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
 
         save.Font = new Font(Font, FontStyle.Bold);
@@ -230,6 +234,7 @@ public sealed class ProfilesPage : UserControl
             tcp.Enabled = canEdit && state.AllowTcp; databaseTest.Enabled = canEdit && state.AllowDatabaseTest;
             if (state.RequireDatabaseTest) databaseTest.Checked = true;
             if (state.RequireTcp) tcp.Checked = true;
+            UpdateCompactFields();
             testCount.Enabled = canEdit && !continuous.Checked;
             delete.Enabled = canEdit && selectedId is not null;
             use.Enabled = canEdit && (selectedId is not null || HasUnsavedChanges);
@@ -425,6 +430,69 @@ public sealed class ProfilesPage : UserControl
         dns.Checked = defaults.Dns; ping.Checked = defaults.Ping; tcp.Checked = defaults.Tcp;
         databaseTest.Checked = defaults.DatabaseTest; background.Checked = defaults.StartInBackground;
     });
+
+    private void UpdateCompactFields()
+    {
+        if (compactPairs.Count == 0) return;
+        var compact = editor.ClientSize.Width * 96d / editor.DeviceDpi >= 650;
+        var type = (databaseType.SelectedItem as DatabaseProfile)?.Type ?? DatabaseType.MySqlMariaDb;
+        compactPairs[0].Update(compact, DatabaseUiState.Create(type, SqlServerAuthentication.Windows).ShowHost);
+        compactPairs[1].Update(compact, true);
+    }
+
+    private sealed class CompactFieldPair
+    {
+        private readonly TableLayoutPanel table;
+        private readonly UiLayout.FieldRow first;
+        private readonly UiLayout.FieldRow second;
+        private readonly TableLayoutPanel line;
+        private bool compact;
+
+        public CompactFieldPair(TableLayoutPanel table, UiLayout.FieldRow first, UiLayout.FieldRow second, int inputWidth)
+        {
+            this.table = table; this.first = first; this.second = second;
+            line = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
+            line.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            line.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            line.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, inputWidth * table.DeviceDpi / 96f));
+        }
+
+        public void Update(bool requested, bool visible)
+        {
+            requested &= visible;
+            if (requested == compact) return;
+            table.SuspendLayout(); line.SuspendLayout();
+            try
+            {
+                compact = requested;
+                if (compact)
+                {
+                    table.Controls.Remove(first.Input);
+                    table.Controls.Remove(second.Label);
+                    table.Controls.Remove(second.Input);
+                    line.Controls.Add(first.Input, 0, 0);
+                    line.Controls.Add(second.Label, 1, 0);
+                    line.Controls.Add(second.Input, 2, 0);
+                    table.Controls.Add(line, 1, first.Row);
+                    table.RowStyles[second.Row].SizeType = SizeType.Absolute;
+                    table.RowStyles[second.Row].Height = 0;
+                }
+                else
+                {
+                    table.Controls.Remove(line);
+                    line.Controls.Remove(first.Input);
+                    line.Controls.Remove(second.Label);
+                    line.Controls.Remove(second.Input);
+                    table.Controls.Add(first.Input, 1, first.Row);
+                    table.Controls.Add(second.Label, 0, second.Row);
+                    table.Controls.Add(second.Input, 1, second.Row);
+                    table.RowStyles[second.Row].SizeType = visible ? SizeType.AutoSize : SizeType.Absolute;
+                    table.RowStyles[second.Row].Height = 0;
+                }
+            }
+            finally { line.ResumeLayout(true); table.ResumeLayout(true); }
+        }
+    }
 
     private static void AddSection(TableLayoutPanel table, int row, string title)
     {
