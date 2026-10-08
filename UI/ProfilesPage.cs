@@ -40,7 +40,7 @@ public sealed class ProfilesPage : UserControl
     private readonly LatestUiRequest refreshRequests = new();
     private readonly LatestUiRequest mutationRequests = new();
     private readonly Dictionary<Control, UiLayout.FieldRow> fields = [];
-    private readonly Button create = new() { Text = "Novo", AutoSize = true };
+    private readonly Button create = new() { Text = "Novo perfil", AutoSize = true };
     private readonly TableLayoutPanel editor;
 
 
@@ -83,7 +83,9 @@ public sealed class ProfilesPage : UserControl
         editor.SetColumnSpan(editor.GetControlFromPosition(0, row)!, 2);
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
 
-        buttons.Controls.AddRange(new Control[] { create, save, delete, use });
+        save.Font = new Font(Font, FontStyle.Bold);
+        delete.Margin = new Padding(24, 3, 3, 3);
+        buttons.Controls.AddRange(new Control[] { save, use, delete });
         var viewport = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true };
         viewport.Controls.Add(editor);
         var editorHost = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
@@ -109,11 +111,14 @@ public sealed class ProfilesPage : UserControl
                 Math.Max(split.Panel1MinSize, extent - split.Panel2MinSize - split.SplitterWidth));
             split.ResumeLayout(true);
         };
-        var listPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        var listPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3 };
         listPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         listPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         listPanel.Controls.Add(new Label { Text = "Perfis", AutoSize = true, Font = new Font(Font.FontFamily, 20, FontStyle.Bold), Margin = new Padding(3, 3, 3, 14) });
-        listPanel.Controls.Add(profiles, 0, 1);
+        listPanel.RowStyles.Insert(1, new RowStyle(SizeType.AutoSize));
+        listPanel.Controls.Add(create, 0, 1);
+        create.Margin = new Padding(3, 0, 3, 10);
+        listPanel.Controls.Add(profiles, 0, 2);
         split.Panel1.Padding = new Padding(0, 0, 12, 0);
         split.Panel1.Controls.Add(listPanel);
         split.Panel2.Controls.Add(editorHost);
