@@ -60,7 +60,7 @@ public sealed class ProfilesPage : UserControl
         databaseType.DisplayMember = nameof(DatabaseProfile.DisplayName);
         authentication.Items.AddRange(Enum.GetValues<SqlServerAuthentication>().Cast<object>().ToArray());
 
-        editor = UiLayout.Fields(160);
+        editor = UiLayout.Fields(120);
         var row = 0;
         AddSection(editor, row++, "Identificação");
         AddRow(editor, row++, "Nome:", name);
@@ -71,7 +71,7 @@ public sealed class ProfilesPage : UserControl
         AddRow(editor, row++, "Usuário:", user);
         AddRow(editor, row++, "Banco (opcional):", database);
         AddRow(editor, row++, "Arquivo SQLite:", sqliteFile);
-        AddRow(editor, row++, "Autenticação SQL Server:", authentication);
+        AddRow(editor, row++, "Autenticação:", authentication);
         AddRow(editor, row++, "Driver ODBC:", odbcDriver);
         AddNote(editor, row++, "A senha não é salva no perfil. Informe-a em Nova execução.");
         AddSection(editor, row++, "Execução");
@@ -106,20 +106,28 @@ public sealed class ProfilesPage : UserControl
         editorHost.Controls.Add(buttons, 0, 2);
         editorHost.Controls.Add(viewport, 0, 3);
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, Size = new Size(900, 650), SplitterDistance = 220,
+        var split = new SplitContainer { Dock = DockStyle.Fill, Size = new Size(900, 650), SplitterDistance = 200,
             FixedPanel = FixedPanel.Panel1, Panel1MinSize = 80, Panel2MinSize = 140 };
         split.SizeChanged += (_, _) =>
         {
-            var orientation = split.ClientSize.Width * 96d / split.DeviceDpi >= 800 ? Orientation.Vertical : Orientation.Horizontal;
-            if (split.Orientation == orientation) return;
+            var width = split.ClientSize.Width * 96d / split.DeviceDpi;
+            var orientation = width >= 680 ? Orientation.Vertical : Orientation.Horizontal;
             var extent = orientation == Orientation.Vertical ? split.ClientSize.Width : split.ClientSize.Height;
             if (extent <= split.Panel1MinSize + split.Panel2MinSize + split.SplitterWidth) return;
-            split.SuspendLayout();
-            split.SplitterDistance = split.Panel1MinSize;
-            split.Orientation = orientation;
-            var preferred = (int)((orientation == Orientation.Vertical ? 220 : 130) * split.DeviceDpi / 96d);
-            split.SplitterDistance = Math.Clamp(preferred, split.Panel1MinSize,
+            // Reclaim list width gradually before stacking the list above the editor.
+            var listSize = orientation == Orientation.Vertical ? Math.Clamp(width - 500, 180, 200) : 130;
+            var preferred = (int)(listSize * split.DeviceDpi / 96d);
+            var distance = Math.Clamp(preferred, split.Panel1MinSize,
                 Math.Max(split.Panel1MinSize, extent - split.Panel2MinSize - split.SplitterWidth));
+            if (split.Orientation == orientation && split.SplitterDistance == distance) return;
+            split.SuspendLayout();
+            if (split.Orientation != orientation)
+            {
+                split.SplitterDistance = split.Panel1MinSize;
+                split.Orientation = orientation;
+            }
+            split.Panel1.Padding = orientation == Orientation.Vertical ? new Padding(0, 0, 12, 0) : new Padding(0, 0, 0, 10);
+            split.SplitterDistance = distance;
             split.ResumeLayout(true);
         };
         var listPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3 };
@@ -466,7 +474,7 @@ public sealed class ProfilesPage : UserControl
     private void UpdateCompactFields()
     {
         if (compactPairs.Count == 0) return;
-        var compact = editor.ClientSize.Width * 96d / editor.DeviceDpi >= 650;
+        var compact = editor.ClientSize.Width * 96d / editor.DeviceDpi >= 500;
         var type = (databaseType.SelectedItem as DatabaseProfile)?.Type ?? DatabaseType.MySqlMariaDb;
         compactPairs[0].Update(compact, DatabaseUiState.Create(type, SqlServerAuthentication.Windows).ShowHost);
         compactPairs[1].Update(compact, true);

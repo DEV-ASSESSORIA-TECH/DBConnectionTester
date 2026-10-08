@@ -196,7 +196,7 @@ public sealed class ProfilesLoadingTests
             form.ClientSize = size;
             await Task.Delay(40);
             var editor = Field<TableLayoutPanel>(page, "editor");
-            var compact = editor.Width * 96d / editor.DeviceDpi >= 650;
+            var compact = editor.Width * 96d / editor.DeviceDpi >= 500;
             Assert.Equal(compact, ReferenceEquals(host.Parent, port.Parent) && host.Parent != editor);
             if (compact) Assert.True(host.Right <= port.Left);
             Assert.True(host.Width > 100);
@@ -216,6 +216,51 @@ public sealed class ProfilesLoadingTests
         Field<ComboBox>(page, "databaseType").SelectedItem = DatabaseProfiles.Get(DatabaseType.MySqlMariaDb);
         Assert.True(host.Visible);
         Assert.True(port.Visible);
+    });
+
+    [Fact]
+    public Task NarrowProfilesKeepListBesideEditorAndFieldsWithinBounds() => RunUi(async (page, _, form) =>
+    {
+        await page.RefreshAsync();
+        Field<ListBox>(page, "profiles").SelectedIndex = 0;
+        var split = page.Controls.OfType<SplitContainer>().Single();
+        var editor = Field<TableLayoutPanel>(page, "editor");
+        foreach (var type in Enum.GetValues<DatabaseType>())
+        {
+            Field<ComboBox>(page, "databaseType").SelectedItem = DatabaseProfiles.Get(type);
+            Field<ComboBox>(page, "authentication").SelectedItem = SqlServerAuthentication.SqlLogin;
+            foreach (var width in new[] { 800, 762, 740, 720, 719, 690, 719, 720, 740, 800 })
+            {
+                form.ClientSize = new System.Drawing.Size(width, 620);
+                await Task.Delay(30);
+                Assert.Equal(width >= 720 ? Orientation.Vertical : Orientation.Horizontal, split.Orientation);
+                if (split.Orientation == Orientation.Vertical)
+                    Assert.InRange(split.SplitterDistance * 96d / split.DeviceDpi, 180, 200);
+                foreach (Control control in editor.Controls)
+                    if (control.Visible)
+                        Assert.True(control.Right <= editor.ClientSize.Width, $"{type}, {width}: {control.Text} outside editor");
+                foreach (var caption in editor.Controls.OfType<Label>().Where(label => label.Visible && editor.GetColumnSpan(label) == 1))
+                {
+                    var position = editor.GetPositionFromControl(caption);
+                    var input = editor.GetControlFromPosition(1, position.Row);
+                    if (input is not null && input.Visible)
+                        Assert.True(caption.Right <= input.Left, $"{type}, {width}: label overlaps {caption.Text}");
+                }
+                var stages = Field<CheckBox>(page, "databaseTest").Parent!;
+                foreach (Control option in stages.Controls)
+                    Assert.True(option.Right <= stages.ClientSize.Width && option.Bottom <= stages.ClientSize.Height, $"{type}, {width}: {option.Text}");
+                var name = Field<TextBox>(page, "name");
+                Assert.True(name.Width > 180);
+                var output = Environment.GetEnvironmentVariable("DBCT_UI_SNAPSHOT_DIR");
+                if (output is not null && width is 800 or 720 or 719)
+                {
+                    Directory.CreateDirectory(output);
+                    using var image = new System.Drawing.Bitmap(form.Width, form.Height);
+                    form.DrawToBitmap(image, new System.Drawing.Rectangle(System.Drawing.Point.Empty, form.Size));
+                    image.Save(Path.Combine(output, $"profiles-narrow-{type}-{width}.png"));
+                }
+            }
+        }
     });
 
     private static Task RunUi(Func<ProfilesPage, Repository, Form, Task> action)
