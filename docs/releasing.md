@@ -58,6 +58,10 @@ dotnet test tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj -c Re
 
 O job de release só roda para uma tag `v*`, após validação, e exige que o nome corresponda a `v<VERSION>`. Uma tag divergente falha. O job publica ou atualiza a GitHub Release usando os artefatos validados. Execuções de branch não publicam uma release.
 
-Cada pacote, checksum individual e `SHA256SUMS.txt` é enviado separadamente com `archive: false`, totalizando sete artefatos sem um ZIP adicional. Nesse modo, o nome do artefato é o nome do arquivo. O job de release baixa os seis arquivos `DBConnectionTester-v*` e o manifesto `SHA256SUMS.txt` explicitamente, reunindo-os na mesma pasta antes da publicação.
+Branches e PRs geram e validam os pacotes sem enviar artefatos ao Actions. Somente tags enviam os sete arquivos (três pacotes, três checksums e `SHA256SUMS.txt`) em um único artefato temporário `DBConnectionTester-v<VERSION>-release-bundle`, com `archive: true`, `compression-level: 0` e retenção de um dia. O contêiner de transferência preserva os ZIPs e o EXE originais durante o download.
+
+Após criar ou atualizar a release, o workflow confirma que todos os arquivos locais constam nos assets publicados com o mesmo tamanho. Só então exclui o artefato temporário pelo ID fornecido pelo job de validação. A limpeza requer `actions: write` somente no job de release; não remove assets da GitHub Release nem artefatos de outras execuções. Se a publicação ou verificação falhar, o artefato é preservado até expirar, permitindo nova tentativa dentro desse prazo. Após a exclusão ou expiração, execute o workflow completo novamente; repetir apenas o job de release não terá o contêiner disponível.
+
+Arquivos no disco do runner hospedado são temporários. Esta política evita o acúmulo de novos artefatos persistidos no Actions, mas não remove os antigos: uma limpeza inicial deve ser feita separadamente, identificando os artefatos dispensáveis. Não é necessário excluir logs ou releases para aplicar esta política.
 
 Esta preparação de documentação não cria tag nem envia commits. Quando a entrega for aprovada, confira a CI e autorize separadamente a criação/envio da tag e a publicação.

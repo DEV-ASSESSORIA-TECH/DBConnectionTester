@@ -18,6 +18,9 @@ jobs:
   validate:
     name: Validate Windows x64
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+      release-artifact-id: ${{ steps.release_bundle.outputs.artifact-id }}
 
     steps:
       - name: Checkout
@@ -63,63 +66,26 @@ jobs:
         shell: pwsh
         run: ./build/Publish-Release.ps1 -NoRestore
 
-      # With archive=false, each upload must contain exactly one file and its
-      # filename becomes the artifact name (the name input would be ignored).
-      - name: Upload framework-dependent package
+      # Transfer the seven release files in one ZIP container. Compression is
+      # disabled because the packages are already compressed.
+      - name: Upload temporary release bundle
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: release_bundle
         uses: actions/upload-artifact@v7
         with:
-          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-framework-dependent.zip
-          archive: false
+          name: DBConnectionTester-v${{ steps.version.outputs.value }}-release-bundle
+          path: |
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-framework-dependent.zip
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-framework-dependent.zip.sha256
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.zip
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.zip.sha256
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.exe
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.exe.sha256
+            artifacts/SHA256SUMS.txt
+          archive: true
+          compression-level: 0
           if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload framework-dependent checksum
-        uses: actions/upload-artifact@v7
-        with:
-          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-framework-dependent.zip.sha256
-          archive: false
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload self-contained package
-        uses: actions/upload-artifact@v7
-        with:
-          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.zip
-          archive: false
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload self-contained checksum
-        uses: actions/upload-artifact@v7
-        with:
-          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.zip.sha256
-          archive: false
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload standalone executable
-        uses: actions/upload-artifact@v7
-        with:
-          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.exe
-          archive: false
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload standalone checksum
-        uses: actions/upload-artifact@v7
-        with:
-          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.exe.sha256
-          archive: false
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload checksum manifest
-        uses: actions/upload-artifact@v7
-        with:
-          path: artifacts/SHA256SUMS.txt
-          archive: false
-          if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
   release:
     name: Publish GitHub Release
@@ -128,32 +94,52 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      actions: write
 
     steps:
       - name: Download validated artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: DBConnectionTester-v*
-          path: artifacts
-          merge-multiple: true
-
-      - name: Download checksum manifest
-        uses: actions/download-artifact@v7
-        with:
-          name: SHA256SUMS.txt
+          name: DBConnectionTester-v${{ needs.validate.outputs.version }}-release-bundle
           path: artifacts
 
       - name: Create or update GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release view "${{ github.ref_name }}" 2>$null
+          $files = @(Get-ChildItem -LiteralPath artifacts -File)
+          if ($files.Count -ne 7) { throw "Expected seven release files, found $($files.Count)." }
+          gh release view $env:RELEASE_TAG 2>$null
           $releaseExists = $LASTEXITCODE -eq 0
           if ($releaseExists) {
-            gh release upload "${{ github.ref_name }}" artifacts/* --clobber
+            gh release upload $env:RELEASE_TAG artifacts/* --clobber
           } else {
-            gh release create "${{ github.ref_name }}" artifacts/* `
-              --title "DB Connection Tester ${{ github.ref_name }}" `
+            gh release create $env:RELEASE_TAG artifacts/* `
+              --title "DB Connection Tester $env:RELEASE_TAG" `
               --generate-notes
           }
+          if ($LASTEXITCODE -ne 0) { throw "GitHub Release publication failed; retaining the temporary artifact." }
+
+          $releaseJson = gh release view $env:RELEASE_TAG --json assets
+          if ($LASTEXITCODE -ne 0) { throw "Unable to verify published assets; retaining the temporary artifact." }
+          $publishedAssets = ($releaseJson | ConvertFrom-Json).assets
+          foreach ($file in $files) {
+            $asset = @($publishedAssets | Where-Object { $_.name -eq $file.Name -and $_.size -eq $file.Length })
+            if ($asset.Count -ne 1) { throw "Published asset missing or size mismatch: $($file.Name). Retaining the temporary artifact." }
+          }
+
+      # Delete only the bundle produced by this run, after publication and
+      # asset verification succeed. Failed releases expire after one day.
+      - name: Delete temporary release bundle
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          ARTIFACT_ID: ${{ needs.validate.outputs.release-artifact-id }}
+        run: |
+          if ($env:ARTIFACT_ID -notmatch '^\d+$') { throw "Missing or invalid temporary artifact ID." }
+          gh api --method DELETE "repos/$env:REPOSITORY/actions/artifacts/$env:ARTIFACT_ID"
+          if ($LASTEXITCODE -ne 0) { throw "Unable to delete temporary artifact $env:ARTIFACT_ID." }
