@@ -268,6 +268,35 @@ public sealed class HistoryLoadingTests
     });
 
     [Fact]
+    public Task SqliteExportFailureIsReportedAndExportCanBeRetried() => RunUi(async (page, repository) =>
+    {
+        await page.RefreshAsync();
+        await StartExport(page, () => Task.FromException<RunExportResult>(new Microsoft.Data.Sqlite.SqliteException("database is locked", 5)));
+        Assert.Contains("database is locked", Field<Label>(page, "exportFeedback").Text);
+        Assert.False(Field<Button>(page, "openExportFolder").Visible);
+        Assert.All(Field<FlowLayoutPanel>(page, "exportActions").Controls.OfType<Button>().Where(b => b.Text != "Abrir pasta"), b => Assert.True(b.Enabled));
+        await StartExport(page, () => Task.FromResult(new RunExportResult(repository.A.RunId, [Path.Combine(Path.GetTempPath(), "retry.csv")])));
+        Assert.Contains("Exportação concluída", Field<Label>(page, "exportFeedback").Text);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task SqliteHistoryFailureUsesExistingErrorBoundaryAndRefreshCanBeRetried(bool details) => RunUi(async (page, repository) =>
+    {
+        var error = new Microsoft.Data.Sqlite.SqliteException("database is locked", 5);
+        if (details) repository.Details = _ => Task.FromException<RunHistoryDetails?>(error);
+        else repository.Search = (_, _) => Task.FromException<PagedResult<RunHistoryItem>>(error);
+        var wrapped = await Assert.ThrowsAsync<ApplicationStoreException>(() => page.RefreshAsync());
+        Assert.Same(error, wrapped.InnerException);
+        repository.Details = null;
+        repository.Search = null;
+        await page.RefreshAsync();
+        Assert.Equal(2, Field<DataGridView>(page, "runs").Rows.Count);
+        Assert.Contains("A", Field<TextBox>(page, "details").Text);
+    });
+
+    [Fact]
     public Task ClosingHistoryWhileExportingDoesNotUpdateDisposedControls() => RunUi(async (page, repository) =>
     {
         await page.RefreshAsync();

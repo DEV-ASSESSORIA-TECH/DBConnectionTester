@@ -156,7 +156,11 @@ public sealed class HistoryPage : UserControl
             await LoadRunsAsync(runPage, request.Token);
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
-        catch (ApplicationStoreException) when (!request.IsCurrent) { }
+        catch (Exception error) when (!request.IsCurrent && error is ApplicationStoreException or Microsoft.Data.Sqlite.SqliteException) { }
+        catch (Microsoft.Data.Sqlite.SqliteException error)
+        {
+            throw new ApplicationStoreException("Não foi possível carregar o histórico: " + error.Message, error);
+        }
         finally
         {
             if (request.IsCurrent)
@@ -315,7 +319,11 @@ public sealed class HistoryPage : UserControl
             runPageLabel.Text = $"Página {runPage} de {Math.Max(1, runPages)} · {result.TotalItems:N0} execuções";
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
-        catch (ApplicationStoreException) when (!request.IsCurrent) { }
+        catch (Exception error) when (!request.IsCurrent && error is ApplicationStoreException or Microsoft.Data.Sqlite.SqliteException) { }
+        catch (Microsoft.Data.Sqlite.SqliteException error)
+        {
+            throw new ApplicationStoreException("Não foi possível carregar o histórico: " + error.Message, error);
+        }
         finally
         {
             if (request.IsCurrent)
@@ -343,7 +351,11 @@ public sealed class HistoryPage : UserControl
             await EnsureCyclesAsync();
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
-        catch (ApplicationStoreException) when (!request.IsCurrent) { }
+        catch (Exception error) when (!request.IsCurrent && error is ApplicationStoreException or Microsoft.Data.Sqlite.SqliteException) { }
+        catch (Microsoft.Data.Sqlite.SqliteException error)
+        {
+            throw new ApplicationStoreException("Não foi possível carregar o histórico: " + error.Message, error);
+        }
     }
 
     private Task EnsureCyclesAsync()
@@ -390,7 +402,11 @@ public sealed class HistoryPage : UserControl
             UpdateChart();
         }
         catch (OperationCanceledException) when (request.Token.IsCancellationRequested) { }
-        catch (ApplicationStoreException) when (!request.IsCurrent) { }
+        catch (Exception error) when (!request.IsCurrent && error is ApplicationStoreException or Microsoft.Data.Sqlite.SqliteException) { }
+        catch (Microsoft.Data.Sqlite.SqliteException error)
+        {
+            throw new ApplicationStoreException("Não foi possível carregar o histórico: " + error.Message, error);
+        }
         finally
         {
             if (request.IsCurrent)
@@ -503,7 +519,8 @@ public sealed class HistoryPage : UserControl
             exportHints.SetToolTip(openExportFolder, Path.GetDirectoryName(lastExportPath));
             openExportFolder.Visible = true;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ApplicationStoreException or KeyNotFoundException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ApplicationStoreException or KeyNotFoundException
+            or Microsoft.Data.Sqlite.SqliteException or System.Text.Json.JsonException)
         {
             if (!IsDisposed)
             {
