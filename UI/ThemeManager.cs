@@ -125,7 +125,7 @@ public static class ThemeManager
         { return SystemColors.Window.GetBrightness() < 0.5f; }
     }
 
-    public static void Apply(Form form, ApplicationTheme theme)
+    public static void ConfigureNativeMode(ApplicationTheme theme)
     {
         System.Windows.Forms.Application.SetColorMode(theme switch
         {
@@ -133,6 +133,11 @@ public static class ThemeManager
             ApplicationTheme.Light => SystemColorMode.Classic,
             _ => SystemColorMode.System
         });
+    }
+
+    public static void Apply(Form form, ApplicationTheme theme)
+    {
+        ConfigureNativeMode(theme);
         var palette = PaletteFor(theme);
         ApplyPalette(form, palette);
         form.BackColor = palette.Window;
@@ -210,6 +215,8 @@ public static class ThemeManager
                     item.ForeColor = palette.Text;
                 }
             }
+
+            NativeTheme.Bind(control, palette);
 
             foreach (Control child in control.Controls)
                 ApplyCore(child, palette);

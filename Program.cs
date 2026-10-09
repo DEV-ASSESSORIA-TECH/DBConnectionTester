@@ -55,6 +55,7 @@ internal static class Program
                 // Outra instância está executando testes; esta ainda pode consultar o armazenamento.
             }
             var settings = Task.Run(() => new PersistentSettingsRepository(store).GetAsync()).GetAwaiter().GetResult();
+            ThemeManager.ConfigureNativeMode(settings.Theme);
             System.Windows.Forms.Application.Run(new MainForm(store, settings));
             return 0;
         }

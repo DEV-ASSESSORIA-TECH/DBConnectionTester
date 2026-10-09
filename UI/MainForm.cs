@@ -89,6 +89,7 @@ public sealed partial class MainForm : Form
 
     public MainForm(SqliteApplicationStore applicationStore, ApplicationSettings applicationSettings)
     {
+        ThemeManager.ConfigureNativeMode(applicationSettings.Theme);
         Font = UiTypography.Body;
         UiStyle.SetRole(btnTestOnce, UiRole.PrimaryAction);
         UiStyle.SetRole(btnStart, UiRole.PrimaryAction);

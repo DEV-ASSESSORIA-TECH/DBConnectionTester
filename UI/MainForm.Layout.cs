@@ -333,9 +333,14 @@ public sealed partial class MainForm
 
     private void ApplyApplicationSettings(ApplicationSettings settings)
     {
+        var outputChanged = applicationSettings.LegacyOutputEnabled != settings.LegacyOutputEnabled
+            || applicationSettings.LegacyOutputDirectory != settings.LegacyOutputDirectory;
         applicationSettings = settings;
-        runCoordinator.Dispose();
-        runCoordinator = CreateRunCoordinator(settings);
+        if (outputChanged)
+        {
+            runCoordinator.Dispose();
+            runCoordinator = CreateRunCoordinator(settings);
+        }
         ThemeManager.Apply(this, settings.Theme);
         lblStatus.Text = "Configurações salvas.";
     }
