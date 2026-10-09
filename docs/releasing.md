@@ -58,4 +58,6 @@ dotnet test tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj -c Re
 
 O job de release só roda para uma tag `v*`, após validação, e exige que o nome corresponda a `v<VERSION>`. Uma tag divergente falha. O job publica ou atualiza a GitHub Release usando os artefatos validados. Execuções de branch não publicam uma release.
 
+Cada pacote, checksum individual e `SHA256SUMS.txt` é enviado separadamente com `archive: false`, totalizando sete artefatos sem um ZIP adicional. Nesse modo, o nome do artefato é o nome do arquivo. O job de release baixa os seis arquivos `DBConnectionTester-v*` e o manifesto `SHA256SUMS.txt` explicitamente, reunindo-os na mesma pasta antes da publicação.
+
 Esta preparação de documentação não cria tag nem envia commits. Quando a entrega for aprovada, confira a CI e autorize separadamente a criação/envio da tag e a publicação.

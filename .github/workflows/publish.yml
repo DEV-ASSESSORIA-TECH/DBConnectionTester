@@ -63,13 +63,20 @@ jobs:
         shell: pwsh
         run: ./build/Publish-Release.ps1 -NoRestore
 
+      # With archive=false, each upload must contain exactly one file and its
+      # filename becomes the artifact name (the name input would be ignored).
       - name: Upload framework-dependent package
         uses: actions/upload-artifact@v7
         with:
-          name: DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-framework-dependent
-          path: |
-            artifacts/*-framework-dependent.zip
-            artifacts/*-framework-dependent.zip.sha256
+          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-framework-dependent.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload framework-dependent checksum
+        uses: actions/upload-artifact@v7
+        with:
+          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-framework-dependent.zip.sha256
           archive: false
           if-no-files-found: error
           retention-days: 14
@@ -77,10 +84,15 @@ jobs:
       - name: Upload self-contained package
         uses: actions/upload-artifact@v7
         with:
-          name: DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained
-          path: |
-            artifacts/*-self-contained.zip
-            artifacts/*-self-contained.zip.sha256
+          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload self-contained checksum
+        uses: actions/upload-artifact@v7
+        with:
+          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.zip.sha256
           archive: false
           if-no-files-found: error
           retention-days: 14
@@ -88,10 +100,15 @@ jobs:
       - name: Upload standalone executable
         uses: actions/upload-artifact@v7
         with:
-          name: DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained-exe
-          path: |
-            artifacts/*-self-contained.exe
-            artifacts/*-self-contained.exe.sha256
+          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.exe
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload standalone checksum
+        uses: actions/upload-artifact@v7
+        with:
+          path: artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.exe.sha256
           archive: false
           if-no-files-found: error
           retention-days: 14
@@ -99,7 +116,6 @@ jobs:
       - name: Upload checksum manifest
         uses: actions/upload-artifact@v7
         with:
-          name: DBConnectionTester-v${{ steps.version.outputs.value }}-checksums
           path: artifacts/SHA256SUMS.txt
           archive: false
           if-no-files-found: error
@@ -120,6 +136,12 @@ jobs:
           pattern: DBConnectionTester-v*
           path: artifacts
           merge-multiple: true
+
+      - name: Download checksum manifest
+        uses: actions/download-artifact@v7
+        with:
+          name: SHA256SUMS.txt
+          path: artifacts
 
       - name: Create or update GitHub Release
         shell: pwsh
