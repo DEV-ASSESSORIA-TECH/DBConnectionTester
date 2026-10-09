@@ -23,7 +23,7 @@ public sealed class SettingsPage : UserControl
     private readonly Button package = new ThemedButton() { Text = "Criar pacote portátil", AutoSize = true };
     private readonly Button restore = new ThemedButton() { Text = "Restaurar pacote", AutoSize = true };
     private readonly Button openFolder = new ThemedButton() { Text = "Abrir pasta", AutoSize = true };
-    private readonly CheckBox includeExecutable = new() { Text = "Incluir aplicativo", AutoSize = true };
+    private readonly CheckBox includeExecutable = new ThemedCheckBox() { Text = "Incluir aplicativo", AutoSize = true };
     private readonly TextBox currentDatabasePath = new() { ReadOnly = true, AccessibleName = "Caminho do banco atual" };
     private readonly Label bankDetails = new() { AutoSize = true, Dock = DockStyle.Top, Visible = false };
     private readonly Label copyDescription = new() { AutoSize = true, Dock = DockStyle.Top, Text = "Inclui tema e exportação automática. Sem copiar, o destino mantém suas preferências." };

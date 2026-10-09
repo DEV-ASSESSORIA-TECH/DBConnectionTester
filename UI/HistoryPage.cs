@@ -13,8 +13,8 @@ public sealed class HistoryPage : UserControl
     private readonly IRunHistoryRepository history;
     private readonly IConnectionProfileRepository profilesRepository;
     private readonly RunExportService exporter;
-    private readonly DateTimePicker from = new() { Format = DateTimePickerFormat.Short, ShowCheckBox = true, Checked = false };
-    private readonly DateTimePicker until = new() { Format = DateTimePickerFormat.Short, ShowCheckBox = true, Checked = false };
+    private readonly DateTimePicker from = new ThemedDateTimePicker() { Format = DateTimePickerFormat.Short, ShowCheckBox = true, Checked = false };
+    private readonly DateTimePicker until = new ThemedDateTimePicker() { Format = DateTimePickerFormat.Short, ShowCheckBox = true, Checked = false };
     private readonly ComboBox profile = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox target = new();
     private readonly ComboBox status = new() { DropDownStyle = ComboBoxStyle.DropDownList };
