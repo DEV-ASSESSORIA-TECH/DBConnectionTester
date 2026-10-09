@@ -34,8 +34,10 @@ public sealed class ProfilesLoadingTests
         var width = input.Width;
         form.Width += 200;
         await Task.Delay(30);
-        Assert.True(input.Width > width);
-        Assert.True(input.Right <= editor.ClientSize.Width);
+        Assert.True(input.Width > width,
+            $"Input width before={width}, after={input.Width}; {UiTestWindow.Describe(form)}");
+        Assert.True(input.Right <= editor.ClientSize.Width,
+            $"Input bounds={input.Bounds}, editor client={editor.ClientSize}; {UiTestWindow.Describe(form)}");
     });
 
     [Fact]
@@ -274,7 +276,7 @@ public sealed class ProfilesLoadingTests
                 using var page = new ProfilesPage(repository);
                 page.EditDecision = _ => DialogResult.No;
                 page.ErrorReporter = _ => { };
-                using var form = new Form { Width = 1300, Height = 850 };
+                using var form = new Form { MaximumSize = UiTestWindow.MaximumSize, Width = 1300, Height = 850 };
                 form.Controls.Add(page);
                 form.Shown += async (_, _) =>
                 {

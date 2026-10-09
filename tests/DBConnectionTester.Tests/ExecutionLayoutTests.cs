@@ -21,6 +21,7 @@ public sealed class ExecutionLayoutTests
             try
             {
                 using var form = new MainForm(store, ApplicationSettings.Default);
+                form.MaximumSize = UiTestWindow.MaximumSize;
                 Assert.Equal(new Size(1000, 680), form.Size);
                 var connection = Descendants(form).OfType<GroupBox>().Single(c => c.Text == "Conexão");
                 var status = (Label)typeof(MainForm).GetField("lblStatus", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(form)!;
@@ -83,7 +84,9 @@ public sealed class ExecutionLayoutTests
                             var statisticsGrid = Descendants(results).OfType<DataGridView>().Single(g => g.Columns.Contains("Median"));
                             Assert.True(statisticsGrid.GetRowDisplayRectangle(4, false).Bottom <= statisticsGrid.ClientSize.Height);
                             Snapshot(form, $"execution-{size.Width}x{size.Height}-running");
-                            if (size.Width >= 1100) Assert.False(viewport.VerticalScroll.Visible, $"AutoScroll={viewport.AutoScroll}, height={viewport.Height}, display={viewport.DisplayRectangle}");
+                            if (size.Width >= 1100) Assert.False(viewport.VerticalScroll.Visible,
+                                $"Requested client={size}; {UiTestWindow.Describe(form)}; " +
+                                $"viewport={viewport.Bounds}, AutoScroll={viewport.AutoScroll}, display={viewport.DisplayRectangle}");
                         }
                         Invoke(form, "ApplyRunUiState", RunState("Completed"), null);
                         Assert.False(Field<Button>(form, "btnStop").Enabled);
