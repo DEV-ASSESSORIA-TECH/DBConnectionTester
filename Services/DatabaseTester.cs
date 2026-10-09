@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Data.Common;
-using System.Data.Odbc;
 using System.Globalization;
 using DBConnectionTester.Models;
 
@@ -8,30 +7,40 @@ namespace DBConnectionTester.Services;
 
 internal static class DatabaseTester
 {
-    public static async Task<DatabaseResult> TestAsync(TestSettings settings, CancellationToken token)
+    public static Task<DatabaseResult> TestAsync(TestSettings settings, CancellationToken token) =>
+        TestAsync(settings, token, () => DatabaseConnectionFactory.Create(settings));
+
+    internal static Task<DatabaseResult> TestAsync(TestSettings settings, CancellationToken token, Func<DbConnection> createConnection) =>
+        settings.DatabaseType == DatabaseType.SapSqlAnywhere
+            ? Task.Run(() => TestCoreAsync(settings, token, createConnection), CancellationToken.None)
+            : TestCoreAsync(settings, token, createConnection);
+
+    private static async Task<DatabaseResult> TestCoreAsync(TestSettings settings, CancellationToken token, Func<DbConnection> createConnection)
     {
         long connectMs = 0;
         long queryMs = 0;
         var total = Stopwatch.StartNew();
         DbConnection? connection = null;
-        Task? deferredOdbcOpen = null;
+        Task? deferredOperation = null;
+        DbCommand? command = null;
 
         try
         {
-            connection = DatabaseConnectionFactory.Create(settings);
+            token.ThrowIfCancellationRequested();
+            connection = createConnection();
             var connect = Stopwatch.StartNew();
             try
             {
-                if (connection is OdbcConnection)
+                if (settings.DatabaseType == DatabaseType.SapSqlAnywhere)
                 {
                     var openTask = Task.Run(connection.Open, CancellationToken.None);
                     try
                     {
-                        await openTask.WaitAsync(settings.Timeout.Value, token);
+                        await openTask.WaitAsync(settings.Timeout.Value, token).ConfigureAwait(false);
                     }
                     catch
                     {
-                        deferredOdbcOpen = openTask;
+                        deferredOperation = openTask;
                         throw;
                     }
                 }
@@ -55,10 +64,23 @@ internal static class DatabaseTester
             var query = Stopwatch.StartNew();
             try
             {
-                await using var command = connection.CreateCommand();
+                command = connection.CreateCommand();
                 command.CommandText = "SELECT 1";
                 command.CommandTimeout = (int)Math.Ceiling(settings.Timeout.Value.TotalSeconds);
-                var value = await command.ExecuteScalarAsync(token).WaitAsync(settings.Timeout.Value, token);
+                var queryTask = settings.DatabaseType == DatabaseType.SapSqlAnywhere
+                    ? Task.Run(command.ExecuteScalar, CancellationToken.None)
+                    : command.ExecuteScalarAsync(token);
+                object? value;
+                try
+                {
+                    value = await queryTask.WaitAsync(settings.Timeout.Value, token).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // A native ODBC call can outlive the wait. Keep its resources alive until it returns.
+                    if (settings.DatabaseType == DatabaseType.SapSqlAnywhere) deferredOperation = queryTask;
+                    throw;
+                }
                 query.Stop();
                 total.Stop();
                 queryMs = (long)query.Elapsed.TotalMilliseconds;
@@ -88,27 +110,34 @@ internal static class DatabaseTester
         {
             if (connection is not null)
             {
-                if (deferredOdbcOpen is null)
-                    await connection.DisposeAsync();
+                if (deferredOperation is null)
+                    await DisposeResourcesAsync(connection, command);
                 else
-                    _ = DisposeAfterOpenCompletesAsync(connection, deferredOdbcOpen);
+                    _ = DisposeAfterOperationCompletesAsync(connection, command, deferredOperation);
             }
         }
     }
 
-    private static async Task DisposeAfterOpenCompletesAsync(DbConnection connection, Task openTask)
+    private static async Task DisposeAfterOperationCompletesAsync(DbConnection connection, DbCommand? command, Task operation)
     {
         try
         {
-            await openTask.ConfigureAwait(false);
+            await operation.ConfigureAwait(false);
         }
         catch
         {
-            // The connection result was already classified as a timeout or cancellation.
+            // The operation result was already classified as a timeout or cancellation.
         }
         finally
         {
-            await connection.DisposeAsync().ConfigureAwait(false);
+            try { await DisposeResourcesAsync(connection, command); }
+            catch { /* Cleanup of an abandoned native operation must not fault an unobserved task. */ }
         }
+    }
+
+    private static async Task DisposeResourcesAsync(DbConnection connection, DbCommand? command)
+    {
+        try { if (command is not null) await command.DisposeAsync().ConfigureAwait(false); }
+        finally { await connection.DisposeAsync().ConfigureAwait(false); }
     }
 }
