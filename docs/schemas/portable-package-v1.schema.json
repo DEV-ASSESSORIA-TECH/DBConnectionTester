@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/schemas/portable-package-v1.schema.json",
+  "title": "DB Connection Tester portable package manifest v1",
+  "type": "object",
+  "required": [
+    "formatVersion",
+    "createdAt",
+    "applicationVersion",
+    "sourceStoreId",
+    "portableStoreId",
+    "databasePath",
+    "databaseSha256",
+    "includesExecutable",
+    "executablePath",
+    "executableSha256"
+  ],
+  "properties": {
+    "formatVersion": {
+      "const": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "applicationVersion": {
+      "type": "string"
+    },
+    "sourceStoreId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "portableStoreId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "databasePath": {
+      "const": "Data/data.db"
+    },
+    "databaseSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "includesExecutable": {
+      "type": "boolean"
+    },
+    "executablePath": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "executableSha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-fA-F]{64}$"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "includesExecutable": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "executablePath": {
+            "type": "string",
+            "minLength": 1
+          },
+          "executableSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{64}$"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "executablePath": {
+            "type": "null"
+          },
+          "executableSha256": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

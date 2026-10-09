@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="390" viewBox="0 0 1120 390" role="img" aria-labelledby="title description">
+  <title id="title">Salvar preferências e confirmar a troca de banco</title>
+  <desc id="description">Selecionar, criar ou clonar prepara uma edição. Salvar confirma preferências e agenda a troca para reiniciar. Descartar restaura a seleção salva e cancelar troca mantém o banco atual.</desc>
+  <rect width="1120" height="390" fill="#f4f6f8"/>
+  <g font-family="Segoe UI, Arial, sans-serif" fill="#20242a">
+    <text x="35" y="42" font-size="24" font-weight="700">Configurações: edição → confirmação → reinício</text>
+    <g fill="#ffffff" stroke="#2467c2" stroke-width="2">
+      <rect x="35" y="82" width="240" height="116" rx="12"/>
+      <rect x="325" y="82" width="225" height="116" rx="12"/>
+      <rect x="600" y="82" width="225" height="116" rx="12"/>
+      <rect x="875" y="82" width="210" height="116" rx="12"/>
+      <rect x="35" y="270" width="300" height="82" rx="12" stroke="#8392a5"/>
+      <rect x="600" y="270" width="335" height="82" rx="12" stroke="#8392a5"/>
+    </g>
+    <g text-anchor="middle" font-size="18" font-weight="700">
+      <text x="155" y="113">Escolher / criar / copiar</text>
+      <text x="438" y="113">Salvar configurações</text>
+      <text x="713" y="113">Troca pendente</text>
+      <text x="980" y="113">Reiniciar</text>
+      <text x="185" y="302">Descartar alterações</text>
+      <text x="768" y="302">Cancelar troca pendente</text>
+    </g>
+    <g text-anchor="middle" font-size="15">
+      <text x="155" y="146">Troca ainda não salva</text><text x="155" y="174">Preferências: cópia opcional</text>
+      <text x="438" y="146">Gravar preferências</text><text x="438" y="174">Confirmar banco de destino</text>
+      <text x="713" y="146">Banco atual continua ativo</text><text x="713" y="174">Destino lembrado para o início</text>
+      <text x="980" y="146">Abrir o destino escolhido</text><text x="980" y="174">Banco anterior preservado</text>
+      <text x="185" y="330">Restaurar última seleção salva</text>
+      <text x="768" y="330">Manter banco atual no próximo início</text>
+    </g>
+    <g fill="none" stroke="#77a9ef" stroke-width="3" marker-end="url(#arrow)">
+      <path d="M275 140 H315"/><path d="M550 140 H590"/><path d="M825 140 H865"/>
+      <path d="M155 198 V260"/><path d="M713 198 V260"/>
+    </g>
+    <text x="35" y="378" font-size="14">Criar ou restaurar pacote portátil é uma operação independente do salvamento.</text>
+  </g>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0 L0 6 L9 3 Z" fill="#77a9ef"/></marker></defs>
+</svg>

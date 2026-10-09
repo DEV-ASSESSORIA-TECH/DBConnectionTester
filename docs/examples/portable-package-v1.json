@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "createdAt": "2026-10-09T13:41:54.0484922+00:00",
+  "applicationVersion": "2.0.0.0",
+  "sourceStoreId": "2796ea08-e56c-4c9f-84af-55506f94cd3e",
+  "portableStoreId": "78722643-f828-47de-9c82-2505dc64628a",
+  "databasePath": "Data/data.db",
+  "databaseSha256": "717bc4b792b35d2a314e83f56499acaf1d0279a58f0dd17030063af30b2d10bf",
+  "includesExecutable": false,
+  "executablePath": null,
+  "executableSha256": null
+}

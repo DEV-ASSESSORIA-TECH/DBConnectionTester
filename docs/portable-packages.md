@@ -24,12 +24,15 @@ DBConnectionTester.exe  # opcional
 
 O manifesto v1 contém versão da aplicação, `SourceStoreId`, `PortableStoreId`, caminho do banco, checksums e informações sobre o executável.
 
+No arquivo, os nomes são camelCase. O contrato formal está em [portable-package-v1.schema.json](schemas/portable-package-v1.schema.json), com [exemplo de manifesto](examples/portable-package-v1.json). `databasePath` é `Data/data.db`; `executablePath` e `executableSha256` são nulos quando o EXE não está incluído. A identidade do clone difere da identidade do banco de origem.
+
 ## Restauração
 
 1. Encerre a execução ativa.
 2. Escolha o ZIP e uma pasta vazia.
 3. O aplicativo valida caminhos, versão do manifesto, checksums, esquema, identidade e escopo.
 4. Somente após todas as validações a pasta temporária é movida ao destino.
+5. O banco restaurado fica selecionado como uma edição em Configurações. Para usá-lo na próxima inicialização, confirme com **Salvar configurações**; a restauração por si só não confirma a troca.
 
 A restauração recusa checksum inválido, banco incompatível, entrada ZIP fora do destino e pasta ocupada. Ela nunca mescla o pacote com um banco existente.
 
@@ -37,3 +40,5 @@ A restauração recusa checksum inválido, banco incompatível, entrada ZIP fora
 
 - **Exportar ZIP no Histórico:** relatório CSV/TXT/JSON de uma única execução.
 - **Criar pacote portátil:** banco completo, manifesto próprio e EXE opcional.
+
+Criar o pacote não troca o banco ativo nem salva outras edições do formulário. O pacote contém os dados já persistidos do banco em uso. A opção de copiar preferências para um destino é confirmada pelo salvamento das configurações, separadamente da criação do pacote.

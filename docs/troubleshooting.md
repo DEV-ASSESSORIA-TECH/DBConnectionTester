@@ -2,7 +2,7 @@
 
 ## O aplicativo encontrou vários bancos
 
-Escolha explicitamente o armazenamento desejado. O seletor é intencional: não existe prioridade silenciosa entre históricos válidos. A escolha será lembrada pelo `StoreId`.
+Escolha explicitamente o armazenamento desejado. A preferência válida usa identidade e caminho. Se você copiou o arquivo manualmente, escolha o caminho da cópia; não copie apenas o `data.db` enquanto ele estiver aberto em WAL.
 
 ## Banco inválido ou com versão futura
 
@@ -10,7 +10,7 @@ O arquivo não será alterado. Confirme se ele realmente pertence ao DB Connecti
 
 ## Já existe uma execução gravando neste armazenamento
 
-Outra instância mantém o `.run.lock`. O histórico ainda pode ser consultado. Encerre a execução da outra instância antes de iniciar, clonar, restaurar ou empacotar. Se nenhuma instância existir, confirme no Gerenciador de Tarefas antes de remover manualmente um lock residual.
+Outra instância mantém o handle de escrita do `.run.lock`. O histórico ainda pode ser consultado. Encerre a execução da outra instância antes de iniciar, clonar, restaurar ou empacotar. A presença do arquivo após encerrar é normal e não exige apagá-lo; se o bloqueio continuar, confira os processos e as permissões da pasta.
 
 ## ProgramData não pôde ser preparado
 
@@ -36,6 +36,22 @@ O processo terminou sem finalizar a sessão, por exemplo após queda de energia 
 
 Instale o driver SQL Anywhere x64 e informe exatamente seu nome. A arquitetura do driver precisa corresponder à aplicação Windows x64.
 
-## Alto DPI
+## A troca de banco não foi aplicada
 
-A interface usa escala por DPI e rolagem. Em 150% ou 200%, a página de execução pode exibir barra horizontal para preservar os campos e o gráfico sem reduzir a legibilidade.
+Selecionar, criar ou clonar não confirma a troca. Clique em **Salvar configurações**, confira a indicação de troca pendente e reinicie. **Descartar alterações** volta à seleção salva; **Cancelar troca** cancela uma seleção já confirmada para o próximo início. Para retornar a outro banco, use **Escolher…**, salve e reinicie.
+
+## A exportação falhou
+
+Verifique a mensagem exibida abaixo das ações do Histórico. Erros de permissão, banco bloqueado ou arquivo de destino existente são reportados sem bloquear a interface. Escolha um nome novo e tente novamente. A exportação inclui a execução inteira, não somente a página visível. Execuções ainda em andamento não podem ser exportadas.
+
+## ODBC atingiu o timeout, mas o driver ainda aparece ocupado
+
+Timeout e cancelamento limitam a espera do aplicativo. Um driver nativo pode continuar executando internamente até retornar; o aplicativo mantém os recursos vivos e os libera depois. Verifique também o timeout e a conectividade no driver instalado.
+
+## Alto DPI e janela pequena
+
+A interface usa escala por DPI, reorganização por largura e rolagem quando o conteúdo não cabe. Nova execução e Perfis mantêm colunas enquanto há espaço suficiente e depois reorganizam os formulários. Amplie a janela ou use rolagem em telas menores; grades podem abreviar textos e oferecer detalhes por tooltip.
+
+## Tema claro ou escuro
+
+Salve a escolha em Configurações para aplicar o tema à janela aberta e às próximas inicializações. A troca preserva controles, dados, seleção e rolagem. O modo Sistema acompanha a preferência do Windows quando o tema é aplicado. Alto contraste usa as cores do sistema.

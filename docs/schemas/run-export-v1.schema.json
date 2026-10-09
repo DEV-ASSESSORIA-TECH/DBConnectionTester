@@ -3,52 +3,202 @@
   "$id": "https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/schemas/run-export-v1.schema.json",
   "title": "DB Connection Tester run export v1",
   "type": "object",
-  "required": ["formatVersion", "run", "settings", "stageSummaries", "warnings", "cycles"],
+  "required": [
+    "formatVersion",
+    "run",
+    "settings",
+    "stageSummaries",
+    "warnings",
+    "cycles"
+  ],
   "properties": {
-    "formatVersion": { "const": 1 },
+    "formatVersion": {
+      "const": 1
+    },
     "run": {
       "type": "object",
-      "required": ["runId", "status", "startedAt", "applicationVersion", "machineName", "databaseType", "target", "completedCycles"],
+      "required": [
+        "runId",
+        "profileId",
+        "profileName",
+        "status",
+        "terminationReason",
+        "startedAt",
+        "finishedAt",
+        "applicationVersion",
+        "machineName",
+        "databaseType",
+        "target",
+        "completedCycles",
+        "failureMessage"
+      ],
       "properties": {
-        "runId": { "type": "string", "format": "uuid" },
-        "profileId": { "type": ["string", "null"], "format": "uuid" },
-        "profileName": { "type": ["string", "null"] },
-        "status": { "enum": ["Running", "Completed", "Stopped", "Failed", "Interrupted"] },
-        "terminationReason": { "type": ["string", "null"], "enum": ["PlannedCountCompleted", "StoppedByUser", "ExecutionFailed", "ProcessInterrupted", null] },
-        "startedAt": { "type": "string", "format": "date-time" },
-        "finishedAt": { "type": ["string", "null"], "format": "date-time" },
-        "applicationVersion": { "type": "string" },
-        "machineName": { "type": "string" },
-        "databaseType": { "type": "string" },
-        "target": { "type": "string" },
-        "completedCycles": { "type": "integer", "minimum": 0 },
-        "failureMessage": { "type": ["string", "null"] }
+        "runId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profileId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "profileName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "Running",
+            "Completed",
+            "Stopped",
+            "Failed",
+            "Interrupted"
+          ]
+        },
+        "terminationReason": {
+          "enum": [
+            "PlannedCountCompleted",
+            "StoppedByUser",
+            "ExecutionFailed",
+            "ProcessInterrupted",
+            null
+          ]
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finishedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "applicationVersion": {
+          "type": "string"
+        },
+        "machineName": {
+          "type": "string"
+        },
+        "databaseType": {
+          "$ref": "#/$defs/databaseType"
+        },
+        "target": {
+          "type": "string"
+        },
+        "completedCycles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failureMessage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
       "additionalProperties": true
     },
-    "settings": { "type": "object", "not": { "required": ["password"] } },
-    "stageSummaries": { "type": "array", "items": { "type": "object" } },
-    "warnings": { "type": "array", "items": { "type": "object" } },
+    "settings": {
+      "$ref": "#/$defs/settings"
+    },
+    "stageSummaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "stage",
+          "statistics"
+        ],
+        "properties": {
+          "stage": {
+            "enum": [
+              "Dns",
+              "Ping",
+              "Tcp",
+              "DatabaseConnect",
+              "DatabaseQuery"
+            ]
+          },
+          "statistics": {
+            "$ref": "#/$defs/statistics"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "createdAt",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
     "cycles": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["number", "startedAt", "databaseTotalMs", "stages"],
+        "required": [
+          "number",
+          "startedAt",
+          "resolvedIp",
+          "pingExtra",
+          "tcpLocalIp",
+          "tcpRemoteIp",
+          "databaseTotalMs",
+          "stages"
+        ],
         "properties": {
-          "number": { "type": "integer", "minimum": 1 },
-          "startedAt": { "type": "string", "format": "date-time" },
-          "databaseTotalMs": { "type": "integer", "minimum": 0 },
+          "number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedIp": {
+            "type": "string"
+          },
+          "pingExtra": {
+            "type": "string"
+          },
+          "tcpLocalIp": {
+            "type": "string"
+          },
+          "tcpRemoteIp": {
+            "type": "string"
+          },
+          "databaseTotalMs": {
+            "type": "integer",
+            "minimum": 0
+          },
           "stages": {
             "type": "array",
             "items": {
-              "type": "object",
-              "required": ["stage", "status", "elapsedMs", "extra"],
-              "properties": {
-                "stage": { "enum": ["Dns", "Ping", "Tcp", "DatabaseConnect", "DatabaseQuery"] },
-                "status": { "enum": ["Success", "Failed", "Skipped"] },
-                "elapsedMs": { "type": "integer", "minimum": 0 }
-              },
-              "additionalProperties": true
+              "$ref": "#/$defs/stage"
             }
           }
         },
@@ -56,5 +206,301 @@
       }
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "databaseType": {
+      "enum": [
+        "MySqlMariaDb",
+        "PostgreSql",
+        "SqlServer",
+        "SapSqlAnywhere",
+        "Sqlite",
+        "TcpOnly"
+      ]
+    },
+    "settings": {
+      "type": "object",
+      "required": [
+        "databaseType",
+        "host",
+        "port",
+        "user",
+        "database",
+        "sqliteFile",
+        "sqlServerAuthentication",
+        "odbcDriver",
+        "testCount",
+        "continuous",
+        "intervalSeconds",
+        "timeoutSeconds",
+        "dns",
+        "ping",
+        "tcp",
+        "databaseTest"
+      ],
+      "properties": {
+        "databaseType": {
+          "$ref": "#/$defs/databaseType"
+        },
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "user": {
+          "type": "string"
+        },
+        "database": {
+          "type": "string"
+        },
+        "sqliteFile": {
+          "type": "string"
+        },
+        "sqlServerAuthentication": {
+          "enum": [
+            "Windows",
+            "SqlLogin"
+          ]
+        },
+        "odbcDriver": {
+          "type": "string"
+        },
+        "testCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "continuous": {
+          "type": "boolean"
+        },
+        "intervalSeconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "timeoutSeconds": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 120
+        },
+        "dns": {
+          "type": "boolean"
+        },
+        "ping": {
+          "type": "boolean"
+        },
+        "tcp": {
+          "type": "boolean"
+        },
+        "databaseTest": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stage": {
+      "type": "object",
+      "required": [
+        "stage",
+        "status",
+        "elapsedMs",
+        "extra",
+        "diagnosticCode",
+        "suggestionCode",
+        "confidence",
+        "userMessage",
+        "technicalMessage",
+        "provider",
+        "providerCode",
+        "sqlState",
+        "nativeCode",
+        "providerErrorsJson"
+      ],
+      "properties": {
+        "stage": {
+          "enum": [
+            "Dns",
+            "Ping",
+            "Tcp",
+            "DatabaseConnect",
+            "DatabaseQuery"
+          ]
+        },
+        "status": {
+          "enum": [
+            "Success",
+            "Failed",
+            "Skipped"
+          ]
+        },
+        "elapsedMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "extra": {
+          "type": "string"
+        },
+        "diagnosticCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "suggestionCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "Exact",
+            "Heuristic",
+            "Fallback",
+            null
+          ]
+        },
+        "userMessage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "technicalMessage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "providerCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sqlState": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nativeCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "providerErrorsJson": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Serialized provider error collection encoded as a JSON string, or null."
+        }
+      },
+      "additionalProperties": true
+    },
+    "statistics": {
+      "type": "object",
+      "required": [
+        "attempts",
+        "successes",
+        "failures",
+        "averageMs",
+        "minimumMs",
+        "maximumMs",
+        "medianMs",
+        "p95Ms",
+        "consecutiveFailures",
+        "maximumConsecutiveFailures",
+        "lastFailureAt",
+        "successRate"
+      ],
+      "properties": {
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "successes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failures": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "averageMs": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "minimumMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "maximumMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "medianMs": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "p95Ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "consecutiveFailures": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maximumConsecutiveFailures": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lastFailureAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "successRate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": true
+    }
+  }
 }

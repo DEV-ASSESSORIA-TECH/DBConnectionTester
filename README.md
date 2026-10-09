@@ -4,7 +4,19 @@ Aplicativo Windows portátil para testar repetidamente cada camada envolvida no 
 
 **Versão atual:** `2.0.0`
 
-![Arquitetura de armazenamento da versão 2.0](docs/images/storage-architecture.svg)
+![Painel Nova execução: conexão, parâmetros de execução e resumo estatístico](docs/images/execution-panel.png)
+
+## Começar a usar
+
+1. Baixe o EXE self-contained da [release](https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/releases). Os ZIPs alternativos estão descritos abaixo.
+2. Abra **Nova execução**, configure o destino ou selecione um perfil e informe a senha quando necessária.
+3. Use **Testar uma vez** para conferir a conexão ou **Iniciar teste** para executar a sequência configurada.
+4. Acompanhe **Resumo estatístico**, **Ciclos recentes** e **Tendência**. **Parar** encerra a execução com os ciclos já gravados preservados.
+5. Em **Histórico**, selecione uma execução finalizada para consultar detalhes e exportar CSV, TXT, JSON ou ZIP.
+
+O primeiro início cria o banco do aplicativo no seu perfil do Windows, quando não existe outro armazenamento conhecido. O banco testado e o `data.db` do aplicativo têm funções diferentes.
+
+Veja o [guia dos painéis e fluxos](docs/user-guide.md) para perfis, bandeja, configurações e troca de banco.
 
 ## Principais recursos
 
@@ -30,7 +42,7 @@ Aplicativo Windows portátil para testar repetidamente cada camada envolvida no 
 | SQLite | `Microsoft.Data.Sqlite` | — |
 | Somente TCP | — | Editável |
 
-Cada ciclo abre uma nova conexão sem pooling para medir conexão e autenticação reais. SQLite é aberto em modo somente leitura. SQL Anywhere requer um driver ODBC da mesma arquitetura do aplicativo.
+Cada ciclo abre uma nova conexão. Os providers MySQL, PostgreSQL, SQL Server e SQLite têm pooling desabilitado na configuração da conexão; ODBC pode ter pooling gerenciado pelo driver. SQLite é testado em modo somente leitura. SQL Anywhere requer um driver ODBC x64. A abertura e a consulta ODBC rodam fora da thread da interface; timeout e cancelamento encerram a espera, enquanto os recursos da chamada nativa são liberados quando ela retorna.
 
 ## Armazenamento
 
@@ -46,6 +58,8 @@ O aplicativo procura bancos compatíveis nos locais conhecidos e usa o banco par
 Uma escolha explícita sempre vence. Sem escolha, a preferência válida do usuário é reutilizada; uma mídia portátil ainda não observada ou vários bancos sem preferência abrem o seletor. Se nenhum banco existir, o modo Local é criado. Bancos inválidos ou com esquema futuro nunca são sobrescritos.
 
 Consulte [Arquitetura de armazenamento](docs/storage.md) para regras de descoberta, troca, concorrência e ProgramData.
+
+![Arquitetura de armazenamento da versão 2.0](docs/images/storage-architecture.svg)
 
 ## Perfis, histórico e exportação
 
@@ -66,6 +80,8 @@ Em **Configurações**, é possível:
 - restaurar um pacote para uma pasta vazia.
 
 Nenhuma operação mescla bancos, substitui destinos ocupados ou apaga o banco anterior. Veja [Pacotes portáteis](docs/portable-packages.md).
+
+**Salvar configurações** confirma as preferências e o banco selecionado. Uma troca fica pendente até reiniciar; antes disso, pode ser cancelada. **Descartar alterações** restaura a última seleção salva. Ao escolher outro banco, copiar as preferências atuais é opcional. As preferências permanecem no SQLite.
 
 ## Segurança
 
@@ -108,13 +124,18 @@ Os arquivos são gravados em `artifacts/`. A automação de release é executada
 
 ## Documentação
 
+- [Índice da documentação](docs/README.md)
+- [Guia dos painéis e fluxos](docs/user-guide.md)
 - [Arquitetura de armazenamento](docs/storage.md)
+- [Esquema SQLite v1](docs/database-schema.md)
 - [Formato JSON exportado](docs/export-json-schema.md)
 - [Pacotes portáteis](docs/portable-packages.md)
 - [Segurança e privacidade](docs/security.md)
 - [Solução de problemas](docs/troubleshooting.md)
 - [Códigos de diagnóstico](docs/diagnostics/README.md)
 - [Histórico de versões](CHANGELOG.md)
+- [Notas da versão 2.0.0](docs/release-notes-2.0.0.md)
+- [Preparação e publicação da release](docs/releasing.md)
 
 ## Desenvolvedor
 
@@ -122,4 +143,4 @@ Desenvolvido por [Guilherme Garcia](https://github.com/GUILHERME-GARCIATECH).
 
 ## Licença
 
-Distribuído sob a [Licença MIT](LICENSE).
+Distribuído sob a [Licença MIT](LICENSE), também disponível em [português](LICENSE.pt-BR).

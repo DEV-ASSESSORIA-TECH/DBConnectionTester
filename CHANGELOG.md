@@ -6,12 +6,12 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-10-07
+## [2.0.0] - 2026-10-09
 
 ### Adicionado
 
 - Armazenamento SQLite versionado para configurações, perfis, execuções, ciclos, diagnósticos, resumos e avisos.
-- Descoberta segura de armazenamento Local, Compartilhado, Portátil e Personalizado, com preferência por `StoreId` e opção `--data-dir`.
+- Descoberta segura de armazenamento Local, Compartilhado, Portátil e Personalizado, com preferência por identidade e caminho e opção `--data-dir`.
 - Perfis de conexão sem persistência de senha.
 - Histórico paginado com filtros, detalhes, ciclos sob demanda e gráficos.
 - Exportação posterior em CSV, TXT, JSON v1 e ZIP com manifesto.
@@ -19,6 +19,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - Assistente de criação, clonagem e seleção de armazenamento, incluindo preparação elevada e restrita do ProgramData.
 - Shell WinForms navegável, temas Sistema/Claro/Escuro e suporte a DPI alto.
 - CI em push e pull request, auditoria de pacotes, três artefatos Windows x64, checksums e limite de 120 MiB para o EXE único.
+- Início com atalhos, estado da execução atual e três execuções recentes.
+- Seletor de perfis em Nova execução e proteção contra alterações não salvas em Perfis e Configurações.
+- Salvamento conjunto de preferências e seleção de banco, cópia opcional de preferências, descarte de edições e cancelamento da troca pendente.
+- Guia dos painéis com capturas reais, documentação do esquema SQLite e schemas dos manifestos JSON.
 
 ### Alterado
 
@@ -27,6 +31,18 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - Cada ciclo é persistido antes de ser informado à interface.
 - Execuções abandonadas são recuperadas como `Interrupted` quando não existe escritor ativo.
 - A interface mantém navegação e consulta de histórico durante uma execução, bloqueando somente operações mutáveis.
+- Nova execução abre no resumo estatístico, com progresso entre formulário e resultados; formulários reorganizam os campos conforme a largura disponível.
+- Temas claro e escuro modernizados, com papéis visuais centralizados e estados de ação, erro, aviso e seleção.
+- Carregamento paginado e sob demanda, controles leves e preservação dos painéis entre navegações.
+
+### Corrigido
+
+- Exportações do Histórico executadas fora da thread da interface, com bloqueio de duplicidade, feedback e opção de abrir a pasta após sucesso.
+- Tratamento de erros SQLite no carregamento e exportação do Histórico, permitindo nova tentativa.
+- Abertura e consulta ODBC fora da thread da interface, com espera limitada por timeout/cancelamento e descarte após a chamada nativa terminar.
+- Seleção persistente de caminho quando uma cópia manual do banco compartilha a identidade do original.
+- Troca de tema em tempo de execução atualiza os controles nativos sem recriar painéis, recarregar dados ou reiniciar o coordenador apenas por mudança de tema.
+- Pintura dos botões, contraste dos controles desabilitados e campos de data no tema escuro.
 
 ### Segurança
 

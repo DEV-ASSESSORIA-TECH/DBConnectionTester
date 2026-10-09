@@ -1,0 +1,223 @@
+{
+  "formatVersion": 1,
+  "run": {
+    "runId": "11111111-1111-4111-8111-111111111111",
+    "profileId": null,
+    "profileName": null,
+    "status": "Completed",
+    "terminationReason": "PlannedCountCompleted",
+    "startedAt": "2026-10-09T13:41:53.5666405\u002B00:00",
+    "finishedAt": "2026-10-09T13:41:53.7330586\u002B00:00",
+    "applicationVersion": "2.0.0.0",
+    "machineName": "EXAMPLE-PC",
+    "databaseType": "TcpOnly",
+    "target": "db.example:443",
+    "completedCycles": 1,
+    "failureMessage": null
+  },
+  "settings": {
+    "databaseType": "TcpOnly",
+    "host": "db.example",
+    "port": 443,
+    "user": "",
+    "database": "",
+    "sqliteFile": "",
+    "sqlServerAuthentication": "SqlLogin",
+    "odbcDriver": "",
+    "testCount": 1,
+    "continuous": false,
+    "intervalSeconds": 0,
+    "timeoutSeconds": 5,
+    "dns": true,
+    "ping": false,
+    "tcp": true,
+    "databaseTest": false
+  },
+  "stageSummaries": [
+    {
+      "stage": "DatabaseConnect",
+      "statistics": {
+        "attempts": 0,
+        "successes": 0,
+        "failures": 0,
+        "averageMs": null,
+        "minimumMs": null,
+        "maximumMs": null,
+        "medianMs": null,
+        "p95Ms": null,
+        "consecutiveFailures": 0,
+        "maximumConsecutiveFailures": 0,
+        "lastFailureAt": null,
+        "successRate": null
+      }
+    },
+    {
+      "stage": "DatabaseQuery",
+      "statistics": {
+        "attempts": 0,
+        "successes": 0,
+        "failures": 0,
+        "averageMs": null,
+        "minimumMs": null,
+        "maximumMs": null,
+        "medianMs": null,
+        "p95Ms": null,
+        "consecutiveFailures": 0,
+        "maximumConsecutiveFailures": 0,
+        "lastFailureAt": null,
+        "successRate": null
+      }
+    },
+    {
+      "stage": "Dns",
+      "statistics": {
+        "attempts": 1,
+        "successes": 1,
+        "failures": 0,
+        "averageMs": 3,
+        "minimumMs": 3,
+        "maximumMs": 3,
+        "medianMs": 3,
+        "p95Ms": 3,
+        "consecutiveFailures": 0,
+        "maximumConsecutiveFailures": 0,
+        "lastFailureAt": null,
+        "successRate": 100
+      }
+    },
+    {
+      "stage": "Ping",
+      "statistics": {
+        "attempts": 0,
+        "successes": 0,
+        "failures": 0,
+        "averageMs": null,
+        "minimumMs": null,
+        "maximumMs": null,
+        "medianMs": null,
+        "p95Ms": null,
+        "consecutiveFailures": 0,
+        "maximumConsecutiveFailures": 0,
+        "lastFailureAt": null,
+        "successRate": null
+      }
+    },
+    {
+      "stage": "Tcp",
+      "statistics": {
+        "attempts": 1,
+        "successes": 0,
+        "failures": 1,
+        "averageMs": null,
+        "minimumMs": null,
+        "maximumMs": null,
+        "medianMs": null,
+        "p95Ms": null,
+        "consecutiveFailures": 1,
+        "maximumConsecutiveFailures": 1,
+        "lastFailureAt": "2026-10-09T09:41:53.7239929-04:00",
+        "successRate": 0
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "createdAt": "2026-10-09T13:41:53.7097246\u002B00:00",
+      "code": "LEGACY_OUTPUT_FAILED",
+      "message": "Exemplo de aviso de sa\u00EDda opcional."
+    }
+  ],
+  "cycles": [
+    {
+      "number": 1,
+      "startedAt": "2026-10-09T12:00:00\u002B00:00",
+      "resolvedIp": "203.0.113.10",
+      "pingExtra": "",
+      "tcpLocalIp": "192.0.2.10",
+      "tcpRemoteIp": "203.0.113.10",
+      "databaseTotalMs": 0,
+      "stages": [
+        {
+          "stage": "DatabaseConnect",
+          "status": "Skipped",
+          "elapsedMs": 0,
+          "extra": "",
+          "diagnosticCode": null,
+          "suggestionCode": null,
+          "confidence": null,
+          "userMessage": null,
+          "technicalMessage": null,
+          "provider": null,
+          "providerCode": null,
+          "sqlState": null,
+          "nativeCode": null,
+          "providerErrorsJson": null
+        },
+        {
+          "stage": "DatabaseQuery",
+          "status": "Skipped",
+          "elapsedMs": 0,
+          "extra": "",
+          "diagnosticCode": null,
+          "suggestionCode": null,
+          "confidence": null,
+          "userMessage": null,
+          "technicalMessage": null,
+          "provider": null,
+          "providerCode": null,
+          "sqlState": null,
+          "nativeCode": null,
+          "providerErrorsJson": null
+        },
+        {
+          "stage": "Dns",
+          "status": "Success",
+          "elapsedMs": 3,
+          "extra": "203.0.113.10",
+          "diagnosticCode": null,
+          "suggestionCode": null,
+          "confidence": null,
+          "userMessage": null,
+          "technicalMessage": null,
+          "provider": null,
+          "providerCode": null,
+          "sqlState": null,
+          "nativeCode": null,
+          "providerErrorsJson": null
+        },
+        {
+          "stage": "Ping",
+          "status": "Skipped",
+          "elapsedMs": 0,
+          "extra": "",
+          "diagnosticCode": null,
+          "suggestionCode": null,
+          "confidence": null,
+          "userMessage": null,
+          "technicalMessage": null,
+          "provider": null,
+          "providerCode": null,
+          "sqlState": null,
+          "nativeCode": null,
+          "providerErrorsJson": null
+        },
+        {
+          "stage": "Tcp",
+          "status": "Failed",
+          "elapsedMs": 10,
+          "extra": "203.0.113.10",
+          "diagnosticCode": "DBT-TCP-001",
+          "suggestionCode": "DBT-FIX-PORT-001",
+          "confidence": "Exact",
+          "userMessage": "Conex\u00E3o recusada",
+          "technicalMessage": "Connection refused",
+          "provider": null,
+          "providerCode": null,
+          "sqlState": null,
+          "nativeCode": null,
+          "providerErrorsJson": null
+        }
+      ]
+    }
+  ]
+}

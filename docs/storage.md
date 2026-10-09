@@ -15,17 +15,17 @@ O banco usa WAL, chaves estrangeiras, `busy_timeout` de cinco segundos e transa�
 | `Portable` | `<pasta-do-exe>\Data\data.db` |
 | `Custom` | `<diretório escolhido>\data.db` |
 
-`HKCU\Software\DBConnectionTester` guarda `ActiveStoreId`, caminho, escopo e a identidade da mídia portátil já observada.
+`HKCU\Software\DBConnectionTester` guarda a seleção em um único valor JSON, `StorageSelection`: `storeId`, `databasePath`, `scope` e `observedPortableStoreId` no modelo lógico. A serialização atual do Registro usa nomes PascalCase (`StoreId`, `DatabasePath`, `Scope`, `ObservedPortableStoreId`) e escopo numérico. Os valores antigos `ActiveStoreId`, `ActiveStorePath`, `ActiveStoreScope` e `ObservedPortableStoreId` ainda são lidos para compatibilidade.
 
 ## Resolução na inicialização
 
 1. `--data-dir <pasta>` ou `--data-dir=<pasta>` vence qualquer preferência.
 2. São inspecionados o banco portátil, LocalAppData, ProgramData e o caminho personalizado registrado.
-3. A preferência é usada somente se o mesmo `StoreId` ainda existir.
+3. A preferência é usada somente se identidade e caminho corresponderem ao banco inspecionado. Cópias manuais com o mesmo `StoreId` não substituem silenciosamente o caminho lembrado.
 4. Uma mídia portátil nova, diferente da preferência, força seleção explícita.
 5. Um único candidato é aberto automaticamente; vários candidatos sem preferência abrem o seletor.
 6. Sem candidatos, um banco Local é criado.
-7. Bancos inválidos ou futuros interrompem a seleção e nunca são recriados por cima.
+7. Se não houver candidato compatível e houver bancos inválidos ou futuros, a abertura é interrompida. Uma escolha explícita inválida também é recusada. Esses arquivos nunca são recriados por cima.
 
 Não existe prioridade silenciosa entre bancos válidos. Essa regra evita abrir um histórico diferente apenas porque o EXE foi movido.
 
@@ -44,17 +44,27 @@ Estados possíveis: `Running`, `Completed`, `Stopped`, `Failed` e `Interrupted`.
 
 ## Concorrência
 
-O arquivo `.run.lock`, na mesma pasta do banco, permite uma única execução escritora por `StoreId`. Outras instâncias continuam livres para consultar e paginar o histórico. Cada ciclo e suas etapas são gravados em uma transação antes de o progresso ser entregue à interface.
+O arquivo `.run.lock`, na mesma pasta do banco, permite uma única execução escritora nessa pasta. Outras instâncias continuam livres para consultar e paginar o histórico. Cada ciclo e suas etapas são gravados em uma transação antes de o progresso ser entregue à interface.
+
+O bloqueio efetivo é o handle exclusivo de escrita do arquivo na pasta, não a presença do arquivo nem uma exclusão global por identidade. Cópias em pastas diferentes têm locks independentes. O arquivo pode continuar existindo após encerrar; seu conteúdo é informativo. A recuperação de sessões interrompidas também exige adquirir esse lock.
 
 ## Troca de armazenamento
 
-A troca só fica disponível sem execução ativa. O assistente pode:
+A troca só fica disponível sem execução ativa. Em **Configurações > Banco de dados**, **Escolher…** seleciona diretamente um banco existente. Também é possível:
 
 - clonar o banco atual para um destino vazio;
 - criar um banco vazio;
 - selecionar um banco compatível existente.
 
-A clonagem usa `SqliteConnection.BackupDatabase`, atribui um novo `StoreId` e registra `ClonedFromStoreId`. O destino nunca é mesclado ou sobrescrito. O banco anterior permanece intacto e a nova preferência entra em vigor na próxima inicialização.
+A clonagem usa `SqliteConnection.BackupDatabase`, atribui um novo `StoreId` e registra `ClonedFromStoreId`. O destino nunca é mesclado ou sobrescrito. Criar ou clonar prepara o arquivo, mas ainda não confirma a troca.
+
+**Salvar configurações** grava as preferências e confirma a seleção. Se **Copiar preferências atuais** estiver marcada, tema e saída automática são gravados também no destino; sem ela, o destino mantém suas preferências. Uma clonagem já inclui as preferências. O serviço valida novamente a identidade do destino antes de salvar e tenta restaurar as preferências anteriores se a confirmação falhar.
+
+Após salvar, o banco atual continua ativo e aparece **Troca pendente — reinicie para aplicar**. É possível cancelar a troca pendente. **Descartar alterações** restaura as edições para a última seleção salva, inclusive uma troca já pendente; não apaga arquivos preparados. O banco anterior permanece preservado. Veja o [fluxo completo](user-guide.md#configurações).
+
+![Fluxo de confirmação da troca de armazenamento](images/settings-storage-flow.svg)
+
+O contrato das tabelas e dos JSON internos está em [Esquema SQLite v1](database-schema.md).
 
 ## ProgramData
 

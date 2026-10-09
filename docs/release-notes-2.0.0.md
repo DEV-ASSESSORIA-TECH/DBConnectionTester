@@ -13,12 +13,28 @@ A versão 2.0 transforma o aplicativo em uma ferramenta portátil com histórico
 - Perfis de conexão reutilizáveis sem armazenamento de senha.
 - Recuperação de execuções interrompidas e lock contra escritores concorrentes.
 - Migração para .NET 10 LTS.
+- Início com execução atual, atalhos e últimas execuções.
+- Nova execução com seletor de perfil, resumo estatístico inicial e formulário responsivo.
+- Perfis e Configurações com proteção contra edições não salvas.
+- Preferências e seleção de banco confirmadas por um único salvamento, com cópia opcional de preferências, descarte e cancelamento de troca pendente.
+- Temas modernizados e troca claro/escuro na janela aberta, sem recarregar os painéis.
+
+## Correções incluídas
+
+- Exportações trabalham fora da thread da interface e reportam erros SQLite com opção de nova tentativa.
+- Consultas ODBC não bloqueiam a janela; timeout e parada limitam a espera, preservando os recursos até o driver retornar.
+- Cópias manuais de um banco com a mesma identidade respeitam o caminho escolhido após reiniciar.
+- Pintura de botões, campos de data e contraste de opções desabilitadas revisados.
+
+![Nova execução na versão 2.0.0](images/execution-panel.png)
 
 ## Atualização da versão 1.x
 
 O primeiro início cria `%LOCALAPPDATA%\DBConnectionTester\data.db` quando nenhum armazenamento é encontrado. CSV/TXT contínuos ficam desligados por padrão e podem ser reativados em Configurações. Arquivos CSV/TXT antigos não são importados automaticamente.
 
 Nenhuma senha ou connection string é migrada ou persistida. O EXE pode continuar sendo movido entre pastas e máquinas; use um pacote portátil para transportar também perfis e histórico.
+
+Preferências ficam no banco selecionado. Trocar o banco exige salvar e reiniciar; o banco anterior é preservado. Criar/restaurar um pacote portátil é uma operação separada. Os detalhes estão no [guia dos painéis](user-guide.md).
 
 ## Artefatos
 
@@ -37,3 +53,5 @@ O artefato framework-dependent requer o .NET 10 Desktop Runtime. Os outros dois 
 - Pacote portátil `formatVersion: 1`.
 
 Consulte o [CHANGELOG](../CHANGELOG.md) e a [documentação principal](../README.md) para detalhes completos.
+
+O [índice técnico](README.md) reúne os schemas de execução/manifestos, o esquema SQLite e os fluxos de armazenamento. A [preparação da release](releasing.md) descreve a validação local e a publicação por tag; esta documentação não implica que a tag já tenha sido publicada.

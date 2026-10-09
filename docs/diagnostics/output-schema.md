@@ -2,7 +2,7 @@
 
 ## Interface
 
-O cartão da etapa e a grade exibem `[código] mensagem curta`. Ao posicionar o cursor, o tooltip mostra sugestão, provider, código original, SQLSTATE, código nativo e detalhe técnico. Isso mantém o painel compacto.
+Nova execução reúne Resumo estatístico, Ciclos recentes e Tendência; os antigos cartões individuais foram removidos. A grade de ciclos e os detalhes do Histórico apresentam diagnósticos por etapa. Tooltips fornecem códigos e detalhes conforme o campo; o Histórico permite filtrar pelo código de diagnóstico.
 
 ## CSV
 
@@ -20,7 +20,7 @@ Conexão e consulta de banco têm diagnósticos independentes. Campos sem valor 
 
 ## TXT
 
-A linha compacta de cada ciclo foi preservada. Para cada falha, uma linha indentada `DIAGNÓSTICO` registra:
+A saída TXT contínua e a exportação posterior têm apresentações próprias. Ambas incluem linhas de ciclo e diagnósticos. O TXT exportado do Histórico inclui etapa, código interno, código da sugestão, confiança e detalhe técnico, além do resumo e dos avisos. A saída contínua também apresenta os dados estruturados do provider e o texto da sugestão:
 
 - etapa;
 - código interno;
