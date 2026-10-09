@@ -48,6 +48,14 @@ O script verifica que os ZIPs contêm o EXE e limita o EXE único a 120 MiB. Com
 
 O [workflow atual](../.github/workflows/publish.yml) valida pushes de branches, pull requests e execuções manuais em Windows. Restaura, lista vulnerabilidades, compila com avisos como erros, testa e gera os três pacotes. A etapa de auditoria lista vulnerabilidades; o comando não constitui por si só uma regra que falha automaticamente ao encontrar um pacote vulnerável. Examine sua saída antes de publicar.
 
+O CI usa `--filter "Category!=InteractiveDesktop"` para excluir apenas os dois testes de redimensionamento de janelas de Perfis e Nova execução. O desktop do runner limita as dimensões nativas, impedindo os tamanhos exigidos por esses testes. Os demais testes de UI e comportamento continuam no CI, incluindo a restauração dos campos e eventos de Perfis. Não há `Skip` permanente nos testes.
+
+O comando local acima executa a suíte completa, incluindo esses dois testes. Execute-o em uma sessão gráfica do Windows com espaço suficiente para janelas de até 1680×950 de área cliente antes de publicar. Para executar somente os testes de redimensionamento:
+
+```powershell
+dotnet test tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj -c Release --no-build --no-restore --filter "Category=InteractiveDesktop"
+```
+
 O job de release só roda para uma tag `v*`, após validação, e exige que o nome corresponda a `v<VERSION>`. Uma tag divergente falha. O job publica ou atualiza a GitHub Release usando os artefatos validados. Execuções de branch não publicam uma release.
 
 Esta preparação de documentação não cria tag nem envia commits. Quando a entrega for aprovada, confira a CI e autorize separadamente a criação/envio da tag e a publicação.

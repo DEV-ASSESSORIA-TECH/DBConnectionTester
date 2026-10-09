@@ -54,8 +54,10 @@ jobs:
       - name: Build
         run: dotnet build $env:SOLUTION -c Release --no-restore --warnaserror
 
-      - name: Test
-        run: dotnet test $env:TEST_PROJECT -c Release --no-build --no-restore --verbosity minimal
+      # The hosted desktop limits native window sizes. Keep resizing checks
+      # active in the local suite; run all other UI and functional tests here.
+      - name: Test (excluding interactive desktop resizing)
+        run: dotnet test $env:TEST_PROJECT -c Release --no-build --no-restore --verbosity minimal --filter "Category!=InteractiveDesktop"
 
       - name: Publish and validate release packages
         shell: pwsh

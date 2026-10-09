@@ -11,6 +11,7 @@ namespace DBConnectionTester.Tests;
 public sealed class ExecutionLayoutTests
 {
     [Fact]
+    [Trait("Category", "InteractiveDesktop")]
     public async Task ExecutionLayoutKeepsConfigurationProgressAndResultsInOrder()
     {
         var directory = Path.Combine(Path.GetTempPath(), "DBCT-layout", Guid.NewGuid().ToString("N"));

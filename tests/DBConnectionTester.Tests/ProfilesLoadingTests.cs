@@ -10,7 +10,7 @@ namespace DBConnectionTester.Tests;
 public sealed class ProfilesLoadingTests
 {
     [Fact]
-    public Task NewProfileRestoresEventsAndLayoutAfterRepeatedResets() => RunUi(async (page, repository, form) =>
+    public Task NewProfileRestoresEventsAndFieldsAfterRepeatedResets() => RunUi(async (page, repository, _) =>
     {
         await page.RefreshAsync();
         for (var i = 0; i < 3; i++)
@@ -28,6 +28,19 @@ public sealed class ProfilesLoadingTests
             Assert.True(Field<TextBox>(page, "host").Visible);
             Assert.False(Field<TextBox>(page, "sqliteFile").Visible);
             Assert.Equal(3306, Field<NumericUpDown>(page, "port").Value);
+        }
+    });
+
+    [Fact]
+    [Trait("Category", "InteractiveDesktop")]
+    public Task NewProfileResizesAfterRepeatedResets() => RunUi(async (page, repository, form) =>
+    {
+        await page.RefreshAsync();
+        for (var i = 0; i < 3; i++)
+        {
+            Field<ListBox>(page, "profiles").SelectedIndex = 0;
+            Field<Button>(page, "create").PerformClick();
+            Field<ComboBox>(page, "databaseType").SelectedItem = DatabaseProfiles.Get(DatabaseType.MySqlMariaDb);
         }
         var editor = Field<TableLayoutPanel>(page, "editor");
         var input = Field<TextBox>(page, "host");

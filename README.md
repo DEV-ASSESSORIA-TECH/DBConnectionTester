@@ -114,6 +114,8 @@ dotnet test tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj -c Re
 dotnet run --project DBConnectionTester.csproj
 ```
 
+O teste local executa a suíte completa. No CI, apenas dois testes que exigem redimensionamento real de janelas são excluídos pelo limite do desktop do runner; veja [validação de release](docs/releasing.md#ci-e-publicação).
+
 Gerar e validar os três artefatos:
 
 ```powershell
