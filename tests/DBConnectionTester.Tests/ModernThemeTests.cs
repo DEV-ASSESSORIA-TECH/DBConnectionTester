@@ -136,6 +136,55 @@ public sealed class ModernThemeTests
         form.Close();
     });
 
+    [Theory]
+    [InlineData(ApplicationTheme.Light)]
+    [InlineData(ApplicationTheme.Dark)]
+    public Task RoundedButtonsRepaintEveryPixelAcrossStatesAndResizes(ApplicationTheme theme) => UiStyleTests.OnUiThread(() =>
+    {
+        using var form = new Form { ClientSize = new Size(400, 200) };
+        using var button = new PaintProbeButton { Text = "Abrir histórico" };
+        form.Controls.Add(button);
+        ThemeManager.ApplyPalette(form, ThemeManager.PaletteFor(theme));
+        form.Show();
+        foreach (var role in new[] { UiRole.NeutralAction, UiRole.Navigation, UiRole.PrimaryAction })
+        {
+            UiStyle.SetRole(button, role);
+            foreach (var state in new[] { "normal", "hover", "pressed", "disabled" })
+            foreach (var size in new[] { new Size(150, 36), new Size(117, 42), new Size(225, 54) })
+            {
+                button.Size = size;
+                button.SetInteraction(state);
+                using var first = PaintOver(Color.Magenta);
+                using var second = PaintOver(Color.Lime);
+                for (var y = 0; y < size.Height; y++)
+                for (var x = 0; x < size.Width; x++)
+                    Assert.True(first.GetPixel(x, y) == second.GetPixel(x, y),
+                        $"Unpainted pixel at {x},{y}: {theme}, {role}, {state}, {size}");
+            }
+        }
+        form.Close();
+
+        Bitmap PaintOver(Color initialColor)
+        {
+            var image = new Bitmap(button.Width, button.Height);
+            using (var graphics = Graphics.FromImage(image)) graphics.Clear(initialColor);
+            button.DrawToBitmap(image, button.ClientRectangle);
+            return image;
+        }
+    });
+
+    private sealed class PaintProbeButton : ThemedButton
+    {
+        public void SetInteraction(string state)
+        {
+            OnMouseLeave(EventArgs.Empty);
+            Enabled = true;
+            if (state is "hover" or "pressed") OnMouseEnter(EventArgs.Empty);
+            if (state == "pressed") OnMouseDown(new MouseEventArgs(MouseButtons.Left, 1, 10, 10, 0));
+            if (state == "disabled") Enabled = false;
+        }
+    }
+
     private static double Contrast(Color a, Color b)
     {
         static double Channel(byte value) => value / 255d <= 0.04045 ? value / 255d / 12.92 : Math.Pow((value / 255d + 0.055) / 1.055, 2.4);

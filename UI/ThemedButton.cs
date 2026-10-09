@@ -19,6 +19,8 @@ internal class ThemedButton : Button, IThemePaletteAware
         UseVisualStyleBackColor = false;
         Font = UiTypography.Body;
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        // ButtonBase is opaque by default, which skips the background paint needed outside rounded corners.
+        SetStyle(ControlStyles.Opaque, false);
     }
 
     void IThemePaletteAware.ApplyPalette(ThemePalette value) { palette = value; Invalidate(); }
