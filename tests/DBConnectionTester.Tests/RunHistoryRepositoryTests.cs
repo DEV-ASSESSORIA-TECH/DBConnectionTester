@@ -6,6 +6,23 @@ namespace DBConnectionTester.Tests;
 public sealed class RunHistoryRepositoryTests
 {
     [Fact]
+    public async Task RecentRunsReturnOnlyNewestThreeAndDoNotDependOnCycles()
+    {
+        using var fixture = await HistoryFixture.CreateAsync();
+        Assert.Empty(await fixture.History.GetRecentAsync());
+        await fixture.AddRunAsync("oldest", PersistedRunStatus.Completed);
+        var third = await fixture.AddRunAsync("third", PersistedRunStatus.Stopped);
+        var second = await fixture.AddRunAsync("second", PersistedRunStatus.Failed);
+        var newest = Guid.NewGuid();
+        await fixture.Writer.BeginAsync(newest, Settings("newest-without-cycles"));
+        var recent = await fixture.History.GetRecentAsync();
+        Assert.Equal(new[] { newest, second, third }, recent.Select(item => item.RunId));
+        Assert.Equal(0, recent[0].CompletedCycles);
+        Assert.Equal(PersistedRunStatus.Running, recent[0].Status);
+        Assert.DoesNotContain(recent, item => item.Target.Contains("oldest"));
+    }
+
+    [Fact]
     public async Task SearchesRunsWithFiltersAndPagination()
     {
         using var fixture = await HistoryFixture.CreateAsync();

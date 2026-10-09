@@ -8,7 +8,7 @@ public sealed partial class MainForm
 {
     private async Task StartAsync(bool singleRun)
     {
-        if (runCoordinator.IsRunning)
+        if (runCoordinator.IsRunning || settingsPage.IsBusy)
             return;
 
         var settings = TryBuildSettings();
@@ -94,24 +94,20 @@ public sealed partial class MainForm
 
     private void UpdateProgress(TestSettings settings, TestProgress value, bool singleRun)
     {
-        completedTests = value.Completed;
+        completedTests = Math.Max(completedTests, value.Completed);
         if (value.LatestCycle is not null)
             resultsControl.AddCycle(value.LatestCycle);
         if (value.Statistics is not null)
             resultsControl.UpdateStatistics(value.Statistics);
+        if (runUiState is not (RunUiState.Running or RunUiState.Stopping)) return;
         if (!settings.Continuous)
         {
             var percentage = (int)Math.Round(value.Completed * 100.0 / settings.TestCount.Value);
             progressBar.Value = Math.Clamp(percentage, 0, 100);
         }
-        var prefix = singleRun
-            ? "Teste único concluído"
-            : settings.Continuous
-            ? $"Executando continuamente | {value.Completed:N0} testes"
-            : $"Executando {value.Completed:N0}/{settings.TestCount.Value:N0}";
-        lblStatus.Text = $"{prefix} | DNS: {value.DnsFailures} | Ping: {value.PingFailures} | " +
-                         $"TCP: {value.TcpFailures} | DB conexão: {value.DatabaseConnectFailures} | " +
-                         $"DB consulta: {value.DatabaseQueryFailures}";
+        lblStatus.Text = runUiState == RunUiState.Stopping ? "Finalizando execução..."
+            : settings.Continuous ? "Execução contínua em andamento." : "Executando testes...";
+        UpdateRunProgressText();
         homePage.UpdateRunStatus(lblStatus.Text);
         UpdateTrayStatus(settings, value);
     }
@@ -133,6 +129,7 @@ public sealed partial class MainForm
         }
         if (summary.Stopped)
         {
+            UiStyle.SetState(lblStatus, UiState.Warning);
             lblStatus.Text = $"Teste interrompido. {summary.Completed:N0} verificações gravadas.";
             homePage.UpdateRunStatus(lblStatus.Text);
             trayStatus.Text = $"Interrompido - {summary.Completed:N0} testes";
@@ -144,6 +141,7 @@ public sealed partial class MainForm
         lblStatus.Text = string.IsNullOrWhiteSpace(summary.CsvPath)
             ? $"Concluído. {summary.Completed:N0} verificações salvas no histórico."
             : $"Concluído. Histórico salvo | CSV: {Path.GetFileName(summary.CsvPath)} | TXT: {Path.GetFileName(summary.TxtPath)}";
+        if (warnings.Count > 0) UiStyle.SetState(lblStatus, UiState.Warning);
         if (warnings.Count > 0)
             lblStatus.Text += $" | {warnings.Count} aviso(s) de saída";
         homePage.UpdateRunStatus(lblStatus.Text);
@@ -195,14 +193,28 @@ public sealed partial class MainForm
         }
 
         exitRequested = true;
-        trayIcon.Visible = false;
         Close();
     }
 
-    private void OnFormClosing(object? sender, FormClosingEventArgs e)
+    private bool profileClosePending;
+    private bool profileCloseApproved;
+    private async void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
         if (!runCoordinator.IsRunning)
+        {
+            if (settingsPage.IsBusy) { e.Cancel = true; exitRequested = false; return; }
+            if (profileCloseApproved || (!profilesPage.HasUnsavedChanges && !profilesPage.IsBusy && !settingsPage.HasUnsavedChanges) || e.CloseReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing) return;
+            e.Cancel = true;
+            if (profileClosePending) return;
+            profileClosePending = true;
+            try
+            {
+                if (await profilesPage.TryLeaveAsync() && await settingsPage.TryLeaveAsync()) { profileCloseApproved = true; BeginInvoke((Action)Close); }
+                else exitRequested = false;
+            }
+            finally { profileClosePending = false; }
             return;
+        }
 
         e.Cancel = true;
         if (exitRequested)
@@ -222,6 +234,7 @@ public sealed partial class MainForm
         exitRequested = true;
         ApplyRunUiState(RunUiState.Stopping);
         lblStatus.Text = "Encerrando teste, finalizando os arquivos e saindo...";
+        homePage.UpdateRunStatus(lblStatus.Text);
         trayStatus.Text = "Finalizando arquivos...";
         runCoordinator.Stop();
     }
@@ -229,11 +242,19 @@ public sealed partial class MainForm
     private void ApplyRunUiState(RunUiState state, TestSettings? settings = null)
     {
         runUiState = state;
+        UiStyle.SetState(lblStatus, state switch
+        {
+            RunUiState.Running => UiState.Busy,
+            RunUiState.Stopping => UiState.Warning,
+            RunUiState.Completed => UiState.Success,
+            RunUiState.Failed => UiState.Error,
+            _ => UiState.Normal
+        });
         var active = state is RunUiState.Running or RunUiState.Stopping;
         var stopping = state == RunUiState.Stopping;
         SetConfigurationEnabled(!active);
-        btnTestOnce.Enabled = !active;
-        btnStart.Enabled = !active;
+        btnTestOnce.Enabled = !active && !settingsPage.IsBusy;
+        btnStart.Enabled = !active && !settingsPage.IsBusy;
         btnStop.Enabled = active && !stopping;
         trayStop.Enabled = active && !stopping;
         profilesPage.SetEditingEnabled(!active);
@@ -241,26 +262,47 @@ public sealed partial class MainForm
 
         var hasOutput = !string.IsNullOrWhiteSpace(currentCsvPath);
         btnOpenCsv.Enabled = hasOutput;
-        btnOpenLog.Enabled = hasOutput;
+        btnOpenLog.Enabled = !string.IsNullOrWhiteSpace(currentTxtPath);
         trayOpenCsv.Enabled = hasOutput;
-        trayOpenLog.Enabled = hasOutput;
+        trayOpenLog.Enabled = btnOpenLog.Enabled;
 
-        if (state == RunUiState.Running && settings?.Continuous == true)
+        if (state == RunUiState.Running && settings is not null)
         {
-            progressBar.Style = ProgressBarStyle.Marquee;
-            progressBar.MarqueeAnimationSpeed = 30;
+            progressSettings = settings;
+            runElapsed.Restart();
+            elapsedTimer.Start();
+            progressBar.Value = 0;
         }
-        else
+        else if (!active)
         {
-            progressBar.Style = ProgressBarStyle.Blocks;
-            if (state == RunUiState.Running)
-                progressBar.Value = 0;
+            elapsedTimer.Stop();
+            runElapsed.Stop();
         }
+        showRunProgress = progressSettings is not null && state != RunUiState.Idle;
+        showProgressBar = showRunProgress && progressSettings?.Continuous == false && state != RunUiState.Failed;
+        // Continuous runs have no completion percentage.
+        progressBar.Style = ProgressBarStyle.Blocks;
+        progressBar.Visible = showProgressBar;
+        lblRunProgress.Visible = showRunProgress;
+        UpdateRunProgressText();
+    }
+
+    private void UpdateRunProgressText()
+    {
+        if (!showRunProgress || progressSettings is null) return;
+        var elapsed = runElapsed.Elapsed;
+        var duration = $"{(long)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
+        lblRunProgress.Text = progressSettings.Continuous
+            ? $"{completedTests:N0} ciclos concluídos · {duration} decorridos"
+            : $"{completedTests:N0} de {progressSettings.TestCount.Value:N0} ciclos · {duration} decorridos";
+        homePage.UpdateRunProgress(lblRunProgress.Text);
     }
 
     private void SetConfigurationEnabled(bool enabled)
     {
         configurationEnabled = enabled;
+        executionProfile.Enabled = enabled;
+        manageProfiles.Enabled = enabled;
         foreach (var control in new Control[]
                  {
                      cmbDatabaseType, txtHost, numPort, cmbSqlServerAuth, txtUser, txtPassword, txtDatabase,

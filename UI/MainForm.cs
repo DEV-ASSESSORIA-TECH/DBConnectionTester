@@ -17,7 +17,7 @@ public sealed partial class MainForm : Form
     private readonly ComboBox cmbSqlServerAuth = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox txtOdbcDriver = new() { Text = "SQL Anywhere 17" };
     private readonly TextBox txtSqliteFile = new();
-    private readonly Button btnBrowseSqlite = new() { Text = "Escolher...", AutoSize = true };
+    private readonly Button btnBrowseSqlite = new ThemedButton() { Text = "Escolher...", AutoSize = true };
     private readonly NumericUpDown numTests = new() { Minimum = 1, Maximum = 10_000_000, Value = 1000, ThousandsSeparator = true };
     private readonly CheckBox chkContinuous = new() { Text = "Execução contínua (até encerrar manualmente)", AutoSize = true };
     private readonly NumericUpDown numInterval = new() { Minimum = 0, Maximum = 3600, Value = 5, DecimalPlaces = 1, Increment = 0.5M };
@@ -27,16 +27,22 @@ public sealed partial class MainForm : Form
     private readonly CheckBox chkTcp = new() { Text = "TCP", Checked = true, AutoSize = true };
     private readonly CheckBox chkDatabase = new() { Text = "Banco + SELECT 1", Checked = true, AutoSize = true };
     private readonly CheckBox chkBackground = new() { Text = "Minimizar para a bandeja ao iniciar", AutoSize = true };
-    private readonly Button btnTestOnce = new() { Text = "Testar uma vez", AutoSize = true };
-    private readonly Button btnStart = new() { Text = "Iniciar teste", AutoSize = true };
-    private readonly Button btnStop = new() { Text = "Parar", AutoSize = true, Enabled = false };
-    private readonly Button btnOpenCsv = new() { Text = "Abrir CSV", AutoSize = true, Enabled = false };
-    private readonly Button btnOpenLog = new() { Text = "Abrir TXT", AutoSize = true, Enabled = false };
-    private readonly Button btnOpenFolder = new() { Text = "Abrir pasta", AutoSize = true };
+    private readonly Button btnTestOnce = new ThemedButton() { Text = "Testar uma vez", AutoSize = true };
+    private readonly Button btnStart = new ThemedButton() { Text = "Iniciar teste", AutoSize = true };
+    private readonly Button btnStop = new ThemedButton() { Text = "Parar", AutoSize = true, Enabled = false };
+    private readonly Button btnOpenCsv = new ThemedButton() { Text = "Abrir CSV", AutoSize = true, Enabled = false };
+    private readonly Button btnOpenLog = new ThemedButton() { Text = "Abrir TXT", AutoSize = true, Enabled = false };
+    private readonly Button btnOpenFolder = new ThemedButton() { Text = "Abrir pasta", AutoSize = true };
     private readonly Label lblStatus = new() { AutoSize = true, Text = "Pronto." };
+    private readonly Label lblRunProgress = new();
+    private readonly System.Windows.Forms.Timer elapsedTimer = new() { Interval = 1000 };
+    private readonly System.Diagnostics.Stopwatch runElapsed = new();
+    private TestSettings? progressSettings;
+    private bool showProgressBar;
+    private bool showRunProgress;
     private readonly ProgressBar progressBar = new() { Minimum = 0, Maximum = 100, Value = 0, Dock = DockStyle.Fill };
     private readonly ResultsControl resultsControl = new();
-    private readonly Panel pageHost = new() { Dock = DockStyle.Fill };
+    private readonly Panel pageHost = new BufferedPanel() { Dock = DockStyle.Fill };
     private readonly FlowLayoutPanel navigation = new()
     {
         Dock = DockStyle.Fill,
@@ -60,14 +66,14 @@ public sealed partial class MainForm : Form
     private readonly ToolStripMenuItem trayStop = new("Encerrar teste") { Enabled = false };
     private readonly ToolStripMenuItem trayExit = new("Sair");
 
-    private RowBinding hostRow = null!;
-    private RowBinding portRow = null!;
-    private RowBinding userRow = null!;
-    private RowBinding passwordRow = null!;
-    private RowBinding databaseRow = null!;
-    private RowBinding sqlAuthRow = null!;
-    private RowBinding odbcDriverRow = null!;
-    private RowBinding sqliteFileRow = null!;
+    private UiLayout.FieldRow hostRow = null!;
+    private UiLayout.FieldRow portRow = null!;
+    private UiLayout.FieldRow userRow = null!;
+    private UiLayout.FieldRow passwordRow = null!;
+    private UiLayout.FieldRow databaseRow = null!;
+    private UiLayout.FieldRow sqlAuthRow = null!;
+    private UiLayout.FieldRow odbcDriverRow = null!;
+    private UiLayout.FieldRow sqliteFileRow = null!;
 
     private RunCoordinator runCoordinator;
     private readonly SqliteApplicationStore applicationStore;
@@ -83,14 +89,23 @@ public sealed partial class MainForm : Form
 
     public MainForm(SqliteApplicationStore applicationStore, ApplicationSettings applicationSettings)
     {
+        ThemeManager.ConfigureNativeMode(applicationSettings.Theme);
+        Font = UiTypography.Body;
+        UiStyle.SetRole(btnTestOnce, UiRole.PrimaryAction);
+        UiStyle.SetRole(btnStart, UiRole.PrimaryAction);
+        UiStyle.SetRole(btnStop, UiRole.DestructiveAction);
+        UiStyle.SetRole(lblStatus, UiRole.Status);
+        UiStyle.SetRole(lblRunProgress, UiRole.SecondaryText);
+        UiStyle.SetRole(globalStatus, UiRole.SecondaryText);
+
         this.applicationStore = applicationStore;
         this.applicationSettings = applicationSettings;
         runCoordinator = CreateRunCoordinator(applicationSettings);
         Text = $"DB Connection Tester {ApplicationInfo.Version}";
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
-        MinimumSize = new Size(980, 720);
-        Size = new Size(1120, 900);
+        MinimumSize = SizeFromClientSize(new Size(800, 600));
+        Size = new Size(1000, 680);
         MaximizeBox = true;
 
         BuildUi();
@@ -101,8 +116,7 @@ public sealed partial class MainForm : Form
         ThemeManager.Apply(this, applicationSettings.Theme);
         Shown += async (_, _) =>
         {
-            await RefreshProfilesAsync();
-            await RefreshHistoryAsync();
+            await Task.WhenAll(RefreshProfilesAsync(), RefreshHistoryAsync());
         };
     }
 
@@ -118,7 +132,7 @@ public sealed partial class MainForm : Form
         new TestCycleExecutor(),
         new RunOutputFactory(applicationStore, settings)));
 
-    internal ApplicationTheme ConfiguredTheme => settingsPage.SelectedTheme;
+    internal ApplicationTheme ConfiguredTheme => applicationSettings.Theme;
 }
 
 internal enum RunUiState
