@@ -46,7 +46,9 @@ public sealed class StorageResolver
             .Where(item => item.IsCompatible)
             .Select(item => item.Descriptor!)
             .GroupBy(item => item.StoreId)
-            .Select(group => group.First())
+            // Manual copies share an identity. Preserve the explicitly remembered path before deduplicating.
+            .Select(group => group.FirstOrDefault(item => preference is not null &&
+                PathsEqual(item.DatabasePath, preference.DatabasePath)) ?? group.First())
             .ToArray();
         var problems = inspections
             .Where(item => item.Status is StoreInspectionStatus.FutureVersion or StoreInspectionStatus.Invalid)
@@ -55,7 +57,8 @@ public sealed class StorageResolver
             PathsEqual(item.DatabasePath, locations.PortableDatabasePath) && item.Scope == StorageScope.Portable);
         var preferred = preference is null
             ? null
-            : compatible.FirstOrDefault(item => item.StoreId == preference.StoreId);
+            : compatible.FirstOrDefault(item => item.StoreId == preference.StoreId &&
+                PathsEqual(item.DatabasePath, preference.DatabasePath));
 
         var unseenPortable = portable is not null &&
             portable.StoreId != preferred?.StoreId &&

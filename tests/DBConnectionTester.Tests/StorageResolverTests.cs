@@ -5,6 +5,35 @@ namespace DBConnectionTester.Tests;
 
 public sealed class StorageResolverTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RememberedPathWinsWhenManualCopiesShareAnIdentity(bool chooseOriginal)
+    {
+        using var fixture = new ResolverFixture();
+        var original = await fixture.CreateLocalAsync();
+        var copyPath = Path.Combine(fixture.Root, "manual-copy", "data.db");
+        Directory.CreateDirectory(Path.GetDirectoryName(copyPath)!);
+        await using (var source = await original.OpenConnectionAsync())
+        await using (var destination = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+        { DataSource = copyPath, Pooling = false }.ToString()))
+        {
+            await destination.OpenAsync();
+            source.BackupDatabase(destination);
+        }
+        var selected = (await SqliteApplicationStore.InspectAsync(chooseOriginal ? original.Descriptor.DatabasePath : copyPath)).Descriptor!;
+        await fixture.Resolver.ActivateAsync(selected, [original.Descriptor, selected]);
+
+        for (var restart = 0; restart < 2; restart++)
+        {
+            var result = await fixture.Resolver.ResolveAsync([]);
+            Assert.Equal(original.Descriptor.StoreId, result.SelectedStore!.Descriptor.StoreId);
+            Assert.Equal(selected.DatabasePath, result.SelectedStore.Descriptor.DatabasePath);
+            Assert.Equal(selected.DatabasePath, fixture.Preferences.Value!.DatabasePath);
+            Assert.False(result.RequiresSelection);
+        }
+    }
+
     [Fact]
     public async Task CreatesLocalStoreWhenNoCandidateExists()
     {
