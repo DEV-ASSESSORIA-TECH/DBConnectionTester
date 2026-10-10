@@ -27,6 +27,7 @@ Os [exemplos](examples/) foram gerados com os serviços reais e dados fictícios
 
 ## Desenvolvimento e publicação
 
+- [Roadmap](roadmap.md): próximo escopo, recursos adiados e melhorias transversais.
 - [Preparação e publicação](releasing.md): validação local, artefatos e comportamento da CI.
 - Fontes: [projeto](../DBConnectionTester.csproj), [workflow](../.github/workflows/publish.yml) e [script de empacotamento](../build/Publish-Release.ps1).
 
