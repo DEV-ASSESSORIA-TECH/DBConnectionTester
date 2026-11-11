@@ -8,7 +8,8 @@ Atualize `VERSION`, README, changelog e notas da release juntos quando a versão
 
 ## Validação local sem publicar
 
-Na raiz, em Windows x64 com .NET 10 SDK:
+Na raiz, em Windows x64 com .NET 10 SDK. O empacotamento MSI também requer C++ v143,
+Windows SDK e o aceite WiX fornecido pelo responsável; veja [pré-requisitos](installation.md#compilar-sem-instalar).
 
 ```powershell
 dotnet restore DBConnectionTester.sln
@@ -33,7 +34,8 @@ Não use o comando interno de preparação do armazenamento compartilhado como t
 | `DBConnectionTester-v2.0.0-win-x64-self-contained.exe` | EXE único, com runtime e bibliotecas nativas extraídas quando necessário. |
 | `DBConnectionTester-v2.0.0-win-x64-portable-complete.zip` | GUI e CLI em dois executáveis self-contained independentes, mais instruções. |
 | `DBConnectionTester-v2.0.0-win-x64-portable-cli.zip` | CLI self-contained sem WinForms, mais instruções. |
-| `SHA256SUMS.txt` e `*.sha256` | Hash dos cinco artefatos. |
+| `DBConnectionTester-v2.0.0-win-x64.msi` | GUI e CLI com escopo por usuário ou por máquina, PATH opcional e dados preservados. |
+| `SHA256SUMS.txt` e `*.sha256` | Hash dos seis artefatos. |
 
 O script verifica que os ZIPs contêm o EXE e limita o EXE único a 120 MiB. Compare os hashes após transferir os arquivos. Não distribua apenas o apphost pequeno gerado por `dotnet build`: ele depende dos outros arquivos da pasta.
 
@@ -42,6 +44,9 @@ incrementa `VERSION` nem modifica releases existentes. Os nomes seguem a versão
 selecionada para a próxima publicação. O limite de 120 MiB continua exclusivo do
 EXE da GUI. Os tamanhos de Complete e CLI são registrados, sem limite presumido.
 O Complete duplica parte do runtime para evitar mesclar diretórios de publicação.
+O MSI reutiliza exatamente esses executáveis; a inspeção extrai seu CAB e compara
+os hashes. Ele é gerado e validado sem instalar o produto na máquina de desenvolvimento.
+Sua primeira entrega não possui assinatura Authenticode.
 
 `Test-PortablePackages.ps1` extrai os dois ZIPs em pasta com espaços, inicia a CLI
 de outro diretório corrente com lookup de runtime redirecionado, executa teste TCP
@@ -63,7 +68,15 @@ uma pasta temporária gravável; drivers ODBC externos não são incorporados.
 
 ## CI e publicação
 
-O [workflow atual](../.github/workflows/publish.yml) valida pushes de branches, pull requests e execuções manuais em Windows. Restaura a solução e os runtimes de Desktop/CLI, lista vulnerabilidades, compila com avisos como erros, executa as duas suítes e gera os cinco artefatos. A etapa de auditoria lista vulnerabilidades; o comando não constitui por si só uma regra que falha automaticamente ao encontrar um pacote vulnerável. Examine sua saída antes de publicar.
+O [workflow atual](../.github/workflows/publish.yml) valida pushes de branches, pull requests e execuções manuais em Windows. Restaura a solução e os runtimes de Desktop/CLI, lista vulnerabilidades, compila com avisos como erros, executa as duas suítes e gera os seis artefatos. A etapa de auditoria lista vulnerabilidades; o comando não constitui por si só uma regra que falha automaticamente ao encontrar um pacote vulnerável. Examine sua saída antes de publicar.
+
+O responsável deve configurar `DBCT_WIX_ACCEPT_EULA` nas variáveis do repositório
+após revisar os termos. O CI não lê o `.env` local nem aceita termos automaticamente.
+Além de ICE e inspeção de conteúdo, o runner descartável executa instalação por
+usuário com conta padrão temporária, instalação por máquina, coexistência, reparo,
+upgrade, downgrade, rollback e preservação de dados. Esses testes nunca são executados
+automaticamente na máquina de desenvolvimento. Em caso de falha, somente os logs de
+diagnóstico do instalador são enviados como artefato temporário por um dia.
 
 O CI usa `--filter "Category!=InteractiveDesktop"` para excluir apenas os dois testes de redimensionamento de janelas de Perfis e Nova execução. O desktop do runner limita as dimensões nativas, impedindo os tamanhos exigidos por esses testes. Os demais testes de UI e comportamento continuam no CI, incluindo a restauração dos campos e eventos de Perfis. Não há `Skip` permanente nos testes.
 
@@ -75,7 +88,7 @@ dotnet test tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj -c Re
 
 O job de release só roda para uma tag `v*`, após validação, e exige que o nome corresponda a `v<VERSION>`. Uma tag divergente falha. O job publica ou atualiza a GitHub Release usando os artefatos validados. Execuções de branch não publicam uma release.
 
-Branches e PRs geram e validam os pacotes sem enviar artefatos ao Actions. Somente tags enviam os onze arquivos (cinco artefatos, cinco checksums e `SHA256SUMS.txt`) em um único artefato temporário `DBConnectionTester-v<VERSION>-release-bundle`, com `archive: true`, `compression-level: 0` e retenção de um dia. O contêiner de transferência preserva os ZIPs e o EXE originais durante o download. A lista esperada está em `build/Get-ReleaseAssetNames.ps1`; o job de release compara nomes e verifica os hashes antes do upload.
+Branches e PRs bem-sucedidos geram e validam os pacotes sem enviar artefatos ao Actions. Somente tags enviam os treze arquivos (seis artefatos, seis checksums e `SHA256SUMS.txt`) em um único artefato temporário `DBConnectionTester-v<VERSION>-release-bundle`, com `archive: true`, `compression-level: 0` e retenção de um dia. O contêiner de transferência preserva os ZIPs, EXE e MSI originais durante o download. A lista esperada está em `build/Get-ReleaseAssetNames.ps1`; o job de release compara nomes e verifica os hashes antes do upload.
 
 Após criar ou atualizar a release, o workflow confirma que todos os arquivos locais constam nos assets publicados com o mesmo tamanho. Só então exclui o artefato temporário pelo ID fornecido pelo job de validação. A limpeza requer `actions: write` somente no job de release; não remove assets da GitHub Release nem artefatos de outras execuções. Se a publicação ou verificação falhar, o artefato é preservado até expirar, permitindo nova tentativa dentro desse prazo. Após a exclusão ou expiração, execute o workflow completo novamente; repetir apenas o job de release não terá o contêiner disponível.
 

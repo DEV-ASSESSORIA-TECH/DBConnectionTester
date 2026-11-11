@@ -4,6 +4,7 @@
 
 - [Guia dos painéis e fluxos](user-guide.md): execução, perfis, histórico, configurações e bandeja.
 - [CLI e automações](cli.md): comandos, credenciais, JSON, armazenamento e códigos de saída.
+- [Instalação MSI](installation.md): escopos, PATH, manutenção, preservação de dados e validação.
 - [Solução de problemas](troubleshooting.md): armazenamento, exportação, drivers e DPI.
 - [Segurança e privacidade](security.md): dados persistidos, redação e distribuição.
 - [Notas da versão 2.0.0](release-notes-2.0.0.md) e [changelog](../CHANGELOG.md).

@@ -58,5 +58,11 @@ mas evita composição manual de dependências. A validação dos ZIPs executa a
 pasta com espaços, diretório corrente diferente e lookup de runtime redirecionado;
 realiza teste TCP local, consulta e exportação sem servidor externo.
 
-MSI, suporte multiplataforma, compartilhamento otimizado de dependências, administração
+O projeto WiX em `installer/` reutiliza os dois executáveis publicados e mantém a
+autoria MSI fora da solução principal. As ações nativas tratam seleção de diretórios,
+PATH e proteção de manutenção, sem referenciar Core nem alterar o armazenamento.
+O pacote suporta os dois contextos e preserva a gestão de dados no aplicativo.
+Veja [instalação e build do MSI](installation.md).
+
+Suporte multiplataforma, compartilhamento otimizado de dependências, administração
 de perfis pela CLI e novo manifesto de pacote de dados ficam fora desta entrega.

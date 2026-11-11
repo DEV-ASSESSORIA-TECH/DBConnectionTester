@@ -12,12 +12,14 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - Saída JSON para automações, progresso em stderr, fontes dedicadas de senha, cancelamento e códigos de saída documentados.
 - Portable Complete (GUI + CLI) e Portable CLI self-contained, com checksums e validação funcional dos ZIPs.
 - Testes de processo, Ctrl+C real, concorrência e recuperação entre GUI/Core e CLI.
+- MSI Windows x64 com assistente em português, instalação por usuário ou máquina, PATH opcional e manutenção independente por contexto.
+- Build WiX 7.0.1 com aceite explícito do responsável, inspeção de conteúdo/hashes, ações nativas e testes de ciclo de vida restritos a Windows descartável.
 
 ### Alterado
 
 - Solução reorganizada em `src/DBConnectionTester.Core`, `src/DBConnectionTester.Desktop` e `src/DBConnectionTester.Cli`, preservando contratos de dados v1 e o executável da GUI.
 - CLI não altera a preferência de armazenamento da GUI e não cria bancos em consultas.
-- Pipeline valida os projetos e os onze arquivos esperados de release, preservando os artefatos anteriores da GUI.
+- Pipeline valida os projetos e os treze arquivos esperados de release, preservando os artefatos anteriores da GUI.
 
 ### Corrigido
 

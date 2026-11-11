@@ -95,13 +95,14 @@ Leia [Segurança e privacidade](docs/security.md) e a [documentação dos diagn�
 
 ## Downloads
 
-O empacotamento passa a oferecer cinco artefatos Windows x64 (alterações em desenvolvimento, sem nova versão publicada):
+O empacotamento passa a oferecer seis artefatos Windows x64 (alterações em desenvolvimento, sem nova versão publicada):
 
 - **Framework-dependent ZIP:** requer o [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
 - **Self-contained ZIP:** inclui o runtime e mantém os arquivos separados.
 - **Self-contained EXE:** arquivo único pronto para executar.
 - **Portable Complete ZIP:** GUI + CLI, com dois executáveis self-contained independentes.
 - **Portable CLI ZIP:** somente `dbct.exe` self-contained, sem WinForms.
+- **MSI:** GUI + CLI, instalação por usuário ou por máquina, com PATH opcional. Veja [instalação e manutenção](docs/installation.md).
 
 Cada artefato possui checksum SHA-256. O EXE único é validado pela CI para permanecer abaixo de 120 MiB.
 
@@ -119,7 +120,7 @@ dotnet run --project src/DBConnectionTester.Cli -- --help
 
 O teste local executa a suíte completa. No CI, apenas dois testes que exigem redimensionamento real de janelas são excluídos pelo limite do desktop do runner; veja [validação de release](docs/releasing.md#ci-e-publicação).
 
-Gerar e validar os cinco artefatos:
+Gerar e validar os seis artefatos (MSI requer C++ Build Tools, Windows SDK e aceite WiX pelo responsável; [pré-requisitos](docs/installation.md#compilar-sem-instalar)):
 
 ```powershell
 ./build/Publish-Release.ps1
@@ -131,6 +132,7 @@ Os arquivos são gravados em `artifacts/`. A automação de release é executada
 
 - [Índice da documentação](docs/README.md)
 - [CLI e automações](docs/cli.md)
+- [Instalação MSI e manutenção](docs/installation.md)
 - [Arquitetura Core, Desktop e CLI](docs/architecture.md)
 - [Guia dos painéis e fluxos](docs/user-guide.md)
 - [Arquitetura de armazenamento](docs/storage.md)

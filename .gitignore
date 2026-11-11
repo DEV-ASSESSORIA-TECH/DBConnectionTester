@@ -8,3 +8,4 @@ TestResults/
 *.txt
 publish/
 artifacts/
+.env
