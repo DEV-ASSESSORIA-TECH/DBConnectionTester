@@ -1,0 +1,18 @@
+<Project Sdk="WixToolset.Sdk/7.0.1">
+  <PropertyGroup>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <Cultures>pt-BR</Cultures>
+    <OutputName>DBConnectionTester</OutputName>
+    <AcceptEula Condition="'$(AcceptEula)' == ''">$(DBCT_WIX_ACCEPT_EULA)</AcceptEula>
+    <DefineConstants>PayloadDirectory=$(PayloadDirectory);ActionsBinary=$(ActionsBinary);InstallerVersion=$(Version);ProductCode=$(InstallerProductCode);LicenseRtf=$(LicenseRtf)</DefineConstants>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="7.0.1" />
+  </ItemGroup>
+  <Target Name="ValidatePayload" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(PayloadDirectory)/DBConnectionTester.exe') or !Exists('$(PayloadDirectory)/dbct.exe')" Text="Provide PayloadDirectory containing the validated self-contained GUI and CLI executables." />
+    <Error Condition="!Exists('$(ActionsBinary)')" Text="Provide ActionsBinary containing the native installer actions DLL." />
+    <Error Condition="'$(InstallerProductCode)' == ''" Text="Build through build/Build-Installer.ps1 to generate the stable, version-specific product code." />
+  </Target>
+</Project>

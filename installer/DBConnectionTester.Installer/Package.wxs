@@ -1,0 +1,83 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="DB Connection Tester" Manufacturer="ASSESSORIA TECNOLOGIA E GESTÃO"
+           Version="$(var.InstallerVersion)" ProductCode="$(var.ProductCode)"
+           UpgradeCode="B243C8D8-2C82-5D41-8DA0-B7534CE8FB26"
+           Language="1046" Codepage="1252" Scope="perUserOrMachine" InstallerVersion="500">
+    <MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="no"
+                  DowngradeErrorMessage="Já existe uma versão mais recente neste contexto de instalação." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <SummaryInformation Description="Instalação de GUI e CLI do DB Connection Tester" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="REBOOT" Value="ReallySuppress" />
+    <Property Id="MSIRESTARTMANAGERCONTROL" Value="DisableShutdown" />
+    <Property Id="MSIDISABLERMRESTART" Value="1" />
+    <Property Id="ADD_TO_PATH" Secure="yes" />
+    <Property Id="DBCT_SCOPE" Value="user" />
+    <Property Id="DBCT_MAINTENANCE" Value="repair" />
+    <Launch Condition="VersionNT64" Message="Este instalador requer Windows de 64 bits." />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="DBConnectionTester">
+        <Component Id="DesktopBinary" Guid="F0D29955-9919-46A7-896A-061235BE6139" Bitness="always64">
+          <File Id="DesktopExe" Source="$(var.PayloadDirectory)/DBConnectionTester.exe" KeyPath="yes" />
+        </Component>
+        <Component Id="CliBinary" Guid="B080CBA5-590B-48DA-85BC-6B05BBC8DDE3" Bitness="always64">
+          <File Id="CliExe" Source="$(var.PayloadDirectory)/dbct.exe" KeyPath="yes" />
+        </Component>
+        <Component Id="LicenseFile" Guid="22EAE821-7CA5-46A0-86EC-965AA7FC0B79" Bitness="always64">
+          <File Id="LicenseDocument" Name="LICENSE.pt-BR" Source="../../LICENSE.pt-BR" KeyPath="yes" />
+        </Component>
+        <Component Id="InstructionsFile" Guid="05E66FA4-81A6-45CC-91F2-4050201F492C" Bitness="always64">
+          <File Id="InstallationGuide" Name="INSTALACAO.html" Source="Instructions.html" KeyPath="yes" />
+        </Component>
+        <Component Id="InstallerSettings" Guid="F450333D-06E7-4BE3-BE17-AC38F992E5B1" Bitness="always64">
+          <RegistryKey Root="HKMU" Key="Software\DBConnectionTester.Installer">
+            <RegistryValue Name="InstallFolder" Value="[INSTALLFOLDER]" Type="string" KeyPath="yes" />
+            <RegistryValue Name="AddToPath" Value="[ADD_TO_PATH]" Type="string" />
+          </RegistryKey>
+        </Component>
+        <Component Id="UserPath" Guid="8B51B984-43CA-41CC-9FEB-7931E2BAA59C" Bitness="always64"
+                   Condition="ALLUSERS &lt;&gt; 1 AND ADD_TO_PATH = 1" Transitive="yes">
+          <RegistryValue Root="HKCU" Key="Software\DBConnectionTester.Installer" Name="UserPath" Type="integer" Value="1" KeyPath="yes" />
+          <Environment Id="UserPathEntry" Name="PATH" Value="[INSTALLFOLDER]" Action="set" Part="last" System="no" Permanent="no" />
+        </Component>
+        <Component Id="MachinePath" Guid="C1BF50B8-D907-47D2-9C93-BEB503BC85BA" Bitness="always64"
+                   Condition="ALLUSERS = 1 AND ADD_TO_PATH = 1" Transitive="yes">
+          <RegistryValue Root="HKLM" Key="Software\DBConnectionTester.Installer" Name="MachinePath" Type="integer" Value="1" KeyPath="yes" />
+          <Environment Id="MachinePathEntry" Name="PATH" Value="[INSTALLFOLDER]" Action="set" Part="last" System="yes" Permanent="no" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProductMenu" Name="DB Connection Tester">
+        <Component Id="MenuShortcuts" Guid="4CD4458E-43D4-4B21-B3B4-32FC9BD67D6D" Bitness="always64">
+          <Shortcut Id="GuiShortcut" Name="DB Connection Tester" Target="[#DesktopExe]" WorkingDirectory="INSTALLFOLDER" />
+          <Shortcut Id="GuideShortcut" Name="Instruções de instalação e CLI" Target="[#InstallationGuide]" WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="RemoveProductMenu" On="uninstall" />
+          <RegistryValue Root="HKMU" Key="Software\DBConnectionTester.Installer" Name="Shortcuts" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <Feature Id="Application" Title="GUI e CLI" Level="1" AllowAbsent="no">
+      <ComponentRef Id="DesktopBinary" /><ComponentRef Id="CliBinary" />
+      <ComponentRef Id="LicenseFile" /><ComponentRef Id="InstructionsFile" />
+      <ComponentRef Id="InstallerSettings" /><ComponentRef Id="MenuShortcuts" />
+      <ComponentRef Id="UserPath" /><ComponentRef Id="MachinePath" />
+    </Feature>
+
+    <Binary Id="NativeActions" SourceFile="$(var.ActionsBinary)" />
+    <CustomAction Id="PrepareSettings" BinaryRef="NativeActions" DllEntry="PrepareSettings" Execute="immediate" Return="check" />
+    <CustomAction Id="FilterRelatedProducts" BinaryRef="NativeActions" DllEntry="FilterRelatedProducts" Execute="immediate" Return="check" />
+    <CustomAction Id="CheckFilesInUse" BinaryRef="NativeActions" DllEntry="CheckFilesInUse" Execute="immediate" Return="check" />
+    <InstallUISequence>
+      <Custom Action="FilterRelatedProducts" After="FindRelatedProducts" />
+      <Custom Action="PrepareSettings" After="CostInitialize" />
+    </InstallUISequence>
+    <InstallExecuteSequence>
+      <Custom Action="FilterRelatedProducts" After="FindRelatedProducts" />
+      <Custom Action="PrepareSettings" After="CostInitialize" />
+      <Custom Action="CheckFilesInUse" Before="InstallInitialize" />
+    </InstallExecuteSequence>
+    <UIRef Id="DBCT_UI" />
+  </Package>
+</Wix>

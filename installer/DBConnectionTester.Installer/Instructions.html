@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>DB Connection Tester — instalação</title>
+<style>body{max-width:850px;margin:40px auto;padding:0 24px;font:17px/1.6 system-ui;color:#202830}code,pre{background:#f1f3f5}pre{padding:16px;overflow:auto}h1,h2{line-height:1.2}</style>
+<h1>DB Connection Tester</h1>
+<p>Esta instalação inclui a interface gráfica e a CLI <code>dbct.exe</code>, com o runtime necessário. Não é preciso instalar .NET separadamente.</p>
+<h2>Terminal</h2><p>Se a opção de PATH foi habilitada, abra um <strong>novo terminal</strong>. Terminais já abertos mantêm o ambiente anterior.</p>
+<pre>dbct --help
+dbct run --help
+dbct history list --data-dir "C:\Meus dados\DBCT" --format json</pre>
+<p>Use <code>where.exe dbct</code> para identificar qual instalação será executada. Instalações por usuário e por máquina podem coexistir; use o caminho completo para escolher uma delas.</p>
+<h2>Dados e credenciais</h2><p>Dados ficam por padrão em <code>%LOCALAPPDATA%\DBConnectionTester</code>. O aplicativo também pode usar armazenamento compartilhado, portátil ou personalizado. O instalador não seleciona, migra ou remove bancos. Instalar para todos os usuários não torna o histórico compartilhado.</p>
+<p><code>--data-dir</code> indica a pasta do armazenamento da aplicação; caminhos relativos usam o diretório corrente. Para senhas use <code>--password-env NOME_DA_VARIAVEL</code> ou <code>--password-stdin</code>. Não forneça senhas nos argumentos.</p>
+<h2>Atualização e remoção</h2><p>Encerre os executáveis desta instalação antes de atualizar, reparar ou remover. O instalador não encerra processos à força. Cada contexto possui manutenção própria. Dados, relatórios e preferências são preservados.</p>
+<p>Na desinstalação são removidos os arquivos registrados, atalhos e a entrada de PATH deste contexto. Arquivos adicionais criados por você não são removidos recursivamente.</p>
+<h2>Dependências externas</h2><p>SQL Anywhere requer driver ODBC x64 instalado separadamente. Autenticação Windows usa a identidade que executa o aplicativo. Bibliotecas nativas dos executáveis single-file podem ser extraídas em diretório temporário gravável.</p>
+<p>Este MSI inicial não possui assinatura Authenticode. Confira o SHA-256 e obtenha o instalador pelo canal oficial do projeto.</p>
+</html>
