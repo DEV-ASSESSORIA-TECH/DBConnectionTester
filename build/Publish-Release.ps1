@@ -3,7 +3,8 @@ param(
     [string] $Configuration = "Release",
     [string] $Runtime = "win-x64",
     [string] $OutputRoot = "",
-    [switch] $NoRestore
+    [switch] $NoRestore,
+    [string] $WixAcceptEula = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,8 +32,9 @@ $selfContainedDirectory = Join-Path $publishRoot "self-contained"
 $standaloneDirectory = Join-Path $publishRoot "standalone"
 $cliDirectory = Join-Path $publishRoot "cli"
 $completeDirectory = Join-Path $publishRoot "complete"
+$installerDirectory = Join-Path $publishRoot "installer"
 
-foreach ($directory in @($frameworkDirectory, $selfContainedDirectory, $standaloneDirectory, $cliDirectory, $completeDirectory, $artifactRoot)) {
+foreach ($directory in @($frameworkDirectory, $selfContainedDirectory, $standaloneDirectory, $cliDirectory, $completeDirectory, $installerDirectory, $artifactRoot)) {
     $resolvedDirectory = [System.IO.Path]::GetFullPath($directory)
     if (-not $resolvedDirectory.StartsWith($repositoryPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Refusing to clean a directory outside the repository: $resolvedDirectory"
@@ -111,7 +113,15 @@ if ($standaloneSize -gt $maximumStandaloneBytes) {
     throw "Standalone executable is $standaloneSize bytes; the limit is $maximumStandaloneBytes bytes."
 }
 
-$artifacts = @($frameworkZip, $selfContainedZip, $standaloneArtifact, $completeZip, $cliZip)
+& (Join-Path $PSScriptRoot "Build-Installer.ps1") -PayloadDirectory $completeDirectory `
+    -OutputDirectory $installerDirectory -Version $version -WixAcceptEula $WixAcceptEula | Out-Host
+$msi = Join-Path $installerDirectory "DBConnectionTester.msi"
+& (Join-Path $PSScriptRoot "Test-InstallerPackage.ps1") -MsiPath $msi -PayloadDirectory $completeDirectory
+& (Join-Path $PSScriptRoot "Test-InstallerActions.ps1") -MsiPath $msi -PayloadDirectory $completeDirectory
+$msiArtifact = Join-Path $artifactRoot "DBConnectionTester-v$version-$Runtime.msi"
+Copy-Item -LiteralPath $msi -Destination $msiArtifact
+
+$artifacts = @($frameworkZip, $selfContainedZip, $standaloneArtifact, $completeZip, $cliZip, $msiArtifact)
 $checksumLines = foreach ($artifact in $artifacts) {
     $hash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLowerInvariant()
     $fileName = [System.IO.Path]::GetFileName($artifact)
@@ -129,4 +139,5 @@ $checksumLines | Set-Content -LiteralPath (Join-Path $artifactRoot "SHA256SUMS.t
     StandaloneExeBytes = $standaloneSize
     PortableCompleteZipBytes = (Get-Item -LiteralPath $completeZip).Length
     PortableCliZipBytes = (Get-Item -LiteralPath $cliZip).Length
+    MsiBytes = (Get-Item -LiteralPath $msiArtifact).Length
 } | Format-List

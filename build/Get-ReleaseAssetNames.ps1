@@ -9,7 +9,8 @@ $packages = @(
     "DBConnectionTester-v$Version-$Runtime-self-contained.zip",
     "DBConnectionTester-v$Version-$Runtime-self-contained.exe",
     "DBConnectionTester-v$Version-$Runtime-portable-complete.zip",
-    "DBConnectionTester-v$Version-$Runtime-portable-cli.zip"
+    "DBConnectionTester-v$Version-$Runtime-portable-cli.zip",
+    "DBConnectionTester-v$Version-$Runtime.msi"
 )
 foreach ($package in $packages) {
     $package
