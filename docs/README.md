@@ -3,6 +3,7 @@
 ## Uso
 
 - [Guia dos painéis e fluxos](user-guide.md): execução, perfis, histórico, configurações e bandeja.
+- [CLI e automações](cli.md): comandos, credenciais, JSON, armazenamento e códigos de saída.
 - [Solução de problemas](troubleshooting.md): armazenamento, exportação, drivers e DPI.
 - [Segurança e privacidade](security.md): dados persistidos, redação e distribuição.
 - [Notas da versão 2.0.0](release-notes-2.0.0.md) e [changelog](../CHANGELOG.md).
@@ -28,7 +29,8 @@ Os [exemplos](examples/) foram gerados com os serviços reais e dados fictícios
 ## Desenvolvimento e publicação
 
 - [Roadmap](roadmap.md): próximo escopo, recursos adiados e melhorias transversais.
+- [Arquitetura Core, Desktop e CLI](architecture.md): limites entre projetos e contratos compartilhados.
 - [Preparação e publicação](releasing.md): validação local, artefatos e comportamento da CI.
-- Fontes: [projeto](../DBConnectionTester.csproj), [workflow](../.github/workflows/publish.yml) e [script de empacotamento](../build/Publish-Release.ps1).
+- Fontes: [solução](../DBConnectionTester.sln), [Desktop](../src/DBConnectionTester.Desktop/DBConnectionTester.Desktop.csproj), [Core](../src/DBConnectionTester.Core/DBConnectionTester.Core.csproj), [CLI](../src/DBConnectionTester.Cli/DBConnectionTester.Cli.csproj), [workflow](../.github/workflows/publish.yml) e [script de empacotamento](../build/Publish-Release.ps1).
 
 As capturas dos cinco painéis estão no guia. Os SVGs de arquitetura e fluxos permanecem em `images/`.

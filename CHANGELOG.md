@@ -6,6 +6,23 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ## [Unreleased]
 
+### Adicionado
+
+- CLI independente da GUI para execução por parâmetros ou perfil, consultas de perfis/histórico e exportações CSV/TXT/JSON/ZIP.
+- Saída JSON para automações, progresso em stderr, fontes dedicadas de senha, cancelamento e códigos de saída documentados.
+- Portable Complete (GUI + CLI) e Portable CLI self-contained, com checksums e validação funcional dos ZIPs.
+- Testes de processo, Ctrl+C real, concorrência e recuperação entre GUI/Core e CLI.
+
+### Alterado
+
+- Solução reorganizada em `src/DBConnectionTester.Core`, `src/DBConnectionTester.Desktop` e `src/DBConnectionTester.Cli`, preservando contratos de dados v1 e o executável da GUI.
+- CLI não altera a preferência de armazenamento da GUI e não cria bancos em consultas.
+- Pipeline valida os projetos e os onze arquivos esperados de release, preservando os artefatos anteriores da GUI.
+
+### Corrigido
+
+- Dependência transitiva de criptografia fixada em versão corrigida, mantendo a auditoria NuGet habilitada.
+
 ## [2.0.0] - 2026-10-09
 
 ### Adicionado

@@ -1,5 +1,10 @@
 # Arquitetura de armazenamento
 
+As regras de seleção por diálogo abaixo descrevem a GUI. A [CLI](cli.md) reutiliza
+a descoberta, mas retorna erro em caso de ambiguidade, não altera a preferência no
+Registro e só permite criar armazenamento no comando `run`. Consultas não recuperam
+sessões abandonadas e exigem escrita pela infraestrutura atual.
+
 ## Princípios
 
 O executável continua portátil: pode ser copiado e executado de qualquer pasta. Os dados funcionais ficam em um banco SQLite identificado por `StoreId`. O Registro do usuário funciona somente como localizador da última escolha e nunca contém perfis, resultados ou credenciais.

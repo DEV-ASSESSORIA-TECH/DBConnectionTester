@@ -95,11 +95,13 @@ Leia [Segurança e privacidade](docs/security.md) e a [documentação dos diagn�
 
 ## Downloads
 
-Cada release oferece três artefatos Windows x64:
+O empacotamento passa a oferecer cinco artefatos Windows x64 (alterações em desenvolvimento, sem nova versão publicada):
 
 - **Framework-dependent ZIP:** requer o [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
 - **Self-contained ZIP:** inclui o runtime e mantém os arquivos separados.
 - **Self-contained EXE:** arquivo único pronto para executar.
+- **Portable Complete ZIP:** GUI + CLI, com dois executáveis self-contained independentes.
+- **Portable CLI ZIP:** somente `dbct.exe` self-contained, sem WinForms.
 
 Cada artefato possui checksum SHA-256. O EXE único é validado pela CI para permanecer abaixo de 120 MiB.
 
@@ -108,15 +110,16 @@ Cada artefato possui checksum SHA-256. O EXE único é validado pela CI para per
 Requisitos: Windows x64 e .NET 10 SDK.
 
 ```powershell
-dotnet restore tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj
+dotnet restore DBConnectionTester.sln
 dotnet build DBConnectionTester.sln -c Release --no-restore
-dotnet test tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj -c Release --no-build
-dotnet run --project DBConnectionTester.csproj
+dotnet test DBConnectionTester.sln -c Release --no-build
+dotnet run --project src/DBConnectionTester.Desktop
+dotnet run --project src/DBConnectionTester.Cli -- --help
 ```
 
 O teste local executa a suíte completa. No CI, apenas dois testes que exigem redimensionamento real de janelas são excluídos pelo limite do desktop do runner; veja [validação de release](docs/releasing.md#ci-e-publicação).
 
-Gerar e validar os três artefatos:
+Gerar e validar os cinco artefatos:
 
 ```powershell
 ./build/Publish-Release.ps1
@@ -127,6 +130,8 @@ Os arquivos são gravados em `artifacts/`. A automação de release é executada
 ## Documentação
 
 - [Índice da documentação](docs/README.md)
+- [CLI e automações](docs/cli.md)
+- [Arquitetura Core, Desktop e CLI](docs/architecture.md)
 - [Guia dos painéis e fluxos](docs/user-guide.md)
 - [Arquitetura de armazenamento](docs/storage.md)
 - [Esquema SQLite v1](docs/database-schema.md)
