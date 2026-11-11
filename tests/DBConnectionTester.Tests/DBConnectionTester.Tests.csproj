@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\DBConnectionTester.csproj" />
+    <ProjectReference Include="..\..\src\DBConnectionTester.Desktop\DBConnectionTester.Desktop.csproj" />
   </ItemGroup>
 </Project>
+
