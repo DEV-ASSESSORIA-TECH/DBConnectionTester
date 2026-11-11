@@ -8,6 +8,7 @@
       <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="Reabra o terminal para usar o PATH atualizado. Seus dados permanecem preservados." />
       <DialogRef Id="ErrorDlg" /><DialogRef Id="FatalError" /><DialogRef Id="UserExit" />
       <DialogRef Id="ProgressDlg" /><DialogRef Id="ExitDialog" /><DialogRef Id="CancelDlg" />
+      <DialogRef Id="FilesInUse" /><DialogRef Id="MsiRMFilesInUse" />
 
       <Dialog Id="DBCT_Welcome" Width="400" Height="280" Title="DB Connection Tester">
         <Control Id="Title" Type="Text" X="20" Y="20" Width="360" Height="35" Text="{\WixUI_Font_Bigger}Instalar DB Connection Tester" />

@@ -50,6 +50,56 @@ namespace
         return result == ERROR_SUCCESS ? value : L"";
     }
 
+    std::wstring NormalizePath(const std::wstring& path)
+    {
+        auto value = path;
+        const auto first = value.find_first_not_of(L" \t\"");
+        if (first == std::wstring::npos) return L"";
+        value = value.substr(first, value.find_last_not_of(L" \t\"") - first + 1);
+        const auto size = ExpandEnvironmentStringsW(value.c_str(), nullptr, 0);
+        if (!size) throw ERROR_INSTALL_FAILURE;
+        std::wstring expanded(size, L'\0');
+        if (!ExpandEnvironmentStringsW(value.c_str(), expanded.data(), size)) throw ERROR_INSTALL_FAILURE;
+        expanded.resize(size - 1);
+        while (!expanded.empty() && (expanded.back() == L'\\' || expanded.back() == L'/')) expanded.pop_back();
+        for (auto& character : expanded) if (character == L'/') character = L'\\';
+        return expanded;
+    }
+
+    bool PathAlreadyExists(bool machine, const std::wstring& folder)
+    {
+        const auto key = machine ? L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" : L"Environment";
+        const auto root = machine ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER;
+        constexpr auto flags = RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ | RRF_NOEXPAND;
+        DWORD size = 0;
+        auto result = RegGetValueW(root, key, L"Path", flags, nullptr, nullptr, &size);
+        if (result == ERROR_FILE_NOT_FOUND) return false;
+        if (result != ERROR_SUCCESS) throw result;
+        std::wstring value(static_cast<size_t>(size) / sizeof(wchar_t), L'\0');
+        result = RegGetValueW(root, key, L"Path", flags, nullptr, value.data(), &size);
+        if (result != ERROR_SUCCESS) throw result;
+        value.resize(wcslen(value.c_str()));
+        const auto expected = NormalizePath(folder);
+        size_t start = 0;
+        while (start < value.size())
+        {
+            const auto end = value.find(L';', start);
+            const auto item = NormalizePath(value.substr(start, end == std::wstring::npos ? end : end - start));
+            if (CompareStringOrdinal(item.c_str(), -1, expected.c_str(), -1, TRUE) == CSTR_EQUAL) return true;
+            if (end == std::wstring::npos) break;
+            start = end + 1;
+        }
+        return false;
+    }
+
+    bool OwnsPath(bool machine)
+    {
+        DWORD value = 0, size = sizeof(value);
+        return RegGetValueW(machine ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER, SettingsKey,
+            machine ? L"MachinePath" : L"UserPath", RRF_RT_REG_DWORD | RRF_SUBKEY_WOW6464KEY,
+            nullptr, &value, &size) == ERROR_SUCCESS && value == 1;
+    }
+
     bool InSelectedContext(const std::wstring& product, bool machine)
     {
         DWORD size = 0;
@@ -117,6 +167,11 @@ extern "C" UINT __stdcall PrepareSettings(MSIHANDLE session)
         const std::wstring folder = std::wstring(root) + L"\\DBConnectionTester\\";
         CoTaskMemFree(root);
         Set(session, L"INSTALLFOLDER", folder);
+        PWSTR programs = nullptr;
+        if (FAILED(SHGetKnownFolderPath(FOLDERID_CommonPrograms, KF_FLAG_DONT_VERIFY, nullptr, &programs))) throw ERROR_INSTALL_FAILURE;
+        const std::wstring menu = std::wstring(programs) + L"\\DB Connection Tester\\";
+        CoTaskMemFree(programs);
+        Set(session, L"MachineProductMenu", menu);
         Set(session, L"DBCT_SCOPE_TEXT", machine ? L"Todos os usuários" : L"Somente este usuário");
         auto option = Property(session, L"ADD_TO_PATH");
         if (option.empty())
@@ -130,6 +185,9 @@ extern "C" UINT __stdcall PrepareSettings(MSIHANDLE session)
             return ERROR_INSTALL_FAILURE;
         }
         Set(session, L"ADD_TO_PATH", option);
+        Set(session, L"DBCT_PATH_DIRECTORY", folder.substr(0, folder.size() - 1));
+        Set(session, L"DBCT_MANAGE_PATH", option == L"1" &&
+            (OwnsPath(machine) || !PathAlreadyExists(machine, folder)) ? L"1" : L"0");
         Set(session, L"DBCT_UI_PATH", option == L"1" ? L"1" : L"");
         return ERROR_SUCCESS;
     }

@@ -37,23 +37,34 @@
           </RegistryKey>
         </Component>
         <Component Id="UserPath" Guid="8B51B984-43CA-41CC-9FEB-7931E2BAA59C" Bitness="always64"
-                   Condition="ALLUSERS &lt;&gt; 1 AND ADD_TO_PATH = 1" Transitive="yes">
+                   Condition="ALLUSERS &lt;&gt; 1 AND DBCT_MANAGE_PATH = 1" Transitive="yes">
           <RegistryValue Root="HKCU" Key="Software\DBConnectionTester.Installer" Name="UserPath" Type="integer" Value="1" KeyPath="yes" />
-          <Environment Id="UserPathEntry" Name="PATH" Value="[INSTALLFOLDER]" Action="set" Part="last" System="no" Permanent="no" />
+          <Environment Id="UserPathEntry" Name="PATH" Value="[DBCT_PATH_DIRECTORY]" Action="set" Part="last" System="no" Permanent="no" />
         </Component>
         <Component Id="MachinePath" Guid="C1BF50B8-D907-47D2-9C93-BEB503BC85BA" Bitness="always64"
-                   Condition="ALLUSERS = 1 AND ADD_TO_PATH = 1" Transitive="yes">
-          <RegistryValue Root="HKLM" Key="Software\DBConnectionTester.Installer" Name="MachinePath" Type="integer" Value="1" KeyPath="yes" />
-          <Environment Id="MachinePathEntry" Name="PATH" Value="[INSTALLFOLDER]" Action="set" Part="last" System="yes" Permanent="no" />
+                   Condition="ALLUSERS = 1 AND DBCT_MANAGE_PATH = 1" Transitive="yes">
+          <RegistryValue Root="HKMU" Key="Software\DBConnectionTester.Installer" Name="MachinePath" Type="integer" Value="1" KeyPath="yes" />
+          <Environment Id="MachinePathEntry" Name="PATH" Value="[DBCT_PATH_DIRECTORY]" Action="set" Part="last" System="yes" Permanent="no" />
         </Component>
       </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="ProductMenu" Name="DB Connection Tester">
-        <Component Id="MenuShortcuts" Guid="4CD4458E-43D4-4B21-B3B4-32FC9BD67D6D" Bitness="always64">
-          <Shortcut Id="GuiShortcut" Name="DB Connection Tester" Target="[#DesktopExe]" WorkingDirectory="INSTALLFOLDER" />
-          <Shortcut Id="GuideShortcut" Name="Instruções de instalação e CLI" Target="[#InstallationGuide]" WorkingDirectory="INSTALLFOLDER" />
-          <RemoveFolder Id="RemoveProductMenu" On="uninstall" />
+      <Directory Id="UserProductMenu" Name="DB Connection Tester">
+        <Component Id="UserShortcuts" Guid="4CD4458E-43D4-4B21-B3B4-32FC9BD67D6D" Bitness="always64" Condition="ALLUSERS &lt;&gt; 1">
+          <Shortcut Id="UserGuiShortcut" Name="DB Connection Tester" Target="[INSTALLFOLDER]DBConnectionTester.exe" WorkingDirectory="INSTALLFOLDER" />
+          <Shortcut Id="UserGuideShortcut" Name="Instruções de instalação e CLI" Target="[INSTALLFOLDER]INSTALACAO.html" WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="RemoveUserMenu" On="uninstall" />
+          <RegistryValue Root="HKCU" Key="Software\DBConnectionTester.Installer" Name="Shortcuts" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="TARGETDIR">
+      <!-- Resolved to FOLDERID_CommonPrograms by PrepareSettings, never hardcoded/localized. -->
+      <Directory Id="MachineProductMenu" Name="DBCT_StartMenu">
+        <Component Id="MachineShortcuts" Guid="548EE5AD-8EAE-4854-9AB9-E18FB5E07BDA" Bitness="always64" Condition="ALLUSERS = 1">
+          <Shortcut Id="MachineGuiShortcut" Name="DB Connection Tester" Target="[INSTALLFOLDER]DBConnectionTester.exe" WorkingDirectory="INSTALLFOLDER" />
+          <Shortcut Id="MachineGuideShortcut" Name="Instruções de instalação e CLI" Target="[INSTALLFOLDER]INSTALACAO.html" WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="RemoveMachineMenu" On="uninstall" />
           <RegistryValue Root="HKMU" Key="Software\DBConnectionTester.Installer" Name="Shortcuts" Type="integer" Value="1" KeyPath="yes" />
         </Component>
       </Directory>
@@ -61,7 +72,7 @@
     <Feature Id="Application" Title="GUI e CLI" Level="1" AllowAbsent="no">
       <ComponentRef Id="DesktopBinary" /><ComponentRef Id="CliBinary" />
       <ComponentRef Id="LicenseFile" /><ComponentRef Id="InstructionsFile" />
-      <ComponentRef Id="InstallerSettings" /><ComponentRef Id="MenuShortcuts" />
+      <ComponentRef Id="InstallerSettings" /><ComponentRef Id="UserShortcuts" /><ComponentRef Id="MachineShortcuts" />
       <ComponentRef Id="UserPath" /><ComponentRef Id="MachinePath" />
     </Feature>
 

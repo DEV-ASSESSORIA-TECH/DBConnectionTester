@@ -64,7 +64,7 @@ foreach ($character in (Get-Content -LiteralPath (Join-Path $repositoryRoot "LIC
     if ($character -in @('\', '{', '}')) { [void]$rtf.Append('\') }
     if ($code -gt 127) {
         if ($code -gt 32767) { $code -= 65536 }
-        [void]$rtf.Append("\u$code?")
+        [void]$rtf.Append("\u${code}?")
     } else { [void]$rtf.Append($character) }
 }
 [void]$rtf.Append('}')
@@ -79,11 +79,12 @@ $identity[8] = ($identity[8] -band 63) -bor 128
 $productCode = ([guid]::new($identity)).ToString("B").ToUpperInvariant()
 $properties = @(
     "-p:Version=$Version", "-p:PayloadDirectory=$payload", "-p:ActionsBinary=$actions",
-    "-p:LicenseRtf=$licenseRtf", "-p:InstallerProductCode=$productCode", "-p:OutputPath=$output/"
+    "-p:LicenseRtf=$licenseRtf", "-p:InstallerProductCode=$productCode", "-p:OutputPath=$output/",
+    "-p:BaseIntermediateOutputPath=$output/wix-obj/"
 )
 if ($WixAcceptEula) { $properties += "-p:AcceptEula=$WixAcceptEula" }
 & dotnet build (Join-Path $projectDirectory "DBConnectionTester.Installer.wixproj") `
-    -c Release --disable-build-servers -m:1 @properties
+    -c Release -t:Rebuild --disable-build-servers -m:1 @properties
 if ($LASTEXITCODE -ne 0) { throw "MSI build or ICE validation failed." }
 $msi = Join-Path $output "DBConnectionTester.msi"
 if (-not (Test-Path -LiteralPath $msi)) { throw "The MSI output was not produced." }
