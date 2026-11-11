@@ -11,6 +11,7 @@ if (Test-Path 'HKLM:\Software\DBConnectionTester.Installer') { throw 'A machine 
 if (Test-Path 'HKCU:\Software\DBConnectionTester.Installer') { throw 'A user installation already exists; refuse to test over it.' }
 
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+& (Join-Path $PSScriptRoot 'Test-InstallerAccountEnvironment.ps1')
 $fixtureRoot = Join-Path $repositoryRoot ('artifacts/installer-lifecycle-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
 $fixtures = Join-Path $fixtureRoot 'packages'

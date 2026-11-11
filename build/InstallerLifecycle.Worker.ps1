@@ -12,10 +12,7 @@ $ErrorActionPreference = 'Stop'
 if (-not $DisposableEnvironment -or -not (Test-Path -LiteralPath (Join-Path $TestWorkspace '.disposable-installer-test'))) {
     throw 'Lifecycle tests only run in an explicitly marked disposable Windows environment.'
 }
-# Bootstrap compilation in the explicitly granted workspace. The inherited TEMP
-# can belong to the administrator who launched this standard-user process.
-$env:TEMP = $TestWorkspace
-$env:TMP = $TestWorkspace
+Initialize-InstallerAccountEnvironment -BootstrapDirectory $TestWorkspace
 $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
 if ($RequireStandardUser -and $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Per-user acceptance must run without administrator membership.'
@@ -35,13 +32,6 @@ using System.Text;
 using System.Runtime.InteropServices;
 namespace DBCT {
     public static class ProductContext {
-        [DllImport("shell32.dll", ExactSpelling=true)] static extern int SHGetKnownFolderPath(ref Guid folder, uint flags, IntPtr token, out IntPtr path);
-        public static string Folder(string id) {
-            var folder=new Guid(id); IntPtr path;
-            Marshal.ThrowExceptionForHR(SHGetKnownFolderPath(ref folder, 0x4000, IntPtr.Zero, out path));
-            try { return Marshal.PtrToStringUni(path); }
-            finally { Marshal.FreeCoTaskMem(path); }
-        }
         delegate bool WindowCallback(IntPtr window, IntPtr parameter);
         [DllImport("user32.dll")] static extern bool EnumWindows(WindowCallback callback, IntPtr parameter);
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
@@ -70,14 +60,6 @@ namespace DBCT {
 }
 '@
 }
-# Resolve folders through the current Windows token, not .NET's environment-based
-# shortcuts, which can still refer to runneradmin after CreateProcessWithLogon.
-$env:USERPROFILE = [DBCT.ProductContext]::Folder('5E6C858F-0E22-4760-9AFE-EA3317B67173')
-$env:LOCALAPPDATA = [DBCT.ProductContext]::Folder('F1B32785-6FBA-4FCF-9D55-7B8E7F157091')
-$env:APPDATA = [DBCT.ProductContext]::Folder('3EB685DB-65F9-4CF6-A03A-E3EF65729F3D')
-$env:TEMP = Join-Path $env:LOCALAPPDATA 'Temp'
-$env:TMP = $env:TEMP
-New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
 $counter = 0
 $attempted = [Collections.Generic.List[object]]::new()
 function Invoke-Msi {

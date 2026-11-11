@@ -83,6 +83,7 @@ jobs:
         run: ./build/Test-InstallerLifecycle.ps1 -PayloadDirectory publish/complete -DisposableEnvironment
 
       - name: Retain installer diagnostic logs on failure
+        timeout-minutes: 2
         if: failure()
         uses: actions/upload-artifact@v7
         with:
