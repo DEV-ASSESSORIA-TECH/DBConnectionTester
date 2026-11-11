@@ -59,6 +59,10 @@ obrigatórios são validados pelo Core. Senhas não fazem parte dos perfis.
 Autenticação que usa senha exige uma fonte explícita; uma senha vazia pode ser
 fornecida por essa fonte. As duas fontes são mutuamente exclusivas.
 
+Com `--database-test false`, diagnósticos de rede não exigem usuário, senha ou driver
+ODBC. Configurações inválidas não criam armazenamento; `--profile` exige um banco
+da aplicação já existente.
+
 Não existe opção `--password`. Evite colocar segredos em argumentos ou no histórico
 do shell. A identidade que executa o processo é usada na autenticação integrada
 do SQL Server, inclusive em tarefas agendadas.

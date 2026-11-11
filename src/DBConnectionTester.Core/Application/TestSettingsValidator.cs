@@ -57,9 +57,9 @@ public sealed class TestSettingsValidator
             return TestSettingsValidationResult.Failure("O timeout deve estar entre 1 e 120 segundos.");
         if (profile.UsesFile && !File.Exists(sqliteFile))
             return TestSettingsValidationResult.Failure("Selecione um arquivo SQLite existente.");
-        if (profile.UsesOdbcDriver && string.IsNullOrWhiteSpace(input.OdbcDriver))
+        if (databaseTest && profile.UsesOdbcDriver && string.IsNullOrWhiteSpace(input.OdbcDriver))
             return TestSettingsValidationResult.Failure("Informe o nome do driver ODBC do SQL Anywhere.");
-        var credentialsRequired = profile.UsesCredentials &&
+        var credentialsRequired = databaseTest && profile.UsesCredentials &&
             (!profile.UsesSqlServerAuthentication || input.SqlServerAuthentication == SqlServerAuthentication.SqlLogin);
         if (credentialsRequired && string.IsNullOrWhiteSpace(input.User))
             return TestSettingsValidationResult.Failure("Informe o usuário do banco de dados.");

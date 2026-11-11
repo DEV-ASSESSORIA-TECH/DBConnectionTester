@@ -150,6 +150,31 @@ public sealed class CliProcessTests
         if (index >= 0) args[index + 1] = value;
         else args.AddRange([option, value]);
         Assert.Equal(2, (await fixture.ExecuteAsync(args.ToArray())).ExitCode);
+        Assert.False(Directory.Exists(fixture.Data));
+    }
+
+    [Fact]
+    public async Task MissingProfileStoreIsNotCreated()
+    {
+        using var fixture = new CliFixture();
+        var result = await fixture.ExecuteAsync(["run", "--profile", Guid.NewGuid().ToString(),
+            "--data-dir", fixture.Data]);
+        Assert.Equal(3, result.ExitCode);
+        Assert.False(Directory.Exists(fixture.Data));
+    }
+
+    [Theory]
+    [InlineData("mysql")]
+    [InlineData("postgresql")]
+    [InlineData("sqlserver")]
+    [InlineData("sqlanywhere")]
+    public async Task NetworkOnlyRunDoesNotRequireDatabaseCredentials(string type)
+    {
+        using var fixture = new CliFixture();
+        var result = await fixture.ExecuteAsync(["run", "--type", type, "--host", "127.0.0.1",
+            "--auth", "sql-login", "--odbc-driver", "", "--database-test", "false",
+            "--tcp", "false", "--ping", "false", "--count", "1", "--data-dir", fixture.Data]);
+        Assert.Equal(0, result.ExitCode);
     }
 
     [Fact]

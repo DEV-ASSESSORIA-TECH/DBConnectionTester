@@ -23,10 +23,12 @@ public sealed partial class CliApplication
                 ?? throw new CliException(2, "A entrada padrão não forneceu uma senha.");
 
         token.ThrowIfCancellationRequested();
-        var store = await OpenStoreAsync(parse, allowCreate: true, token);
+        SqliteApplicationStore? store = null;
         var inputSettings = ProfileSettingsMapper.CreateDefault();
         if (parse.GetValue<Guid?>("--profile") is { } profileId)
         {
+            // Loading a saved profile must never create a missing store.
+            store = await OpenStoreAsync(parse, allowCreate: false, token);
             var profile = await new PersistentSettingsRepository(store).GetAsync(profileId, token)
                 ?? throw new CliException(2, "O perfil informado não existe.");
             inputSettings = ProfileSettingsMapper.FromProfile(profile);
@@ -40,6 +42,7 @@ public sealed partial class CliApplication
         var validation = new TestSettingsValidator().Validate(inputSettings with { Password = secret ?? "" });
         if (!validation.IsValid) throw new CliException(2, validation.ErrorMessage);
 
+        store ??= await OpenStoreAsync(parse, allowCreate: true, token);
         var settings = await new PersistentSettingsRepository(store).GetAsync(token);
         // Recovery must never mark a session from another live writer as interrupted.
         await RunRecoveryService.RecoverAsync(store, token);
