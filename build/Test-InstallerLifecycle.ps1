@@ -69,7 +69,10 @@ try {
         -RedirectStandardError (Join-Path $publicRoot 'standard-user.stderr.log')
     try {
         if (-not $process.WaitForExit(600000)) { throw 'Standard-user installer tests timed out; discard this VM.' }
-        if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $publicRoot 'user.success'))) { throw "Standard-user acceptance failed. Inspect $publicRoot." }
+        if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $publicRoot 'user.success'))) {
+            Get-Content -LiteralPath (Join-Path $publicRoot 'standard-user.stderr.log') | Out-Host
+            throw "Standard-user acceptance failed. Inspect $publicRoot."
+        }
     }
     finally { $process.Dispose() }
     foreach ($scope in @('machine', 'coexistence')) {

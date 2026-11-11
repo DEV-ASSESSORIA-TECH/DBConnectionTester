@@ -37,35 +37,14 @@ public sealed class ConsoleSignalTests
                 active = (await history.SearchAsync(new(), new(), timeout.Token)).Items.FirstOrDefault();
             } while (active is null || active.CompletedCycles < 1);
 
-            var script = """
-                Add-Type -TypeDefinition @'
-                using System;
-                using System.Runtime.InteropServices;
-                public static class Signal {
-                    [DllImport("kernel32.dll", SetLastError=true)] public static extern bool AttachConsole(uint id);
-                    [DllImport("kernel32.dll")] public static extern bool SetConsoleCtrlHandler(IntPtr handler, bool add);
-                    [DllImport("kernel32.dll")] public static extern bool GenerateConsoleCtrlEvent(uint signal, uint group);
-                    [DllImport("kernel32.dll")] public static extern bool FreeConsole();
-                }
-                '@
-                """ + Environment.NewLine + $$"""
-                [void][Signal]::FreeConsole()
-                if (-not [Signal]::AttachConsole({{process.Id}})) {
-                    [Console]::Error.WriteLine([Runtime.InteropServices.Marshal]::GetLastWin32Error())
-                    exit 10
-                }
-                [void][Signal]::SetConsoleCtrlHandler([IntPtr]::Zero, $true)
-                if (-not [Signal]::GenerateConsoleCtrlEvent(0, 0)) { exit 11 }
-                Start-Sleep -Milliseconds 200
-                [void][Signal]::FreeConsole()
-                exit 0
-                """;
-            var info = new ProcessStartInfo("powershell.exe")
+            var info = new ProcessStartInfo("dotnet")
             {
                 UseShellExecute = false, CreateNoWindow = true,
                 RedirectStandardOutput = true, RedirectStandardError = true
             };
-            foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-Command", script }) info.ArgumentList.Add(argument);
+            info.ArgumentList.Add(typeof(ConsoleSignalTests).Assembly.Location);
+            info.ArgumentList.Add("--signal-console");
+            info.ArgumentList.Add(process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
             using var helper = Process.Start(info)!;
             var output = helper.StandardOutput.ReadToEndAsync();
             var error = helper.StandardError.ReadToEndAsync();
