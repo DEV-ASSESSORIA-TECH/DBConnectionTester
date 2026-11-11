@@ -19,7 +19,8 @@ public sealed record TestSettingsInput(
     bool Dns,
     bool Ping,
     bool Tcp,
-    bool DatabaseTest);
+    bool DatabaseTest,
+    Guid? ProfileId = null);
 
 public sealed record TestSettingsValidationResult(TestSettings? Settings, string ErrorMessage)
 {
@@ -82,6 +83,6 @@ public sealed class TestSettingsValidator
             dns,
             ping,
             tcp,
-            databaseTest));
+            databaseTest) { ProfileId = input.ProfileId });
     }
 }

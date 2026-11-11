@@ -44,11 +44,9 @@ internal static class Program
 
             if (store is null)
                 throw new ApplicationStoreException("Nenhum armazenamento foi selecionado.");
-            var runRepository = new RunRepository(store);
             try
             {
-                using var recoveryLease = RunWriteLease.Acquire(store);
-                Task.Run(() => runRepository.RecoverInterruptedAsync()).GetAwaiter().GetResult();
+                Task.Run(() => RunRecoveryService.RecoverAsync(store)).GetAwaiter().GetResult();
             }
             catch (RunAlreadyActiveException)
             {

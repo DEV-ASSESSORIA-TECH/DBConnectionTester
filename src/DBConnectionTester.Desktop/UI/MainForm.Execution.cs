@@ -11,16 +11,9 @@ public sealed partial class MainForm
         if (runCoordinator.IsRunning || settingsPage.IsBusy)
             return;
 
-        var settings = TryBuildSettings();
+        var settings = TryBuildSettings(singleRun);
         if (settings is null)
             return;
-        if (singleRun)
-            settings = settings with
-            {
-                TestCount = RunCount.Create(1),
-                Continuous = false,
-                Interval = TestInterval.Create(TimeSpan.Zero)
-            };
 
         currentCsvPath = "";
         currentTxtPath = "";
@@ -61,7 +54,7 @@ public sealed partial class MainForm
         }
     }
 
-    private TestSettings? TryBuildSettings()
+    private TestSettings? TryBuildSettings(bool singleRun = false)
     {
         var input = new TestSettingsInput(
             SelectedProfile.Type,
@@ -80,10 +73,14 @@ public sealed partial class MainForm
             chkDns.Checked,
             chkPing.Checked,
             chkTcp.Checked,
-            chkDatabase.Checked);
+            chkDatabase.Checked,
+            selectedProfileId);
+
+        if (singleRun)
+            input = input with { TestCount = 1, Continuous = false, Interval = TimeSpan.Zero };
 
         var result = settingsValidator.Validate(input);
-        return result.IsValid ? result.Settings! with { ProfileId = selectedProfileId } : ValidationError(result.ErrorMessage);
+        return result.IsValid ? result.Settings! : ValidationError(result.ErrorMessage);
     }
 
     private TestSettings? ValidationError(string message)
