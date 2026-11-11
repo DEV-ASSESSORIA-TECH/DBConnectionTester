@@ -10,16 +10,21 @@ public sealed record StorageDiscoveryResult(
     public bool RequiresSelection => SelectedStore is null && Candidates.Count > 1;
 }
 
+public sealed record StorageResolutionOptions(bool AllowCreate = true, bool PersistPreference = true);
+
 public sealed class StorageResolver
 {
     private static readonly StringComparer PathComparer = StringComparer.OrdinalIgnoreCase;
     private readonly StorageLocations locations;
     private readonly IStoragePreferenceStore preferences;
+    private readonly StorageResolutionOptions options;
 
-    public StorageResolver(StorageLocations locations, IStoragePreferenceStore preferences)
+    public StorageResolver(StorageLocations locations, IStoragePreferenceStore preferences,
+        StorageResolutionOptions? options = null)
     {
         this.locations = locations;
         this.preferences = preferences;
+        this.options = options ?? new();
     }
 
     public async Task<StorageDiscoveryResult> ResolveAsync(
@@ -87,6 +92,9 @@ public sealed class StorageResolver
                 Environment.NewLine + details);
         }
 
+        if (!options.AllowCreate)
+            throw new ApplicationStoreException("Nenhum armazenamento existente foi encontrado. Informe --data-dir.");
+
         var created = await SqliteApplicationStore.OpenOrCreateAsync(
             locations.LocalDatabasePath,
             StorageScope.LocalUser,
@@ -119,7 +127,10 @@ public sealed class StorageResolver
         var inspection = await SqliteApplicationStore.InspectAsync(path, token);
         return inspection.Status switch
         {
-            StoreInspectionStatus.Missing => await SqliteApplicationStore.OpenOrCreateAsync(path, scope, token: token),
+            StoreInspectionStatus.Missing when options.AllowCreate =>
+                await SqliteApplicationStore.OpenOrCreateAsync(path, scope, token: token),
+            StoreInspectionStatus.Missing => throw new ApplicationStoreException(
+                "O armazenamento informado não existe. Consultas não criam bancos."),
             StoreInspectionStatus.Compatible => await SqliteApplicationStore.OpenOrCreateAsync(
                 path,
                 inspection.Descriptor!.Scope,
@@ -164,12 +175,15 @@ public sealed class StorageResolver
         return StorageScope.Custom;
     }
 
-    private void SavePreference(StoreDescriptor descriptor, Guid? observedPortableStoreId) =>
+    private void SavePreference(StoreDescriptor descriptor, Guid? observedPortableStoreId)
+    {
+        if (!options.PersistPreference) return;
         preferences.Write(new StoragePreference(
             descriptor.StoreId,
             descriptor.DatabasePath,
             descriptor.Scope,
             observedPortableStoreId));
+    }
 
     private static string? ReadExplicitDataDirectory(IReadOnlyList<string> arguments)
     {
