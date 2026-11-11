@@ -14,6 +14,8 @@ env:
   SOLUTION: DBConnectionTester.sln
   DESKTOP_PROJECT: src/DBConnectionTester.Desktop/DBConnectionTester.Desktop.csproj
   CLI_PROJECT: src/DBConnectionTester.Cli/DBConnectionTester.Cli.csproj
+  # Set this repository variable only after the owner reviews and accepts WiX's OSMF terms.
+  DBCT_WIX_ACCEPT_EULA: ${{ vars.DBCT_WIX_ACCEPT_EULA }}
 
 jobs:
   validate:
@@ -45,6 +47,9 @@ jobs:
           }
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
           "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ($env:DBCT_WIX_ACCEPT_EULA -ne "wix7") {
+            throw "MSI build requires the owner's WiX OSMF acceptance in repository variable DBCT_WIX_ACCEPT_EULA. See docs/installation.md."
+          }
 
       - name: Restore
         shell: pwsh
@@ -71,6 +76,21 @@ jobs:
         shell: pwsh
         run: ./build/Publish-Release.ps1 -NoRestore
 
+      # Installs products only on this disposable hosted runner. Creates a temporary
+      # non-administrator account to verify genuine per-user installation.
+      - name: Validate installer lifecycle in disposable Windows
+        shell: pwsh
+        run: ./build/Test-InstallerLifecycle.ps1 -PayloadDirectory publish/complete -DisposableEnvironment
+
+      - name: Retain installer diagnostic logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-diagnostics-${{ github.run_id }}
+          path: C:/Users/Public/DBCTInstallerTests/**/*.log
+          if-no-files-found: ignore
+          retention-days: 1
+
       # Transfer the expected release files in one ZIP container. Compression is
       # disabled because the packages are already compressed.
       - name: Upload temporary release bundle
@@ -90,6 +110,8 @@ jobs:
             artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-portable-complete.zip.sha256
             artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-portable-cli.zip
             artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-portable-cli.zip.sha256
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64.msi
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64.msi.sha256
             artifacts/SHA256SUMS.txt
           archive: true
           compression-level: 0
