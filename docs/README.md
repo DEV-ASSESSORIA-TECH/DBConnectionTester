@@ -4,7 +4,7 @@
 
 - [Guia dos painéis e fluxos](user-guide.md): execução, perfis, histórico, configurações e bandeja.
 - [CLI e automações](cli.md): comandos, credenciais, JSON, armazenamento e códigos de saída.
-- [Monitoramento com Grafana Alloy](monitoring.md): execução contínua no boot e métricas no Prometheus.
+- [Monitoramento com Grafana Alloy](monitoring.md): métricas no Prometheus pelo módulo opcional do `alloyctl`.
 - [Instalação MSI](installation.md): escopos, PATH, manutenção, preservação de dados e validação.
 - [Solução de problemas](troubleshooting.md): armazenamento, exportação, drivers e DPI.
 - [Segurança e privacidade](security.md): dados persistidos, redação e distribuição.

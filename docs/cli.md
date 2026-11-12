@@ -14,10 +14,15 @@ o ZIP Portable CLI inclui o runtime .NET e não depende de WinForms.
 .\dbct.exe history list --data-dir .\Data --status Completed --page 1 --page-size 50 --format json
 .\dbct.exe history show <run-id> --data-dir .\Data --cycles --page-size 50 --format json
 .\dbct.exe export <run-id> --data-dir .\Data --format zip --output .\relatorio.zip
+.\dbct.exe run status --data-dir .\Data
+.\dbct.exe run stop --data-dir .\Data
+.\dbct.exe autostart show --data-dir .\Data
+.\dbct.exe autostart disable --data-dir .\Data
 ```
 
 `profile-id` e `run-id` são GUIDs. Perfis podem ser consultados e executados, mas
-não criados, alterados ou excluídos pela CLI nesta versão. Os comandos não abrem
+não criados, alterados ou excluídos pela CLI nesta versão; nenhum comando da CLI exige
+perfil, inclusive a execução automática. Os comandos não abrem
 diálogos nem solicitam confirmação. `--version` deve ser usado sozinho.
 
 ## Executar
@@ -79,6 +84,46 @@ Fechar o console, encerrar a sessão, desligar o Windows ou parar a tarefa que e
 a CLI também solicitam a parada, com alguns segundos para registrar a execução como
 `Stopped`. Encerrar o processo à força (por exemplo, pelo Gerenciador de Tarefas) não
 dá esse tempo; a execução é marcada como `Interrupted` na próxima execução.
+
+## Segundo plano e início com o Windows
+
+Por padrão, `run` ocupa o terminal até terminar. Para execuções longas:
+
+| Comando | Comportamento | Continua após |
+|---|---|---|
+| `run ... --detach` | Executa em segundo plano, devolve o `runId` e libera o terminal | fechar o terminal ou a sessão SSH |
+| `run ... --autostart` | Grava os parâmetros, inicia em segundo plano e volta a cada início do Windows | fechar o terminal, logoff e reinício |
+| `run status` | Mostra a execução ativa no banco: processo, início, ciclos e se é automática | — |
+| `run stop [<run-id>]` | Pede a parada a partir de qualquer terminal e aguarda (`--timeout`, padrão 30 s) | — |
+| `autostart show` | Mostra a execução automática do banco: parâmetros, tarefa e estado | — |
+| `autostart disable` | Para a execução automática e remove tarefa, parâmetros e senha | — |
+
+```powershell
+# Segundo plano, independente do terminal.
+.\dbct.exe run --type tcp --host srv-db --port 1433 --continuous true --interval 5 --data-dir .\Data --detach
+
+# Contínua e automática: volta sozinha com o Windows. Não precisa de perfil.
+.\dbct.exe run --type sqlserver --host srv-db --user monitor --password-env DB_PASSWORD --interval 5 --data-dir .\Data --autostart
+```
+
+`--autostart` implica execução contínua (não aceita `--count` nem `--continuous false`).
+Com o terminal **de administrador**, a execução roda como SYSTEM e inicia no boot, sem
+ninguém logado. Sem administrador, roda como o usuário atual e inicia no logon dele;
+`--autostart-scope system|user` escolhe explicitamente. Os parâmetros ficam na pasta
+`autostart` ao lado do `data.db`, restrita a SYSTEM, Administradores e quem configurou;
+a senha, quando houver, é cifrada com DPAPI (da máquina para SYSTEM, do usuário no
+logon). Um banco aceita uma execução automática; para trocar os parâmetros, use
+`autostart disable` e configure de novo. A tarefa aparece no Agendador de Tarefas em
+`\DB Connection Tester`.
+
+Se a execução automática terminar (outra execução gravando no banco, falha de
+gravação), ela volta em 30 a 60 s. `run stop` encerra a execução automática até o
+próximo início do Windows; `autostart disable` a remove. Com autenticação Windows do
+SQL Server, a execução como SYSTEM usa a conta do computador.
+
+`run stop` vale para execuções da CLI (normais, `--detach` ou `--autostart`). A
+execução da interface gráfica é parada pela GUI. Uma execução por banco continua
+valendo: enquanto outra grava, `run` retorna o código 4.
 
 ## Armazenamento e concorrência
 

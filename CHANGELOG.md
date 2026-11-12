@@ -10,6 +10,9 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 - `dbct history cycles <id> --after <n> --limit <m>`: leitura incremental dos ciclos, inclusive de uma execução ativa.
 - `dbct run --no-progress`: execução sem progresso no stderr, para execuções supervisionadas.
+- `dbct run --detach`: execução em segundo plano, independente do terminal (sobrevive ao fechamento da janela ou da sessão SSH).
+- `dbct run --autostart`: execução contínua que volta a cada início do Windows (SYSTEM, no boot) ou logon (usuário), sem exigir perfil; `dbct autostart show` e `disable`.
+- `dbct run status` e `dbct run stop`: acompanhar e parar a execução ativa da CLI a partir de qualquer terminal.
 - [Monitoramento com Grafana Alloy](docs/monitoring.md) pelo módulo `dbct` do `alloyctl`.
 
 ### Alterado

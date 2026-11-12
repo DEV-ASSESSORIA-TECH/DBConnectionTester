@@ -31,6 +31,13 @@ public sealed partial class CliApplication
         Add<string?>(run, "--password-env", "Nome da variável de ambiente com a senha.");
         Add<bool>(run, "--password-stdin", "Ler uma linha de senha da entrada padrão.");
         Add<bool>(run, "--no-progress", "Não escrever progresso no stderr (execuções supervisionadas).");
+        Add<bool>(run, "--detach",
+            "Executar em segundo plano, independente deste terminal; devolve o runId. Pare com: dbct run stop.");
+        Add<bool>(run, "--autostart",
+            "Execução contínua em segundo plano que volta a cada início do Windows (ou logon). Remova com: dbct autostart disable.");
+        Add<string?>(run, "--autostart-scope",
+            "system: no boot, como SYSTEM (requer administrador; padrão quando elevado). user: no logon deste usuário.")
+            .AcceptOnlyFromAmong("system", "user");
         Add<long?>(run, "--count", $"Quantidade de ciclos (padrão sem perfil: {CliRunDefaults.Count}).");
         Add<bool?>(run, "--continuous", "Executar até Ctrl+C; aceita true/false.");
         Add<double?>(run, "--interval", $"Intervalo em segundos (padrão sem perfil: {CliRunDefaults.IntervalSeconds}).");
@@ -38,7 +45,33 @@ public sealed partial class CliApplication
         foreach (var stage in new[] { "dns", "ping", "tcp", "database-test" })
             Add<bool?>(run, "--" + stage, "Habilitar/desabilitar etapa; aceita true/false.");
         run.SetAction((parse, token) => RunAsync(parse, token));
+        var runStatus = new Command("status", "Mostrar a execução ativa neste banco, de qualquer terminal.");
+        AddFormat(runStatus);
+        runStatus.SetAction((parse, token) => RunStatusAsync(parse, token));
+        var runStop = new Command("stop", "Parar a execução ativa da CLI (normal, --detach ou --autostart), de qualquer terminal.");
+        runStop.Arguments.Add(new Argument<Guid?>("id") { Arity = ArgumentArity.ZeroOrOne, Description = "Execução a parar (padrão: a ativa)." });
+        AddFormat(runStop);
+        Add(runStop, "--timeout", "Segundos aguardando a confirmação (padrão: 30).", 30);
+        runStop.SetAction((parse, token) => RunStopAsync(parse, token));
+        run.Subcommands.Add(runStatus);
+        run.Subcommands.Add(runStop);
         root.Subcommands.Add(run);
+
+        var autostart = new Command("autostart", "Execução contínua iniciada com o Windows (configure com: dbct run ... --autostart).");
+        var autostartShow = new Command("show", "Mostrar a execução automática deste banco.");
+        AddFormat(autostartShow);
+        autostartShow.SetAction((parse, token) => AutostartShowAsync(parse, token));
+        var autostartDisable = new Command("disable", "Parar e remover a execução automática deste banco.");
+        AddFormat(autostartDisable);
+        Add(autostartDisable, "--timeout", "Segundos aguardando a parada (padrão: 30).", 30);
+        autostartDisable.SetAction((parse, token) => AutostartDisableAsync(parse, token));
+        // Started by the Windows task; not meant to be typed.
+        var autostartRun = new Command("run", "Laço da execução automática (usado pela tarefa do Windows).") { Hidden = true };
+        autostartRun.SetAction((parse, token) => AutostartLoopAsync(parse, token));
+        autostart.Subcommands.Add(autostartShow);
+        autostart.Subcommands.Add(autostartDisable);
+        autostart.Subcommands.Add(autostartRun);
+        root.Subcommands.Add(autostart);
 
         var profiles = new Command("profiles", "Consultar perfis salvos, sem editar.");
         var listProfiles = new Command("list", "Listar perfis.");

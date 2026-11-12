@@ -50,13 +50,13 @@ Itens conhecidos que ficaram fora da release. Não são funcionalidades novas.
 
 Objetivo: executar e acompanhar diagnósticos remotamente pelo terminal (por exemplo, via SSH).
 
-1. `run status`, `history show --follow`, `run stop <id>` e `run --detach`.
+1. `history show --follow`.
 2. `profiles add/update/remove` e `settings show/set`.
 3. `--credential <nome>` usando o Gerenciador de Credenciais do Windows.
 4. `--progress json` com uma linha por ciclo.
 5. Armazenamento e pacotes portáteis pela CLI (`storage`, `portable`).
 6. CLI para Linux.
 
-Já disponível: queda de sessão e desligamento registram a execução como `Stopped`,
-e o módulo `dbct` do Alloy mantém uma execução contínua iniciada com o Windows.
+Já disponível: queda de sessão e desligamento registram a execução como `Stopped`;
+`run --detach`, `run --autostart`, `run status` e `run stop`.
 

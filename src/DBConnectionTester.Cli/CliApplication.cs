@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
+using DBConnectionTester.Cli.Background;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services.Storage;
 using Microsoft.Data.Sqlite;
@@ -27,11 +28,20 @@ public sealed partial class CliApplication
     private readonly TextReader input;
     private readonly StorageLocations locations;
     private readonly IStoragePreferenceStore preferences;
+    private readonly IAutostartScheduler scheduler;
     private string? secret;
+    private string[] arguments = [];
+
+    // Pauses of the autostart loop before starting the run again.
+    internal TimeSpan AutostartRetryDelay { get; init; } = TimeSpan.FromSeconds(60);
+    internal TimeSpan AutostartBusyRetryDelay { get; init; } = TimeSpan.FromSeconds(30);
+    internal TimeSpan AutostartInvalidRetryDelay { get; init; } = TimeSpan.FromMinutes(5);
 
     public CliApplication(TextWriter? output = null, TextWriter? error = null, TextReader? input = null,
-        StorageLocations? locations = null, IStoragePreferenceStore? preferences = null)
+        StorageLocations? locations = null, IStoragePreferenceStore? preferences = null,
+        IAutostartScheduler? scheduler = null)
     {
+        this.scheduler = scheduler ?? new SchtasksScheduler();
         this.output = output ?? Console.Out;
         this.error = error ?? Console.Error;
         this.input = input ?? Console.In;
@@ -42,6 +52,7 @@ public sealed partial class CliApplication
     public async Task<int> InvokeAsync(string[] args, CancellationToken token = default)
     {
         secret = null;
+        arguments = args;
         try
         {
             var root = CreateCommand();
