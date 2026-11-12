@@ -151,25 +151,59 @@ public sealed class RunHistoryRepository : IRunHistoryRepository, IRecentRunHist
             total = Convert.ToInt64(await count.ExecuteScalarAsync(token), CultureInfo.InvariantCulture);
         }
 
-        var cycles = new List<PersistedCycle>();
         await using var command = connection.CreateCommand();
-        command.CommandText = """
-            WITH selected AS (
-                SELECT * FROM cycles WHERE run_id = $runId
-                ORDER BY cycle_number LIMIT $limit OFFSET $offset
-            )
-            SELECT c.cycle_number, c.started_at, c.resolved_ip, c.ping_extra,
-                   c.tcp_local_ip, c.tcp_remote_ip, c.database_total_ms,
-                   s.stage, s.status, s.elapsed_ms, s.extra, s.diagnostic_code,
-                   s.suggestion_code, s.confidence, s.user_message, s.technical_message,
-                   s.provider, s.provider_code, s.sql_state, s.native_code, s.provider_errors_json
-            FROM selected c
-            LEFT JOIN stage_results s ON s.run_id = c.run_id AND s.cycle_number = c.cycle_number
-            ORDER BY c.cycle_number, s.stage;
-            """;
+        command.CommandText = CycleQuery("""
+            SELECT * FROM cycles WHERE run_id = $runId
+            ORDER BY cycle_number LIMIT $limit OFFSET $offset
+            """);
         command.Parameters.AddWithValue("$runId", runId.ToString("D"));
         command.Parameters.AddWithValue("$limit", page.PageSize);
         command.Parameters.AddWithValue("$offset", page.Offset);
+        var cycles = await ReadCyclesAsync(command, token);
+        return new PagedResult<PersistedCycle>(cycles, total, page.PageNumber, page.PageSize);
+    }
+
+    /// <summary>
+    /// Cycles numbered after <paramref name="afterCycle"/>, oldest first: lets a collector
+    /// read a running execution incrementally without paging arithmetic.
+    /// </summary>
+    public async Task<IReadOnlyList<PersistedCycle>> GetCyclesAfterAsync(
+        Guid runId,
+        long afterCycle,
+        int limit,
+        CancellationToken token = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(afterCycle);
+        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
+        await using var connection = await store.OpenConnectionAsync(token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = CycleQuery("""
+            SELECT * FROM cycles WHERE run_id = $runId AND cycle_number > $after
+            ORDER BY cycle_number LIMIT $limit
+            """);
+        command.Parameters.AddWithValue("$runId", runId.ToString("D"));
+        command.Parameters.AddWithValue("$after", afterCycle);
+        command.Parameters.AddWithValue("$limit", limit);
+        return await ReadCyclesAsync(command, token);
+    }
+
+    private static string CycleQuery(string selectedCycles) => $"""
+        WITH selected AS (
+            {selectedCycles}
+        )
+        SELECT c.cycle_number, c.started_at, c.resolved_ip, c.ping_extra,
+               c.tcp_local_ip, c.tcp_remote_ip, c.database_total_ms,
+               s.stage, s.status, s.elapsed_ms, s.extra, s.diagnostic_code,
+               s.suggestion_code, s.confidence, s.user_message, s.technical_message,
+               s.provider, s.provider_code, s.sql_state, s.native_code, s.provider_errors_json
+        FROM selected c
+        LEFT JOIN stage_results s ON s.run_id = c.run_id AND s.cycle_number = c.cycle_number
+        ORDER BY c.cycle_number, s.stage;
+        """;
+
+    private static async Task<List<PersistedCycle>> ReadCyclesAsync(SqliteCommand command, CancellationToken token)
+    {
+        var cycles = new List<PersistedCycle>();
         await using var reader = await command.ExecuteReaderAsync(token);
         CycleBuilder? current = null;
         while (await reader.ReadAsync(token))
@@ -187,7 +221,7 @@ public sealed class RunHistoryRepository : IRunHistoryRepository, IRecentRunHist
         }
         if (current is not null)
             cycles.Add(current.Build());
-        return new PagedResult<PersistedCycle>(cycles, total, page.PageNumber, page.PageSize);
+        return cycles;
     }
 
     private static string BuildWhere(RunHistoryFilter filter, out Dictionary<string, object> parameters)

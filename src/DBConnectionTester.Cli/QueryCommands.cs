@@ -53,6 +53,32 @@ public sealed partial class CliApplication
         return 0;
     }
 
+    private async Task<int> CyclesHistoryAsync(ParseResult parse, CancellationToken token)
+    {
+        var after = parse.GetValue<long>("--after");
+        var limit = parse.GetValue<int>("--limit");
+        if (after < 0 || limit is < 1 or > 500)
+            throw new CliException(2, "--after deve ser 0 ou maior e --limit deve estar entre 1 e 500.");
+        var store = await OpenStoreAsync(parse, false, token);
+        var history = new RunHistoryRepository(store);
+        var id = parse.GetValue<Guid>("id");
+        var details = await history.GetDetailsAsync(id, token)
+            ?? throw new CliException(2, "A execução informada não existe.");
+        // One extra row tells whether another call is needed, without a COUNT.
+        var cycles = await history.GetCyclesAfterAsync(id, after, limit + 1, token);
+        var hasMore = cycles.Count > limit;
+        var items = hasMore ? cycles.Take(limit).ToArray() : cycles.ToArray();
+        WriteResult(parse, new
+        {
+            runId = id,
+            status = details.Run.Status,
+            items,
+            lastCycle = items.Length > 0 ? items[^1].Number : after,
+            hasMore
+        });
+        return 0;
+    }
+
     private async Task<int> ExportAsync(ParseResult parse, CancellationToken token)
     {
         var store = await OpenStoreAsync(parse, false, token);

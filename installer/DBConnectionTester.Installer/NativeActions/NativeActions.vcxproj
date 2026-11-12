@@ -25,6 +25,9 @@
       <SDLCheck>true</SDLCheck>
       <ExceptionHandling>Sync</ExceptionHandling>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <!-- Sources are UTF-8 without BOM; without this MSVC reads them as the ANSI code page
+           and Portuguese strings such as "usuário" reach the installer UI garbled. -->
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <ModuleDefinitionFile>Actions.def</ModuleDefinitionFile>

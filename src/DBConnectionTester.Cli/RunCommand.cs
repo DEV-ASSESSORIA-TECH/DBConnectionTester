@@ -1,5 +1,6 @@
 using System.CommandLine;
 using DBConnectionTester.Application;
+using DBConnectionTester.Cli.Background;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services;
 using DBConnectionTester.Services.Output;
@@ -9,15 +10,27 @@ namespace DBConnectionTester.Cli;
 
 public sealed partial class CliApplication
 {
+    private const string DetachedSecretVariable = "DBCT_DETACHED_SECRET";
+
     private async Task<int> RunAsync(ParseResult parse, CancellationToken token)
     {
+        var detach = parse.GetValue<bool>("--detach");
+        var autostart = parse.GetValue<bool>("--autostart");
+        if (detach && autostart)
+            throw new CliException(2, "--autostart já executa em segundo plano; não combine com --detach.");
+        if (autostart && (parse.GetValue<long?>("--count") is not null || parse.GetValue<bool?>("--continuous") == false))
+            throw new CliException(2, "--autostart executa continuamente; não use --count nem --continuous false.");
         var envName = parse.GetValue<string?>("--password-env");
         var fromStdin = parse.GetValue<bool>("--password-stdin");
         if (envName is not null && fromStdin)
             throw new CliException(2, "Use somente uma fonte de senha: --password-env ou --password-stdin.");
         if (envName is not null)
+        {
             secret = Environment.GetEnvironmentVariable(envName)
                 ?? throw new CliException(2, "A variável de ambiente de senha não existe.");
+            // The secret handed over by --detach is not left in this process's environment.
+            if (envName == DetachedSecretVariable) Environment.SetEnvironmentVariable(envName, null);
+        }
         if (fromStdin)
             secret = await input.ReadLineAsync(token)
                 ?? throw new CliException(2, "A entrada padrão não forneceu uma senha.");
@@ -41,6 +54,7 @@ public sealed partial class CliApplication
         }
         var previousType = inputSettings.DatabaseType;
         inputSettings = ApplyOverrides(parse, inputSettings);
+        if (autostart) inputSettings = inputSettings with { Continuous = true };
         var profileInfo = DatabaseProfiles.Get(inputSettings.DatabaseType);
         // A target type without a default port (tcp) must not silently inherit 3306.
         if (inputSettings.DatabaseType != previousType && profileInfo.UsesNetwork &&
@@ -54,42 +68,84 @@ public sealed partial class CliApplication
         if (!validation.IsValid) throw new CliException(2, validation.ErrorMessage);
 
         store ??= await OpenStoreAsync(parse, allowCreate: true, token);
+        if (autostart) return await EnableAutostartAsync(parse, store, inputSettings, secret, token);
+        if (detach) return await DetachAsync(parse, store, token);
+        var outcome = await ExecuteRunAsync(store, validation.Settings!, parse,
+            quiet: parse.GetValue<bool>("--no-progress"), token);
+        return outcome.ExitCode;
+    }
+
+    private sealed record RunOutcome(int ExitCode, Guid? RunId, bool StopRequested);
+
+    private static string StoreDirectory(SqliteApplicationStore store) =>
+        Path.GetDirectoryName(store.Descriptor.DatabasePath)!;
+
+    /// <summary>
+    /// Runs and records one execution. A stop request (dbct run stop, from any terminal)
+    /// ends it like Ctrl+C. Without <paramref name="parse"/> nothing is written to stdout
+    /// (autostart loop).
+    /// </summary>
+    private async Task<RunOutcome> ExecuteRunAsync(SqliteApplicationStore store, TestSettings runSettings,
+        ParseResult? parse, bool quiet, CancellationToken token)
+    {
+        var storeDirectory = StoreDirectory(store);
         var settings = await new PersistentSettingsRepository(store).GetAsync(token);
-        var progress = new ConsoleProgress(error);
+        var progress = new ConsoleProgress(error, quiet);
         // Recovery runs under the run's own write lease, so it can never mark a session
         // from another live writer as interrupted.
         var outputs = new RunIdCapturingFactory(new RunOutputFactory(store, settings, recoverInterruptedRuns: true));
         var runner = new TestRunner(new TestCycleExecutor(), outputs);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var stopRequested = false;
+        var startedAt = DateTimeOffset.UtcNow;
+        await using var watcher = new Timer(_ =>
+        {
+            try
+            {
+                if (outputs.RunId is { } id && StopRequests.Consume(storeDirectory, id, startedAt))
+                {
+                    stopRequested = true;
+                    stop.Cancel();
+                }
+            }
+            catch (ObjectDisposedException) { }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         RunSummary summary;
-        try { summary = await runner.RunAsync(validation.Settings!, progress, token); }
+        try { summary = await runner.RunAsync(runSettings, progress, stop.Token); }
         catch (Exception) when (outputs.RunId is { } failedRunId)
         {
             // The run was persisted as Failed: report its ID so automation can inspect it.
-            var failedDetails = await new RunHistoryRepository(store).GetDetailsAsync(failedRunId, CancellationToken.None);
-            WriteResult(parse, new
+            if (parse is not null)
             {
-                runId = failedRunId,
-                completed = failedDetails?.Run.CompletedCycles ?? progress.Latest?.Completed ?? 0,
-                terminationReason = RunTerminationReason.ExecutionFailed,
-                hasDiagnosticFailures = progress.HasFailures,
-                statistics = progress.Latest?.Statistics,
-                warnings = failedDetails?.Warnings,
-                failureMessage = failedDetails?.Run.FailureMessage
-            });
-            error.WriteLine("A execução falhou e foi registrada no histórico como Failed.");
-            return 5;
+                var failedDetails = await new RunHistoryRepository(store).GetDetailsAsync(failedRunId, CancellationToken.None);
+                WriteResult(parse, new
+                {
+                    runId = failedRunId,
+                    completed = failedDetails?.Run.CompletedCycles ?? progress.Latest?.Completed ?? 0,
+                    terminationReason = RunTerminationReason.ExecutionFailed,
+                    hasDiagnosticFailures = progress.HasFailures,
+                    statistics = progress.Latest?.Statistics,
+                    warnings = failedDetails?.Warnings,
+                    failureMessage = failedDetails?.Run.FailureMessage
+                });
+                error.WriteLine("A execução falhou e foi registrada no histórico como Failed.");
+            }
+            return new RunOutcome(5, failedRunId, false);
         }
         finally { progress.Complete(); }
-        var details = await new RunHistoryRepository(store).GetDetailsAsync(summary.RunId, CancellationToken.None);
-        WriteResult(parse, new
+        if (parse is not null)
         {
-            summary.RunId, summary.Completed, summary.TerminationReason,
-            hasDiagnosticFailures = progress.HasFailures,
-            statistics = progress.Latest?.Statistics,
-            warnings = details?.Warnings,
-            summary.CsvPath, summary.TxtPath
-        });
-        return summary.Stopped ? 130 : progress.HasFailures ? 1 : 0;
+            var details = await new RunHistoryRepository(store).GetDetailsAsync(summary.RunId, CancellationToken.None);
+            WriteResult(parse, new
+            {
+                summary.RunId, summary.Completed, summary.TerminationReason,
+                hasDiagnosticFailures = progress.HasFailures,
+                statistics = progress.Latest?.Statistics,
+                warnings = details?.Warnings,
+                summary.CsvPath, summary.TxtPath
+            });
+        }
+        return new RunOutcome(summary.Stopped ? 130 : progress.HasFailures ? 1 : 0, summary.RunId, stopRequested);
     }
 
     private sealed class RunIdCapturingFactory(IRunOutputFactory inner) : IRunOutputFactory

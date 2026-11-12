@@ -6,6 +6,26 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ## [Unreleased]
 
+### Adicionado
+
+- `dbct history cycles <id> --after <n> --limit <m>`: leitura incremental dos ciclos, inclusive de uma execução ativa.
+- `dbct run --no-progress`: execução sem progresso no stderr, para execuções supervisionadas.
+- `dbct run --detach`: execução em segundo plano, independente do terminal (sobrevive ao fechamento da janela ou da sessão SSH).
+- `dbct run --autostart`: execução contínua que volta a cada início do Windows (SYSTEM, no boot) ou logon (usuário), sem exigir perfil; `dbct autostart show` e `disable`.
+- `dbct run status` e `dbct run stop`: acompanhar e parar a execução ativa da CLI a partir de qualquer terminal.
+- [Monitoramento com Grafana Alloy](docs/monitoring.md) pelo módulo `dbct` do `alloyctl`.
+
+### Alterado
+
+- Fechar o console, encerrar a sessão, desligar o Windows ou parar a tarefa registram a execução da CLI como `Stopped`, em vez de deixá-la `Running` até o próximo início.
+- Saída redirecionada da CLI (stdout, stderr e stdin) sempre em UTF-8, sem alterar a página de código do console.
+
+- Assistente do instalador com o layout padrão do WiX (faixa de título, separadores, imagem nas telas de boas-vindas e opções agrupadas em caixas) e resumo da instalação com o estado do PATH.
+
+### Corrigido
+
+- Textos acentuados gerados pela ação nativa do instalador (por exemplo, "Somente este usuário") apareciam corrompidos: o código C++ passa a ser compilado como UTF-8.
+
 ## [3.0.0] - 2026-11-12
 
 ### Adicionado

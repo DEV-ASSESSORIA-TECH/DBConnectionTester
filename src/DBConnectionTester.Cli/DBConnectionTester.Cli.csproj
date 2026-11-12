@@ -8,5 +8,9 @@
   <ItemGroup>
     <ProjectReference Include="..\DBConnectionTester.Core\DBConnectionTester.Core.csproj" />
     <PackageReference Include="System.CommandLine" Version="2.0.14" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.12" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="DBConnectionTester.Cli.Tests" />
   </ItemGroup>
 </Project>
