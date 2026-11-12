@@ -1,79 +1,125 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!--
+    Custom dialogs follow the stock WixUI layout (370x270, same as ProgressDlg and
+    ExitDialog): a white banner with title and description, separator lines and the
+    buttons on the bottom row. Welcome and maintenance use the side image of WelcomeDlg.
+    Bitmaps WixUI_Bmp_Banner and WixUI_Bmp_Dialog come from WixUI_Common.
+  -->
   <Fragment>
     <UI Id="DBCT_UI">
       <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
       <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
-      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="10" Bold="yes" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="9" Bold="yes" />
       <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
       <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="Reabra o terminal para usar o PATH atualizado. Seus dados permanecem preservados." />
       <DialogRef Id="ErrorDlg" /><DialogRef Id="FatalError" /><DialogRef Id="UserExit" />
       <DialogRef Id="ProgressDlg" /><DialogRef Id="ExitDialog" /><DialogRef Id="CancelDlg" />
       <DialogRef Id="FilesInUse" /><DialogRef Id="MsiRMFilesInUse" />
 
-      <Dialog Id="DBCT_Welcome" Width="400" Height="280" Title="DB Connection Tester">
-        <Control Id="Title" Type="Text" X="20" Y="20" Width="360" Height="35" Text="{\WixUI_Font_Bigger}Instalar DB Connection Tester" />
-        <Control Id="Description" Type="Text" X="20" Y="70" Width="360" Height="100" Text="Instale a interface gráfica e a CLI para executar diagnósticos e consultar relatórios.&#13;&#10;&#13;&#10;O instalador preserva bancos, perfis, histórico e preferências existentes." />
-        <Control Id="Next" Type="PushButton" X="250" Y="245" Width="65" Height="20" Default="yes" Text="Avançar">
+      <Dialog Id="DBCT_Welcome" Width="370" Height="270" Title="Instalação do [ProductName]">
+        <Control Id="Bitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="234" TabSkip="no" Text="WixUI_Bmp_Dialog" />
+        <Control Id="Title" Type="Text" X="135" Y="20" Width="220" Height="40" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Bigger}Bem-vindo à instalação do [ProductName]" />
+        <Control Id="Description" Type="Text" X="135" Y="70" Width="220" Height="120" Transparent="yes" NoPrefix="yes" Text="Este assistente instala a interface gráfica e a CLI (dbct) para executar diagnósticos e consultar relatórios.&#13;&#10;&#13;&#10;Bancos, perfis, histórico e preferências já existentes são preservados." />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Disabled="yes" Text="Voltar" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Avançar">
           <Publish Event="NewDialog" Value="DBCT_License" />
         </Control>
-        <Control Id="Cancel" Type="PushButton" X="320" Y="245" Width="65" Height="20" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
       </Dialog>
-      <Dialog Id="DBCT_License" Width="400" Height="280" Title="Licença do DB Connection Tester">
-        <Control Id="Title" Type="Text" X="20" Y="15" Width="360" Height="25" Text="{\WixUI_Font_Title}Licença MIT do projeto" />
-        <Control Id="License" Type="ScrollableText" X="20" Y="45" Width="360" Height="155" Sunken="yes"><Text SourceFile="$(var.LicenseRtf)" /></Control>
-        <Control Id="Accept" Type="CheckBox" X="20" Y="210" Width="360" Height="20" Property="DBCT_LICENSE" CheckBoxValue="1" Text="Li e aceito os termos da licença do projeto." />
-        <Control Id="Back" Type="PushButton" X="180" Y="245" Width="65" Height="20" Text="Voltar"><Publish Event="NewDialog" Value="DBCT_Welcome" /></Control>
-        <Control Id="Next" Type="PushButton" X="250" Y="245" Width="65" Height="20" Default="yes" Text="Avançar" DisableCondition="DBCT_LICENSE &lt;&gt; 1" EnableCondition="DBCT_LICENSE = 1"><Publish Event="NewDialog" Value="DBCT_Scope" /></Control>
-        <Control Id="Cancel" Type="PushButton" X="320" Y="245" Width="65" Height="20" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+
+      <Dialog Id="DBCT_License" Width="370" Height="270" Title="Instalação do [ProductName]">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="290" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Licença" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="Leia os termos da licença MIT do projeto." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="License" Type="ScrollableText" X="20" Y="54" Width="330" Height="140" Sunken="yes" TabSkip="no"><Text SourceFile="$(var.LicenseRtf)" /></Control>
+        <Control Id="Accept" Type="CheckBox" X="20" Y="204" Width="330" Height="18" Property="DBCT_LICENSE" CheckBoxValue="1" Text="Li e aceito os termos da licença." />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Voltar"><Publish Event="NewDialog" Value="DBCT_Welcome" /></Control>
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Avançar" DisableCondition="DBCT_LICENSE &lt;&gt; 1" EnableCondition="DBCT_LICENSE = 1"><Publish Event="NewDialog" Value="DBCT_Scope" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
       </Dialog>
-      <Dialog Id="DBCT_Scope" Width="400" Height="280" Title="Escopo da instalação">
-        <Control Id="Title" Type="Text" X="20" Y="20" Width="360" Height="25" Text="{\WixUI_Font_Title}Quem poderá usar esta instalação?" />
-        <Control Id="Scope" Type="RadioButtonGroup" X="20" Y="65" Width="360" Height="65" Property="DBCT_SCOPE">
+
+      <Dialog Id="DBCT_Scope" Width="370" Height="270" Title="Instalação do [ProductName]">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="290" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Escopo da instalação" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="Escolha quem poderá usar esta instalação." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="ScopeBox" Type="GroupBox" X="20" Y="54" Width="330" Height="82" Text="Instalar para" />
+        <Control Id="Scope" Type="RadioButtonGroup" X="30" Y="70" Width="310" Height="58" Property="DBCT_SCOPE">
           <RadioButtonGroup Property="DBCT_SCOPE">
-            <RadioButton Value="user" X="0" Y="0" Width="350" Height="20" Text="Somente este usuário (sem privilégios administrativos)" />
-            <RadioButton Value="machine" X="0" Y="35" Width="350" Height="20" Text="Todos os usuários (requer administrador)" />
+            <RadioButton Value="user" X="0" Y="0" Width="310" Height="18" Text="Somente este usuário (sem privilégios administrativos)" />
+            <RadioButton Value="machine" X="0" Y="32" Width="310" Height="18" Text="Todos os usuários deste computador (requer administrador)" />
           </RadioButtonGroup>
         </Control>
-        <Control Id="Note" Type="Text" X="20" Y="150" Width="360" Height="60" Text="Os dados continuam sendo gerenciados pelo aplicativo. Instalar para todos os usuários não torna o histórico compartilhado." />
-        <Control Id="Back" Type="PushButton" X="180" Y="245" Width="65" Height="20" Text="Voltar"><Publish Event="NewDialog" Value="DBCT_License" /></Control>
-        <Control Id="Next" Type="PushButton" X="250" Y="245" Width="65" Height="20" Default="yes" Text="Avançar">
+        <Control Id="Note" Type="Text" X="20" Y="148" Width="330" Height="60" NoPrefix="yes" Text="O escopo define apenas onde os programas são instalados. Os dados continuam sendo gerenciados pelo aplicativo: instalar para todos os usuários não torna o histórico compartilhado." />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Voltar"><Publish Event="NewDialog" Value="DBCT_License" /></Control>
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Avançar">
           <Publish Property="ALLUSERS" Value="2" Order="1" />
           <Publish Property="MSIINSTALLPERUSER" Value="1" Order="2" Condition="DBCT_SCOPE = &quot;user&quot;" />
           <Publish Property="MSIINSTALLPERUSER" Value="{}" Order="3" Condition="DBCT_SCOPE = &quot;machine&quot;" />
           <Publish Event="DoAction" Value="PrepareSettings" Order="4" />
           <Publish Event="NewDialog" Value="DBCT_Options" Order="5" />
         </Control>
-        <Control Id="Cancel" Type="PushButton" X="320" Y="245" Width="65" Height="20" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
       </Dialog>
-      <Dialog Id="DBCT_Options" Width="400" Height="280" Title="Opções da instalação">
-        <Control Id="Title" Type="Text" X="20" Y="20" Width="360" Height="25" Text="{\WixUI_Font_Title}Integração com o terminal" />
-        <Control Id="Path" Type="CheckBox" X="20" Y="65" Width="360" Height="25" Property="DBCT_UI_PATH" CheckBoxValue="1" Text="Adicionar CLI ao PATH" />
-        <Control Id="Note" Type="Text" X="20" Y="105" Width="360" Height="95" Text="A opção adiciona a pasta do aplicativo ao PATH do contexto escolhido. As demais entradas são preservadas.&#13;&#10;&#13;&#10;Será necessário reabrir os terminais após a instalação." />
-        <Control Id="Back" Type="PushButton" X="180" Y="245" Width="65" Height="20" Text="Voltar"><Publish Event="NewDialog" Value="DBCT_Scope" /></Control>
-        <Control Id="Next" Type="PushButton" X="250" Y="245" Width="65" Height="20" Default="yes" Text="Avançar">
+
+      <Dialog Id="DBCT_Options" Width="370" Height="270" Title="Instalação do [ProductName]">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="290" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Integração com o terminal" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="Permita usar o comando dbct em qualquer pasta." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="OptionsBox" Type="GroupBox" X="20" Y="54" Width="330" Height="100" Text="PATH" />
+        <Control Id="Path" Type="CheckBox" X="30" Y="72" Width="310" Height="18" Property="DBCT_UI_PATH" CheckBoxValue="1" Text="Adicionar a CLI (dbct) ao PATH" />
+        <Control Id="PathNote" Type="Text" X="42" Y="96" Width="298" Height="50" NoPrefix="yes" Text="A pasta do aplicativo é adicionada ao PATH do escopo escolhido. As demais entradas são preservadas. Reabra os terminais após a instalação." />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Voltar"><Publish Event="NewDialog" Value="DBCT_Scope" /></Control>
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Avançar">
           <Publish Property="ADD_TO_PATH" Value="1" Order="1" Condition="DBCT_UI_PATH = 1" />
           <Publish Property="ADD_TO_PATH" Value="0" Order="2" Condition="DBCT_UI_PATH &lt;&gt; 1" />
           <Publish Event="NewDialog" Value="DBCT_Ready" Order="3" />
         </Control>
-        <Control Id="Cancel" Type="PushButton" X="320" Y="245" Width="65" Height="20" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
       </Dialog>
-      <Dialog Id="DBCT_Ready" Width="400" Height="280" Title="Confirmar instalação">
-        <Control Id="Title" Type="Text" X="20" Y="20" Width="360" Height="25" Text="{\WixUI_Font_Title}Pronto para instalar GUI e CLI" />
-        <Control Id="Summary" Type="Text" X="20" Y="65" Width="360" Height="140" Text="Escopo: [DBCT_SCOPE_TEXT]&#13;&#10;&#13;&#10;Destino: [INSTALLFOLDER]&#13;&#10;&#13;&#10;Seus dados não serão migrados, selecionados ou removidos." />
-        <Control Id="Back" Type="PushButton" X="180" Y="245" Width="65" Height="20" Text="Voltar"><Publish Event="NewDialog" Value="DBCT_Options" /></Control>
-        <Control Id="Install" Type="PushButton" X="250" Y="245" Width="65" Height="20" Default="yes" Text="Instalar"><Publish Event="EndDialog" Value="Return" /></Control>
-        <Control Id="Cancel" Type="PushButton" X="320" Y="245" Width="65" Height="20" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+
+      <Dialog Id="DBCT_Ready" Width="370" Height="270" Title="Instalação do [ProductName]">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="290" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Pronto para instalar" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="Confira as opções e clique em Instalar." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="SummaryBox" Type="GroupBox" X="20" Y="54" Width="330" Height="120" Text="Resumo" />
+        <Control Id="ScopeLabel" Type="Text" X="30" Y="72" Width="60" Height="14" NoPrefix="yes" Text="Escopo:" />
+        <Control Id="ScopeValue" Type="Text" X="92" Y="72" Width="248" Height="14" NoPrefix="yes" Text="[DBCT_SCOPE_TEXT]" />
+        <Control Id="FolderLabel" Type="Text" X="30" Y="92" Width="60" Height="14" NoPrefix="yes" Text="Destino:" />
+        <Control Id="FolderValue" Type="Text" X="92" Y="92" Width="248" Height="40" NoPrefix="yes" Text="[INSTALLFOLDER]" />
+        <Control Id="PathLabel" Type="Text" X="30" Y="140" Width="60" Height="14" NoPrefix="yes" Text="PATH:" />
+        <Control Id="PathYes" Type="Text" X="92" Y="140" Width="248" Height="14" NoPrefix="yes" Text="Adicionar a CLI ao PATH" HideCondition="ADD_TO_PATH &lt;&gt; 1" ShowCondition="ADD_TO_PATH = 1" />
+        <Control Id="PathNo" Type="Text" X="92" Y="140" Width="248" Height="14" NoPrefix="yes" Text="Não alterar o PATH" HideCondition="ADD_TO_PATH = 1" ShowCondition="ADD_TO_PATH &lt;&gt; 1" />
+        <Control Id="Note" Type="Text" X="20" Y="184" Width="330" Height="40" NoPrefix="yes" Text="Seus dados não serão migrados, selecionados ou removidos." />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Voltar"><Publish Event="NewDialog" Value="DBCT_Options" /></Control>
+        <Control Id="Install" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Instalar"><Publish Event="EndDialog" Value="Return" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
       </Dialog>
-      <Dialog Id="DBCT_Maintenance" Width="400" Height="280" Title="Manutenção do DB Connection Tester">
-        <Control Id="Title" Type="Text" X="20" Y="20" Width="360" Height="25" Text="{\WixUI_Font_Title}Manutenção desta instalação" />
-        <Control Id="Mode" Type="RadioButtonGroup" X="20" Y="65" Width="360" Height="65" Property="DBCT_MAINTENANCE">
+
+      <Dialog Id="DBCT_Maintenance" Width="370" Height="270" Title="Manutenção do [ProductName]">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="290" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Manutenção desta instalação" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes" NoPrefix="yes" Text="Escolha a operação a realizar." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="ModeBox" Type="GroupBox" X="20" Y="54" Width="330" Height="82" Text="Operação" />
+        <Control Id="Mode" Type="RadioButtonGroup" X="30" Y="70" Width="310" Height="58" Property="DBCT_MAINTENANCE">
           <RadioButtonGroup Property="DBCT_MAINTENANCE">
-            <RadioButton Value="repair" X="0" Y="0" Width="350" Height="20" Text="Reparar arquivos e integrações" />
-            <RadioButton Value="remove" X="0" Y="35" Width="350" Height="20" Text="Remover esta instalação" />
+            <RadioButton Value="repair" X="0" Y="0" Width="310" Height="18" Text="Reparar arquivos e integrações" />
+            <RadioButton Value="remove" X="0" Y="32" Width="310" Height="18" Text="Remover esta instalação" />
           </RadioButtonGroup>
         </Control>
-        <Control Id="Note" Type="Text" X="20" Y="150" Width="360" Height="60" Text="Encerre a GUI e a CLI desta instalação antes de continuar. Bancos, relatórios e preferências serão preservados." />
-        <Control Id="Continue" Type="PushButton" X="250" Y="245" Width="65" Height="20" Default="yes" Text="Continuar">
+        <Control Id="Note" Type="Text" X="20" Y="148" Width="330" Height="60" NoPrefix="yes" Text="Encerre a GUI e a CLI desta instalação antes de continuar. Bancos, relatórios e preferências são preservados nas duas operações." />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Disabled="yes" Text="Voltar" />
+        <Control Id="Continue" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Continuar">
           <Publish Property="REINSTALL" Value="ALL" Order="1" Condition="DBCT_MAINTENANCE = &quot;repair&quot;" />
           <Publish Property="REINSTALLMODE" Value="amus" Order="2" Condition="DBCT_MAINTENANCE = &quot;repair&quot;" />
           <Publish Property="REMOVE" Value="ALL" Order="3" Condition="DBCT_MAINTENANCE = &quot;remove&quot;" />
@@ -81,8 +127,9 @@
           <Publish Property="WixUI_InstallMode" Value="Remove" Order="5" Condition="DBCT_MAINTENANCE = &quot;remove&quot;" />
           <Publish Event="EndDialog" Value="Return" Order="6" />
         </Control>
-        <Control Id="Cancel" Type="PushButton" X="320" Y="245" Width="65" Height="20" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
       </Dialog>
+
       <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" />
       <InstallUISequence>
         <!-- Choose the context before discovery, launch conditions and costing. -->

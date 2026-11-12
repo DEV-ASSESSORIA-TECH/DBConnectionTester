@@ -6,6 +6,14 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ## [Unreleased]
 
+### Alterado
+
+- Assistente do instalador com o layout padrão do WiX (faixa de título, separadores, imagem nas telas de boas-vindas e opções agrupadas em caixas) e resumo da instalação com o estado do PATH.
+
+### Corrigido
+
+- Textos acentuados gerados pela ação nativa do instalador (por exemplo, "Somente este usuário") apareciam corrompidos: o código C++ passa a ser compilado como UTF-8.
+
 ## [3.0.0] - 2026-11-12
 
 ### Adicionado
