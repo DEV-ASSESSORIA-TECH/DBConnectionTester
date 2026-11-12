@@ -123,7 +123,10 @@ como artefato temporário de diagnóstico.
 `Test-InstallerLifecycle.ps1` instala somente quando recebe `-DisposableEnvironment`
 e encontra `GITHUB_ACTIONS=true` ou `DBCT_INSTALLER_DISPOSABLE=1`. Não use essa opção
 na máquina de desenvolvimento. O orquestrador requer administração e cria uma conta
-temporária sem privilégios para a aceitação por usuário. Executa também manutenção
+temporária sem privilégios para a aceitação por usuário. Como o Windows Server trata a política
+`DisableMSI` ausente como `1` (bloqueando instalações por usuário sem administração,
+erro 1625), o orquestrador define `DisableMSI=0` apenas durante o teste, reproduzindo o
+padrão do Windows cliente, e restaura o valor original ao final. Executa também manutenção
 por máquina e coexistência, preservando logs no ambiente descartável.
 
 As fixtures usam versões `252.0.0`, `252.0.1`, `252.0.2`, sem alterar `VERSION`.

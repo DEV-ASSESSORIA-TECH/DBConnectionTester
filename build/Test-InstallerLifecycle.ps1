@@ -49,7 +49,15 @@ $credential = [Management.Automation.PSCredential]::new("$env:COMPUTERNAME\$acco
 $publicRoot = Join-Path $env:PUBLIC ('DBCTInstallerTests/' + [guid]::NewGuid().ToString('N'))
 $previousDisposable = $env:DBCT_INSTALLER_DISPOSABLE
 $env:DBCT_INSTALLER_DISPOSABLE = '1'
+# Windows Server reports DisableMsi=1 when the policy is unset, rejecting per-user
+# installs by standard users with 1625. Windows client editions, the product's
+# target, allow them. Mirror the client default only in this disposable runner.
+$installerPolicy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer'
+$previousDisableMsi = (Get-ItemProperty -LiteralPath $installerPolicy -Name DisableMSI -ErrorAction SilentlyContinue).DisableMSI
 try {
+    if (-not (Test-Path -LiteralPath $installerPolicy)) { New-Item -Path $installerPolicy -Force | Out-Null }
+    New-ItemProperty -LiteralPath $installerPolicy -Name DisableMSI -PropertyType DWord -Value 0 -Force | Out-Null
+    Write-Host "Disposable runner: Windows Installer policy DisableMSI set to 0 (was '$previousDisableMsi')."
     New-LocalUser -Name $account -Password $password -AccountNeverExpires -Description 'Disposable DBCT installer acceptance account' | Out-Null
     $group = Get-LocalGroup -SID 'S-1-5-32-545'
     Add-LocalGroupMember -Group $group.Name -Member $account -ErrorAction SilentlyContinue
@@ -88,6 +96,8 @@ try {
 finally {
     # Keep all logs for diagnostics. The enclosing runner/VM is disposable.
     if (Get-LocalUser -Name $account -ErrorAction SilentlyContinue) { Remove-LocalUser -Name $account }
+    if ($null -eq $previousDisableMsi) { Remove-ItemProperty -LiteralPath $installerPolicy -Name DisableMSI -ErrorAction SilentlyContinue }
+    else { New-ItemProperty -LiteralPath $installerPolicy -Name DisableMSI -PropertyType DWord -Value $previousDisableMsi -Force | Out-Null }
     $env:DBCT_INSTALLER_DISPOSABLE = $previousDisposable
     Write-Host "Lifecycle logs: $publicRoot"
 }
