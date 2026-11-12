@@ -120,6 +120,10 @@ Sem a configuração, o workflow explica o requisito e interrompe a geração.
 A etapa de ciclo de vida tem limite de 30 minutos; em falha, os logs ficam disponíveis
 como artefato temporário de diagnóstico.
 
+No CI, o ciclo de vida não roda automaticamente: dispare o workflow manualmente
+(`workflow_dispatch`) com a opção de instalador marcada. PRs, `main` e tags continuam
+gerando e inspecionando o MSI.
+
 `Test-InstallerLifecycle.ps1` instala somente quando recebe `-DisposableEnvironment`
 e encontra `GITHUB_ACTIONS=true` ou `DBCT_INSTALLER_DISPOSABLE=1`. Não use essa opção
 na máquina de desenvolvimento. O orquestrador requer administração e cria uma conta

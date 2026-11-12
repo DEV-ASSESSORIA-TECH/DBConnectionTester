@@ -8,6 +8,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      installer_lifecycle:
+        description: "Também instalar/atualizar/remover o MSI no runner (lento, ~10 min)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -29,11 +34,53 @@ env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
 
 jobs:
+  # A merged PR produces a new commit on main, but when its tree is identical to
+  # the PR head that already passed this workflow, rebuilding proves nothing new.
+  # Only pushes to main are skipped; PRs, tags and manual runs always validate.
+  changes:
+    name: Detect already validated content
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Compare with validated pull request heads
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          skip=false
+          if [[ "$EVENT" == "push" && "$REF" == "refs/heads/main" ]]; then
+            tree=$(gh api "repos/$REPOSITORY/git/commits/$SHA" --jq .tree.sha)
+            for head in $(gh api "repos/$REPOSITORY/commits/$SHA/pulls" \
+                --jq '.[] | select(.merged_at != null and .base.ref == "main") | .head.sha'); do
+              head_tree=$(gh api "repos/$REPOSITORY/git/commits/$head" --jq .tree.sha)
+              passed=$(gh api "repos/$REPOSITORY/actions/workflows/publish.yml/runs?head_sha=$head&event=pull_request&status=success" \
+                --jq .total_count)
+              if [[ "$head_tree" == "$tree" && "$passed" -gt 0 ]]; then
+                echo "Tree $tree already passed on pull request head $head; skipping validation."
+                skip=true
+              fi
+            done
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
   validate:
     name: Validate Windows x64
+    needs: changes
+    if: needs.changes.outputs.skip != 'true'
     runs-on: windows-latest
-    # A healthy run takes ~20 minutes; fail fast instead of the 6-hour default.
-    timeout-minutes: 60
+    # A healthy run takes ~5 minutes; fail fast instead of the 6-hour default.
+    timeout-minutes: 45
     outputs:
       version: ${{ steps.version.outputs.value }}
       release-artifact-id: ${{ steps.release_bundle.outputs.artifact-id }}
@@ -111,8 +158,11 @@ jobs:
         run: ./build/Publish-Release.ps1 -NoRestore
 
       # Installs products only on this disposable hosted runner. Creates a temporary
-      # non-administrator account to verify genuine per-user installation.
+      # non-administrator account to verify genuine per-user installation. Slow, so it
+      # runs only on demand; the MSI is still built and inspected (ICE, tables, hashes)
+      # by the previous step on every run.
       - name: Validate installer lifecycle in disposable Windows
+        if: github.event_name == 'workflow_dispatch' && inputs.installer_lifecycle
         timeout-minutes: 30
         shell: pwsh
         run: ./build/Test-InstallerLifecycle.ps1 -PayloadDirectory publish/complete -DisposableEnvironment

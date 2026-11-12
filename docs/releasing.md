@@ -68,15 +68,17 @@ uma pasta temporária gravável; drivers ODBC externos não são incorporados.
 
 ## CI e publicação
 
-O [workflow atual](../.github/workflows/publish.yml) valida pull requests, pushes em `main`, tags `v*` e execuções manuais em Windows. Branches de funcionalidade são validadas pela PR, evitando duas execuções idênticas por commit; sem PR aberta, use a execução manual (`workflow_dispatch`). Um commit novo na mesma PR ou branch cancela a validação anterior; execuções de tag nunca são canceladas.
+O [workflow atual](../.github/workflows/publish.yml) valida pull requests, pushes em `main`, tags `v*` e execuções manuais em Windows. Branches de funcionalidade são validadas pela PR, evitando duas execuções idênticas por commit; sem PR aberta, use a execução manual (`workflow_dispatch`). Um commit novo na mesma PR ou branch cancela a validação anterior; execuções de tag nunca são canceladas. Um push em `main` cujo conteúdo (hash da árvore do Git) é idêntico ao do head de uma PR mergeada que já passou no workflow não é validado de novo: o job `Detect already validated content` detecta isso e pula a validação. Se `main` avançou durante a PR, a árvore difere e a validação roda normalmente; exigir PRs atualizadas com `main` antes do merge maximiza esse reaproveitamento. Tags sempre recompilam, pois a release publica os arquivos gerados na própria execução.
 
 O workflow restaura a solução e os runtimes de Desktop/CLI (com cache de pacotes NuGet), audita vulnerabilidades, compila com avisos como erros, executa as duas suítes e gera os seis artefatos. A auditoria falha a execução quando encontra pacote vulnerável, inclusive transitivo. Jobs e etapas longas têm `timeout-minutes`, para que um runner travado falhe em minutos e não em horas.
 
 O responsável deve configurar `DBCT_WIX_ACCEPT_EULA` nas variáveis do repositório
 após revisar os termos. O CI não lê o `.env` local nem aceita termos automaticamente.
-Além de ICE e inspeção de conteúdo, o runner descartável executa instalação por
-usuário com conta padrão temporária, instalação por máquina, coexistência, reparo,
-upgrade, downgrade, rollback e preservação de dados. Esses testes nunca são executados
+Toda execução gera o MSI e o valida com ICE e inspeção de conteúdo. O teste de ciclo
+de vida é sob demanda: execute o workflow manualmente marcando a opção de instalador.
+Nesse caso, o runner descartável executa instalação por usuário com conta padrão
+temporária, instalação por máquina, coexistência, reparo, upgrade, downgrade, rollback
+e preservação de dados. Esses testes nunca são executados
 automaticamente na máquina de desenvolvimento. Em caso de falha, somente os resultados
 de teste (`.trx`) e os logs de diagnóstico do instalador são enviados como artefato
 temporário por um dia. Esse envio é opcional (`continue-on-error`): uma indisponibilidade
