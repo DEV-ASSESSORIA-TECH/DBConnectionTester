@@ -77,7 +77,14 @@ function Invoke-Msi {
     try {
         if (-not $process.WaitForExit(120000)) { throw "MSI timed out. Inspect $log; this VM must be discarded." }
         if ($ExpectFailure) { Assert-InstallerCondition ($process.ExitCode -notin @(0, 3010)) "MSI should have refused this operation: $log" }
-        else { Assert-InstallerCondition ($process.ExitCode -in @(0, 3010)) "MSI failed with $($process.ExitCode): $log" }
+        elseif ($process.ExitCode -notin @(0, 3010)) {
+            # Surface the decisive log lines in the job output; artifact upload is best effort.
+            $excerpt = if (Test-Path -LiteralPath $log) {
+                Select-String -LiteralPath $log -Pattern 'policy|DisableMsi|DisableUserInstalls|AlwaysInstallElevated|Return value 3|Error \d{4}|Note: 1: |MainEngineThread is returning|privileg' |
+                    Select-Object -Last 40 | ForEach-Object { $_.Line.Trim() }
+            }
+            throw ("MSI failed with $($process.ExitCode): $log" + [Environment]::NewLine + ($excerpt -join [Environment]::NewLine))
+        }
     }
     finally { $process.Dispose() }
 }

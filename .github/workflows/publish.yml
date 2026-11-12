@@ -49,7 +49,7 @@ jobs:
 
       # Restore failures of the cache service are non-fatal; restore falls back to nuget.org.
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.wixproj', 'Directory.Build.props') }}
@@ -117,6 +117,22 @@ jobs:
         shell: pwsh
         run: ./build/Test-InstallerLifecycle.ps1 -PayloadDirectory publish/complete -DisposableEnvironment
 
+      # upload-artifact needs a common root, and installer logs live on C: while the
+      # workspace is on D:. Copy them under the workspace before uploading.
+      - name: Collect installer diagnostics on failure
+        if: failure()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $source = 'C:\Users\Public\DBCTInstallerTests'
+          if (-not (Test-Path -LiteralPath $source)) { return }
+          $target = Join-Path $env:GITHUB_WORKSPACE 'diagnostics/installer'
+          foreach ($file in Get-ChildItem -LiteralPath $source -Recurse -File -Filter *.log) {
+            $destination = Join-Path $target $file.FullName.Substring($source.Length + 1)
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $destination
+          }
+
       # Diagnostics are best effort: an unavailable artifact service must neither
       # hide the original failure nor hold the runner (seen on 2026-11-11).
       - name: Retain diagnostic logs on failure
@@ -128,7 +144,7 @@ jobs:
           name: diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             TestResults/**/*.trx
-            C:/Users/Public/DBCTInstallerTests/**/*.log
+            diagnostics/**/*.log
           if-no-files-found: ignore
           retention-days: 1
 

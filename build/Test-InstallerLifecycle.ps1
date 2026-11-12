@@ -71,7 +71,10 @@ try {
     try {
         if (-not $process.WaitForExit(600000)) { throw 'Standard-user installer tests timed out; discard this VM.' }
         if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $publicRoot 'user.success'))) {
-            Get-Content -LiteralPath (Join-Path $publicRoot 'standard-user.stderr.log') | Out-Host
+            foreach ($stream in @('stdout', 'stderr')) {
+                $streamLog = Join-Path $publicRoot "standard-user.$stream.log"
+                if (Test-Path -LiteralPath $streamLog) { Write-Host "--- standard-user $stream ---"; Get-Content -LiteralPath $streamLog | Out-Host }
+            }
             throw "Standard-user acceptance failed. Inspect $publicRoot."
         }
     }
