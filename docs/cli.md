@@ -75,6 +75,11 @@ nativa ODBC pode sobreviver ao tempo de espera, conforme o comportamento existen
 provider. Um segundo Ctrl+C encerra o processo imediatamente; nesse caso a execução
 fica como `Running` e é marcada como `Interrupted` na próxima execução.
 
+Fechar o console, encerrar a sessão, desligar o Windows ou parar a tarefa que executa
+a CLI também solicitam a parada, com alguns segundos para registrar a execução como
+`Stopped`. Encerrar o processo à força (por exemplo, pelo Gerenciador de Tarefas) não
+dá esse tempo; a execução é marcada como `Interrupted` na próxima execução.
+
 ## Armazenamento e concorrência
 
 `--data-dir` indica a pasta de `data.db`, não o banco alvo do teste. Caminhos relativos
@@ -106,6 +111,12 @@ sessões. Armazenamento WAL em compartilhamento SMB não é suportado.
 `Failed`, `Interrupted`. A paginação começa em 1 e aceita até 500 itens por página.
 `history show --cycles` inclui uma página de ciclos; sem a opção, retorna detalhes
 sem carregar todos os ciclos.
+
+`history cycles <id> --after <n> --limit <m>` lê os ciclos de número maior que `n`
+(até 500 por chamada), também durante uma execução ativa. A resposta traz `status` da
+execução, `items`, `lastCycle` (use como próximo `--after`) e `hasMore`. Serve para
+coletores que acompanham uma execução contínua, como o
+[módulo do Grafana Alloy](monitoring.md).
 
 Exportação aceita `csv`, `txt`, `json` e `zip`; o padrão é JSON. Exige uma execução
 finalizada e um novo caminho de saída; recusa sobrescrita. Os relatórios mantêm os

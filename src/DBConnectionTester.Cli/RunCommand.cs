@@ -55,7 +55,7 @@ public sealed partial class CliApplication
 
         store ??= await OpenStoreAsync(parse, allowCreate: true, token);
         var settings = await new PersistentSettingsRepository(store).GetAsync(token);
-        var progress = new ConsoleProgress(error);
+        var progress = new ConsoleProgress(error, quiet: parse.GetValue<bool>("--no-progress"));
         // Recovery runs under the run's own write lease, so it can never mark a session
         // from another live writer as interrupted.
         var outputs = new RunIdCapturingFactory(new RunOutputFactory(store, settings, recoverInterruptedRuns: true));

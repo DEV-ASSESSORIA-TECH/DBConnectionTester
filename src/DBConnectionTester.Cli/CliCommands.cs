@@ -30,6 +30,7 @@ public sealed partial class CliApplication
             .AcceptOnlyFromAmong("windows", "sql-login");
         Add<string?>(run, "--password-env", "Nome da variável de ambiente com a senha.");
         Add<bool>(run, "--password-stdin", "Ler uma linha de senha da entrada padrão.");
+        Add<bool>(run, "--no-progress", "Não escrever progresso no stderr (execuções supervisionadas).");
         Add<long?>(run, "--count", $"Quantidade de ciclos (padrão sem perfil: {CliRunDefaults.Count}).");
         Add<bool?>(run, "--continuous", "Executar até Ctrl+C; aceita true/false.");
         Add<double?>(run, "--interval", $"Intervalo em segundos (padrão sem perfil: {CliRunDefaults.IntervalSeconds}).");
@@ -68,8 +69,16 @@ public sealed partial class CliApplication
         AddPage(showHistory);
         Add<bool>(showHistory, "--cycles", "Incluir uma página de ciclos.");
         showHistory.SetAction((parse, token) => ShowHistoryAsync(parse, token));
+        var cyclesHistory = new Command("cycles",
+            "Ler ciclos de uma execução a partir de um número, inclusive durante a execução (leitura incremental).");
+        cyclesHistory.Arguments.Add(new Argument<Guid>("id"));
+        AddFormat(cyclesHistory);
+        Add(cyclesHistory, "--after", "Retornar ciclos com número maior que este (padrão: 0).", 0L);
+        Add(cyclesHistory, "--limit", "Máximo de ciclos, de 1 a 500 (padrão: 500).", 500);
+        cyclesHistory.SetAction((parse, token) => CyclesHistoryAsync(parse, token));
         history.Subcommands.Add(listHistory);
         history.Subcommands.Add(showHistory);
+        history.Subcommands.Add(cyclesHistory);
         root.Subcommands.Add(history);
 
         var export = new Command("export", "Exportar execução finalizada sem sobrescrever arquivos.");

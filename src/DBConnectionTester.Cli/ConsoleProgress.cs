@@ -4,7 +4,7 @@ using DBConnectionTester.Models;
 namespace DBConnectionTester.Cli;
 
 // Report synchronously: unlike Progress<T> on a console, no queued callback can outlive the run.
-internal sealed class ConsoleProgress(TextWriter error) : IProgress<TestProgress>
+internal sealed class ConsoleProgress(TextWriter error, bool quiet = false) : IProgress<TestProgress>
 {
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private long lastReported = -250;
@@ -29,6 +29,8 @@ internal sealed class ConsoleProgress(TextWriter error) : IProgress<TestProgress
     private void Write(TestProgress value)
     {
         lastReported = clock.ElapsedMilliseconds;
+        // Quiet still tracks Latest: the result and the exit code depend on it.
+        if (quiet) return;
         error.WriteLine($"Ciclos: {value.Completed} | Falhas DNS={value.DnsFailures} Ping={value.PingFailures} TCP={value.TcpFailures} Banco={value.DatabaseFailures}");
     }
 }

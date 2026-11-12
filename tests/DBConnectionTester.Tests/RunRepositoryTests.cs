@@ -75,6 +75,22 @@ public sealed class RunRepositoryTests
     }
 
     [Fact]
+    public async Task ReadsCyclesAfterAGivenNumberInOrder()
+    {
+        using var fixture = await RunFixture.CreateAsync();
+        var runId = Guid.NewGuid();
+        await fixture.Repository.BeginAsync(runId, Settings("incremental"));
+        for (var number = 1; number <= 5; number++)
+            await fixture.Repository.WriteCycleAsync(runId, SuccessfulCycle() with { Number = number });
+        var history = new RunHistoryRepository(fixture.Store);
+
+        var page = await history.GetCyclesAfterAsync(runId, 2, 2);
+        Assert.Equal([3L, 4L], page.Select(cycle => cycle.Number));
+        Assert.All(page, cycle => Assert.Equal(5, cycle.Stages.Count));
+        Assert.Empty(await history.GetCyclesAfterAsync(runId, 5, 10));
+    }
+
+    [Fact]
     public async Task NewOutputRecoversAbandonedRunsOnlyWhenRequested()
     {
         using var fixture = await RunFixture.CreateAsync();

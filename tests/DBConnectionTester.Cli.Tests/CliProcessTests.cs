@@ -50,6 +50,34 @@ public sealed class CliProcessTests
     }
 
     [Fact]
+    public async Task ReadsCyclesIncrementally()
+    {
+        using var fixture = new CliFixture();
+        var run = await fixture.ExecuteAsync(["run", "--data-dir", fixture.Data, "--type", "sqlite",
+            "--sqlite-file", fixture.Target, "--count", "3", "--interval", "0", "--format", "json", "--no-progress"]);
+        Assert.Equal(0, run.ExitCode);
+        Assert.DoesNotContain("Ciclos:", run.Error);
+        using var runJson = JsonDocument.Parse(run.Output);
+        var id = runJson.RootElement.GetProperty("data").GetProperty("runId").GetGuid().ToString();
+
+        var first = await fixture.ExecuteAsync(["history", "cycles", id, "--data-dir", fixture.Data,
+            "--after", "1", "--limit", "1", "--format", "json"]);
+        Assert.Equal(0, first.ExitCode);
+        using var firstJson = JsonDocument.Parse(first.Output);
+        var data = firstJson.RootElement.GetProperty("data");
+        Assert.Equal(2, Assert.Single(data.GetProperty("items").EnumerateArray()).GetProperty("number").GetInt64());
+        Assert.Equal(2, data.GetProperty("lastCycle").GetInt64());
+        Assert.True(data.GetProperty("hasMore").GetBoolean());
+
+        var rest = await fixture.ExecuteAsync(["history", "cycles", id, "--data-dir", fixture.Data,
+            "--after", "2", "--format", "json"]);
+        using var restJson = JsonDocument.Parse(rest.Output);
+        Assert.False(restJson.RootElement.GetProperty("data").GetProperty("hasMore").GetBoolean());
+        Assert.Equal(2, (await fixture.ExecuteAsync(["history", "cycles", id, "--data-dir", fixture.Data,
+            "--limit", "501"])).ExitCode);
+    }
+
+    [Fact]
     public async Task TcpTargetRequiresExplicitPort()
     {
         using var fixture = new CliFixture();
