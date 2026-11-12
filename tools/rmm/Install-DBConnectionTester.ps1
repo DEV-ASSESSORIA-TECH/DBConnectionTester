@@ -5,7 +5,8 @@ Instala ou atualiza o DB Connection Tester (GUI + CLI) para todos os usuarios, s
 
 .DESCRIPTION
 Para ferramentas de RMM (Tactical RMM e similares), que executam como SYSTEM e sem
-terminal interativo. Instala o MSI por maquina, com a CLI no PATH, e nao configura
+terminal interativo. Baixa o MSI da release do GitHub (ou usa -MsiPath), confere o
+SHA256 publicado junto, instala por maquina, com a CLI no PATH, e nao configura
 nenhum monitoramento: isso e feito depois com "dbct run ... --autostart".
 
 Atualizacao: o MSI nao encerra processos em uso. Antes de instalar, o script para as
@@ -18,8 +19,11 @@ Codigos de saida: 0 sucesso (inclusive com reinicio pendente do Windows Installe
 1 falha. O resumo e escrito na saida padrao.
 Manter este arquivo em ASCII: o Windows PowerShell 5.1 le arquivos sem BOM como ANSI.
 
+.PARAMETER Version
+Versao da release a baixar, por exemplo 3.1.0. Padrao: latest (ultima release).
+
 .PARAMETER MsiPath
-Caminho do DBConnectionTester-v<versao>-win-x64.msi.
+MSI ja copiado para a maquina (sem acesso ao GitHub). Quando informado, nada e baixado.
 
 .PARAMETER AddToPath
 1 (padrao) adiciona a CLI ao PATH da maquina; 0 nao altera o PATH.
@@ -28,21 +32,42 @@ Caminho do DBConnectionTester-v<versao>-win-x64.msi.
 Log detalhado do Windows Installer.
 
 .EXAMPLE
+.\Install-DBConnectionTester.ps1
+
+.EXAMPLE
+.\Install-DBConnectionTester.ps1 -Version 3.1.0
+
+.EXAMPLE
 .\Install-DBConnectionTester.ps1 -MsiPath C:\Instaladores\DBConnectionTester-v3.1.0-win-x64.msi
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][string]$MsiPath,
+    [string]$Version = 'latest',
+    [string]$MsiPath = '',
     [ValidateSet(0, 1)][int]$AddToPath = 1,
     [string]$LogPath = (Join-Path $env:windir 'Temp\DBConnectionTester-install.log'),
     [ValidateRange(5, 600)][int]$StopTimeoutSeconds = 60
 )
 
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+
+# PowerShell 32 bits (alguns agentes de RMM) enxerga "Program Files (x86)" e o
+# registro redirecionado: reexecuta no PowerShell 64 bits.
+if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
+    $ps64 = Join-Path $env:windir 'sysnative\WindowsPowerShell\v1.0\powershell.exe'
+    & $ps64 -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $PSCommandPath -Version $Version -MsiPath $MsiPath `
+        -AddToPath $AddToPath -LogPath $LogPath -StopTimeoutSeconds $StopTimeoutSeconds
+    exit $LASTEXITCODE
+}
+
+$Repo = 'DEV-ASSESSORIA-TECH/DBConnectionTester'
 $TaskPath = '\DB Connection Tester\'
 $Dbct = Join-Path $env:ProgramFiles 'DBConnectionTester\dbct.exe'
+$DownloadDir = Join-Path $env:windir 'Temp\DBConnectionTester-download'
 
-function Write-Step([string]$Text) { Write-Output "[DBCT] $Text" }
+# Write-Host: mensagens fora do retorno das funcoes (o RMM captura a saida do host).
+function Write-Step([string]$Text) { Write-Host "[DBCT] $Text" }
 
 function Test-Administrator {
     $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
@@ -73,6 +98,35 @@ function Invoke-Dbct([string[]]$Arguments) {
     return @{ ExitCode = $LASTEXITCODE; Output = $output.Trim() }
 }
 
+# Baixa o MSI da release e confere o SHA256 publicado junto (arquivo .sha256).
+function Get-ReleaseMsi([string]$RequestedVersion) {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $headers = @{ 'User-Agent' = 'DBConnectionTester-RMM' }
+    if ($RequestedVersion -eq 'latest') {
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -Headers $headers -UseBasicParsing
+        $tag = [string]$release.tag_name
+    } else {
+        $tag = 'v' + $RequestedVersion.TrimStart('v')
+    }
+    if ($tag -notmatch '^v\d+\.\d+\.\d+$') { throw "Versao invalida: $tag" }
+    $name = "DBConnectionTester-$tag-win-x64.msi"
+    $base = "https://github.com/$Repo/releases/download/$tag"
+    if (-not (Test-Path -LiteralPath $DownloadDir)) { New-Item -ItemType Directory -Path $DownloadDir | Out-Null }
+    $msi = Join-Path $DownloadDir $name
+    Write-Step "Baixando $name..."
+    Invoke-WebRequest -Uri "$base/$name" -OutFile $msi -Headers $headers -UseBasicParsing
+    $sums = (Invoke-WebRequest -Uri "$base/$name.sha256" -Headers $headers -UseBasicParsing).Content
+    if ($sums -is [byte[]]) { $sums = [Text.Encoding]::ASCII.GetString($sums) }
+    $expected = ([string]$sums).Trim().Split(' ')[0].ToLowerInvariant()
+    $actual = (Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) {
+        Remove-Item -LiteralPath $msi -Force -ErrorAction SilentlyContinue
+        throw "SHA256 do MSI nao confere com a release $tag. Download descartado."
+    }
+    Write-Step "MSI $tag conferido (SHA256)."
+    return $msi
+}
+
 function Wait-DbctExit([int]$TimeoutSeconds) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
@@ -85,8 +139,12 @@ function Wait-DbctExit([int]$TimeoutSeconds) {
 
 try {
     if (-not (Test-Administrator)) { throw 'Execute como administrador ou SYSTEM (instalacao para todos os usuarios).' }
-    $msi = [IO.Path]::GetFullPath($MsiPath)
-    if (-not (Test-Path -LiteralPath $msi -PathType Leaf)) { throw "MSI nao encontrado: $msi" }
+    if ($MsiPath) {
+        $msi = [IO.Path]::GetFullPath($MsiPath)
+        if (-not (Test-Path -LiteralPath $msi -PathType Leaf)) { throw "MSI nao encontrado: $msi" }
+    } else {
+        $msi = Get-ReleaseMsi $Version
+    }
 
     $autostart = @()
     if (Test-Path -LiteralPath $Dbct -PathType Leaf) {

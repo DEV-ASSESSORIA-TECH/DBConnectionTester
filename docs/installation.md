@@ -56,10 +56,15 @@ ser analisadas pelo log; o instalador não mata processos para prosseguir.
 
 Para ferramentas de RMM que executam como SYSTEM (Tactical RMM e similares), use
 [`tools/rmm/Install-DBConnectionTester.ps1`](../tools/rmm/Install-DBConnectionTester.ps1).
-Ele instala o MSI para todos os usuários, com a CLI no PATH, e não configura nenhum
-monitoramento:
+Ele baixa o MSI da release do GitHub, confere o SHA256 publicado junto, instala para
+todos os usuários com a CLI no PATH e não configura nenhum monitoramento:
 
 ```powershell
+# Última release.
+.\Install-DBConnectionTester.ps1
+
+# Versão fixa, ou um MSI já copiado para a máquina (sem acesso ao GitHub).
+.\Install-DBConnectionTester.ps1 -Version 3.1.0
 .\Install-DBConnectionTester.ps1 -MsiPath C:\Instaladores\DBConnectionTester-v3.1.0-win-x64.msi
 ```
 

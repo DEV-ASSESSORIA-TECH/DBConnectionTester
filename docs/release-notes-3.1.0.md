@@ -16,8 +16,8 @@ qualquer terminal.
   terminal. **`dbct autostart show|start|disable`:** consultar, retomar e remover a
   execução automática.
 - **Instalação e atualização por RMM:** [`tools/rmm/Install-DBConnectionTester.ps1`](../tools/rmm/Install-DBConnectionTester.ps1)
-  instala para todos os usuários e, ao atualizar, para e retoma as execuções
-  automáticas.
+  baixa o MSI da release (com conferência do SHA256), instala para todos os usuários
+  e, ao atualizar, para e retoma as execuções automáticas.
 - **Monitoramento opcional com Grafana Alloy:** `dbct history cycles --after` permite
   ler uma execução ativa incrementalmente; o módulo do `alloyctl` publica falhas e
   lentidões no Prometheus. O DBCT continua funcionando sem o Alloy.
@@ -28,9 +28,9 @@ qualquer terminal.
 ```powershell
 # Terminal de administrador: monitorar um MySQL continuamente, também após reiniciar.
 $env:DBCT_DB_PASSWORD = '<senha>'
-dbct run --type mysql --host 192.168.1.10 --user dbct_monitor --password-env DBCT_DB_PASSWORD --interval 5 --data-dir C:\DBCT\mysql --autostart
+dbct run --type mysql --host 192.168.1.10 --user dbct_monitor --password-env DBCT_DB_PASSWORD --interval 5 --data-dir C:\ProgramData\DBConnectionTester\Monitor\mysql --autostart
 Remove-Item Env:DBCT_DB_PASSWORD
-dbct run status --data-dir C:\DBCT\mysql
+dbct run status --data-dir C:\ProgramData\DBConnectionTester\Monitor\mysql
 ```
 
 ## Atualização da versão 3.0

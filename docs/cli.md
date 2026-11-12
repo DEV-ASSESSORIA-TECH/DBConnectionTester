@@ -109,6 +109,11 @@ Por padrão, `run` ocupa o terminal até terminar. Para execuções longas:
 ```
 
 `--autostart` implica execução contínua (não aceita `--count` nem `--continuous false`).
+Use uma pasta própria para cada monitoramento, por exemplo
+`C:\ProgramData\DBConnectionTester\Monitor\<nome>`. Evite a pasta do armazenamento
+Compartilhado da GUI (`C:\ProgramData\DBConnectionTester`, com o `data.db` direto nela):
+a GUI o encontra sozinha, e uma execução automática nele impediria os usuários de
+iniciar os próprios testes (um banco aceita uma execução gravando por vez).
 Com o terminal **de administrador**, a execução roda como SYSTEM e inicia no boot, sem
 ninguém logado. Sem administrador, roda como o usuário atual e inicia no logon dele;
 `--autostart-scope system|user` escolhe explicitamente. Os parâmetros ficam na pasta
