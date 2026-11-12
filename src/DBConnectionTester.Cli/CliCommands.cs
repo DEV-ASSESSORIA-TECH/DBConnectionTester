@@ -61,6 +61,10 @@ public sealed partial class CliApplication
         var autostartShow = new Command("show", "Mostrar a execução automática deste banco.");
         AddFormat(autostartShow);
         autostartShow.SetAction((parse, token) => AutostartShowAsync(parse, token));
+        var autostartStart = new Command("start",
+            "Retomar a execução automática sem reiniciar o Windows (após dbct run stop ou uma atualização).");
+        AddFormat(autostartStart);
+        autostartStart.SetAction((parse, token) => AutostartStartAsync(parse, token));
         var autostartDisable = new Command("disable", "Parar e remover a execução automática deste banco.");
         AddFormat(autostartDisable);
         Add(autostartDisable, "--timeout", "Segundos aguardando a parada (padrão: 30).", 30);
@@ -69,6 +73,7 @@ public sealed partial class CliApplication
         var autostartRun = new Command("run", "Laço da execução automática (usado pela tarefa do Windows).") { Hidden = true };
         autostartRun.SetAction((parse, token) => AutostartLoopAsync(parse, token));
         autostart.Subcommands.Add(autostartShow);
+        autostart.Subcommands.Add(autostartStart);
         autostart.Subcommands.Add(autostartDisable);
         autostart.Subcommands.Add(autostartRun);
         root.Subcommands.Add(autostart);

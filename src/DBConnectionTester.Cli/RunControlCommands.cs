@@ -158,7 +158,8 @@ public sealed partial class CliApplication
                 WriteResult(parse, new { runId = target, details.Run.Status, details.Run.CompletedCycles });
                 var state = new AutostartStore(storeDirectory).LoadState();
                 if (state?.ProcessId == writer.ProcessId)
-                    error.WriteLine("A execução automática volta no próximo início do Windows. Para removê-la: dbct autostart disable");
+                    error.WriteLine("A execução automática volta no próximo início do Windows. " +
+                        "Para retomar agora: dbct autostart start. Para removê-la: dbct autostart disable");
                 return 0;
             }
             await Task.Delay(500, token);

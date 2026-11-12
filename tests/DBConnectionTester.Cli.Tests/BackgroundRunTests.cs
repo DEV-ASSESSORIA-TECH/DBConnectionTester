@@ -80,6 +80,15 @@ public sealed class BackgroundRunTests
             Assert.True(scheduler.Loop!.WaitForExit(30_000));
             Assert.Equal(0, scheduler.Loop.ExitCode);
 
+            // "autostart start" resumes it without restarting Windows.
+            var resumeOutput = new StringWriter();
+            var resume = new CliApplication(resumeOutput, TextWriter.Null, locations: fixture.Locations,
+                preferences: new MemoryPreferences(), scheduler: scheduler);
+            Assert.Equal(0, await resume.InvokeAsync(["autostart", "start", "--data-dir", fixture.Data, "--format", "json"]));
+            using (var json = JsonDocument.Parse(resumeOutput.ToString()))
+                Assert.NotEqual(JsonValueKind.Null, json.RootElement.GetProperty("data").GetProperty("runId").ValueKind);
+            Assert.False(scheduler.Loop.HasExited);
+
             var disable = new CliApplication(TextWriter.Null, TextWriter.Null, locations: fixture.Locations,
                 preferences: new MemoryPreferences(), scheduler: scheduler);
             Assert.Equal(0, await disable.InvokeAsync(["autostart", "disable", "--data-dir", fixture.Data]));

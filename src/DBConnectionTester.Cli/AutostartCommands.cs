@@ -138,6 +138,47 @@ public sealed partial class CliApplication
         return 0;
     }
 
+    /// <summary>
+    /// Resumes the automatic run without restarting Windows, e.g. after "dbct run stop" or an
+    /// upgrade. Registers the task again from the saved configuration if it is missing.
+    /// </summary>
+    private async Task<int> AutostartStartAsync(ParseResult parse, CancellationToken token)
+    {
+        var store = await OpenStoreAsync(parse, false, token);
+        var storeDirectory = StoreDirectory(store);
+        var autostart = new AutostartStore(storeDirectory);
+        var config = autostart.Load()
+            ?? throw new CliException(2, "Este banco não tem execução automática. Configure com: dbct run ... --autostart");
+        if (IsCliProcess(autostart.LoadState()?.ProcessId))
+        {
+            WriteResult(parse, new { config.TaskName, alreadyRunning = true, storeDirectory });
+            return 0;
+        }
+        if (!TaskExists(config.TaskName))
+        {
+            if (config.Scope == AutostartScope.System && !scheduler.IsElevated)
+                throw new CliException(2, "A tarefa da execução automática (SYSTEM) não existe mais; recrie-a em um terminal de administrador.");
+            var executable = Environment.ProcessPath ?? throw new CliException(5, "Caminho do dbct indisponível.");
+            scheduler.Register(config.TaskName, AutostartTask.Build(config.Scope, config.UserName ?? scheduler.CurrentUser,
+                executable, storeDirectory));
+            error.WriteLine("A tarefa do Windows não existia e foi registrada de novo.");
+        }
+        // A request left by "run stop" must not end the loop that starts now.
+        StopRequests.Clear(storeDirectory);
+        var busy = WriterInfo.Read(storeDirectory) is not null;
+        var started = DateTimeOffset.UtcNow;
+        scheduler.Run(config.TaskName);
+        Guid? runId = null;
+        if (!busy)
+        {
+            runId = await WaitForNewRunAsync(store, started, () => { }, token);
+            if (runId is null)
+                throw new CliException(5, "A execução automática não começou em 30 s. Confira com: dbct autostart show");
+        }
+        WriteResult(parse, new { runId, config.TaskName, alreadyRunning = false, waitingForActiveRun = busy, storeDirectory });
+        return 0;
+    }
+
     private bool TaskExists(string taskName)
     {
         try { return scheduler.Exists(taskName); }

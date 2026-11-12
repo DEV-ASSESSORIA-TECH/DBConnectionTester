@@ -52,6 +52,28 @@ nem armazena esses segredos. Código `0` indica sucesso; `3010` indica solicita�
 de reinicialização pelo Windows Installer, sem reinício automático. Falhas devem
 ser analisadas pelo log; o instalador não mata processos para prosseguir.
 
+## Instalação e atualização via RMM
+
+Para ferramentas de RMM que executam como SYSTEM (Tactical RMM e similares), use
+[`tools/rmm/Install-DBConnectionTester.ps1`](../tools/rmm/Install-DBConnectionTester.ps1).
+Ele instala o MSI para todos os usuários, com a CLI no PATH, e não configura nenhum
+monitoramento:
+
+```powershell
+.\Install-DBConnectionTester.ps1 -MsiPath C:\Instaladores\DBConnectionTester-v3.1.0-win-x64.msi
+```
+
+O mesmo script atualiza. Como o MSI não encerra processos em uso, ele para antes as
+execuções automáticas desta instalação (`dbct run stop`, registradas como `Stopped`)
+e as retoma ao final com `dbct autostart start`, inclusive se a instalação falhar.
+Uma GUI ou CLI aberta por um usuário ainda impede a atualização; o log indica o
+arquivo em uso. Saída `0` = sucesso; `1` = falha, com o motivo na saída.
+
+Depois de instalar, configure o que cada máquina monitora com `dbct run ... --autostart`
+(veja o [guia da CLI](cli.md#segundo-plano-e-início-com-o-windows)). Na mesma sessão do
+RMM, use o caminho completo `C:\Program Files\DBConnectionTester\dbct.exe`: o PATH novo
+vale para processos iniciados depois da instalação.
+
 ## Atualização, reparo e remoção
 
 Encerre os executáveis da instalação antes de mantê-la. Se estiverem em uso, a UI

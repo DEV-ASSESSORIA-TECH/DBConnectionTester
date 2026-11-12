@@ -17,6 +17,7 @@ o ZIP Portable CLI inclui o runtime .NET e não depende de WinForms.
 .\dbct.exe run status --data-dir .\Data
 .\dbct.exe run stop --data-dir .\Data
 .\dbct.exe autostart show --data-dir .\Data
+.\dbct.exe autostart start --data-dir .\Data
 .\dbct.exe autostart disable --data-dir .\Data
 ```
 
@@ -96,6 +97,7 @@ Por padrão, `run` ocupa o terminal até terminar. Para execuções longas:
 | `run status` | Mostra a execução ativa no banco: processo, início, ciclos e se é automática | — |
 | `run stop [<run-id>]` | Pede a parada a partir de qualquer terminal e aguarda (`--timeout`, padrão 30 s) | — |
 | `autostart show` | Mostra a execução automática do banco: parâmetros, tarefa e estado | — |
+| `autostart start` | Retoma a execução automática sem reiniciar o Windows (após `run stop` ou atualização) | — |
 | `autostart disable` | Para a execução automática e remove tarefa, parâmetros e senha | — |
 
 ```powershell
@@ -118,7 +120,9 @@ logon). Um banco aceita uma execução automática; para trocar os parâmetros, 
 
 Se a execução automática terminar (outra execução gravando no banco, falha de
 gravação), ela volta em 30 a 60 s. `run stop` encerra a execução automática até o
-próximo início do Windows; `autostart disable` a remove. Com autenticação Windows do
+próximo início do Windows ou até `autostart start`; `autostart disable` a remove.
+Para atualizar o DBCT com uma execução automática ativa, pare-a, instale e retome-a;
+o [script de RMM](installation.md#instalação-e-atualização-via-rmm) faz isso sozinho. Com autenticação Windows do
 SQL Server, a execução como SYSTEM usa a conta do computador.
 
 `run stop` vale para execuções da CLI (normais, `--detach` ou `--autostart`). A
