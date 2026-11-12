@@ -117,6 +117,8 @@ instalam o produto. A DLL nativa usa CRT estática e não acrescenta dependênci
 O responsável configura a variável de repositório GitHub Actions
 `DBCT_WIX_ACCEPT_EULA` com o aceite revisado. O `.env` local não é enviado ao CI.
 Sem a configuração, o workflow explica o requisito e interrompe a geração.
+A etapa de ciclo de vida tem limite de 30 minutos; em falha, os logs ficam disponíveis
+como artefato temporário de diagnóstico.
 
 `Test-InstallerLifecycle.ps1` instala somente quando recebe `-DisposableEnvironment`
 e encontra `GITHUB_ACTIONS=true` ou `DBCT_INSTALLER_DISPOSABLE=1`. Não use essa opção

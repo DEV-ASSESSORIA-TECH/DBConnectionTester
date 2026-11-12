@@ -68,15 +68,19 @@ uma pasta temporária gravável; drivers ODBC externos não são incorporados.
 
 ## CI e publicação
 
-O [workflow atual](../.github/workflows/publish.yml) valida pushes de branches, pull requests e execuções manuais em Windows. Restaura a solução e os runtimes de Desktop/CLI, lista vulnerabilidades, compila com avisos como erros, executa as duas suítes e gera os seis artefatos. A etapa de auditoria lista vulnerabilidades; o comando não constitui por si só uma regra que falha automaticamente ao encontrar um pacote vulnerável. Examine sua saída antes de publicar.
+O [workflow atual](../.github/workflows/publish.yml) valida pull requests, pushes em `main`, tags `v*` e execuções manuais em Windows. Branches de funcionalidade são validadas pela PR, evitando duas execuções idênticas por commit; sem PR aberta, use a execução manual (`workflow_dispatch`). Um commit novo na mesma PR ou branch cancela a validação anterior; execuções de tag nunca são canceladas.
+
+O workflow restaura a solução e os runtimes de Desktop/CLI (com cache de pacotes NuGet), audita vulnerabilidades, compila com avisos como erros, executa as duas suítes e gera os seis artefatos. A auditoria falha a execução quando encontra pacote vulnerável, inclusive transitivo. Jobs e etapas longas têm `timeout-minutes`, para que um runner travado falhe em minutos e não em horas.
 
 O responsável deve configurar `DBCT_WIX_ACCEPT_EULA` nas variáveis do repositório
 após revisar os termos. O CI não lê o `.env` local nem aceita termos automaticamente.
 Além de ICE e inspeção de conteúdo, o runner descartável executa instalação por
 usuário com conta padrão temporária, instalação por máquina, coexistência, reparo,
 upgrade, downgrade, rollback e preservação de dados. Esses testes nunca são executados
-automaticamente na máquina de desenvolvimento. Em caso de falha, somente os logs de
-diagnóstico do instalador são enviados como artefato temporário por um dia.
+automaticamente na máquina de desenvolvimento. Em caso de falha, somente os resultados
+de teste (`.trx`) e os logs de diagnóstico do instalador são enviados como artefato
+temporário por um dia. Esse envio é opcional (`continue-on-error`): uma indisponibilidade
+do serviço de artefatos não esconde a falha original nem prende o runner.
 
 O CI usa `--filter "Category!=InteractiveDesktop"` para excluir apenas os dois testes de redimensionamento de janelas de Perfis e Nova execução. O desktop do runner limita as dimensões nativas, impedindo os tamanhos exigidos por esses testes. Os demais testes de UI e comportamento continuam no CI, incluindo a restauração dos campos e eventos de Perfis. Não há `Skip` permanente nos testes.
 

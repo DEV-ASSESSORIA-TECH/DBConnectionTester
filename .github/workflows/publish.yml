@@ -1,8 +1,10 @@
 name: CI and release
 
+# Feature branches are validated through their pull request only; pushing to a
+# branch with an open PR would otherwise start two identical Windows runs.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
@@ -10,17 +12,28 @@ on:
 permissions:
   contents: read
 
+# One active validation per PR/branch: a newer commit cancels the older run.
+# Tag runs publish releases and are never cancelled midway.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 env:
   SOLUTION: DBConnectionTester.sln
   DESKTOP_PROJECT: src/DBConnectionTester.Desktop/DBConnectionTester.Desktop.csproj
   CLI_PROJECT: src/DBConnectionTester.Cli/DBConnectionTester.Cli.csproj
   # Set this repository variable only after the owner reviews and accepts WiX's OSMF terms.
   DBCT_WIX_ACCEPT_EULA: ${{ vars.DBCT_WIX_ACCEPT_EULA }}
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
 
 jobs:
   validate:
     name: Validate Windows x64
     runs-on: windows-latest
+    # A healthy run takes ~20 minutes; fail fast instead of the 6-hour default.
+    timeout-minutes: 60
     outputs:
       version: ${{ steps.version.outputs.value }}
       release-artifact-id: ${{ steps.release_bundle.outputs.artifact-id }}
@@ -34,16 +47,27 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      # Restore failures of the cache service are non-fatal; restore falls back to nuget.org.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.wixproj', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
       - name: Read and validate version
         id: version
         shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           $version = (Get-Content -Raw VERSION).Trim()
           if ($version -notmatch '^\d+\.\d+\.\d+$') {
             throw "VERSION must use semantic version format, for example 2.0.0."
           }
-          if ("${{ github.ref_type }}" -eq "tag" -and "${{ github.ref_name }}" -ne "v$version") {
-            throw "Tag ${{ github.ref_name }} does not match VERSION v$version."
+          if ($env:REF_TYPE -eq "tag" -and $env:REF_NAME -ne "v$version") {
+            throw "Tag $env:REF_NAME does not match VERSION v$version."
           }
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
           "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -61,8 +85,16 @@ jobs:
           dotnet restore $env:CLI_PROJECT -r win-x64
           if ($LASTEXITCODE -ne 0) { throw "CLI runtime restore failed." }
 
+      # 'dotnet list package --vulnerable' exits 0 even when it finds vulnerabilities.
       - name: Check vulnerable packages
-        run: dotnet list $env:SOLUTION package --vulnerable --include-transitive --no-restore
+        shell: pwsh
+        run: |
+          $report = dotnet list $env:SOLUTION package --vulnerable --include-transitive --no-restore 2>&1 | Out-String
+          Write-Host $report
+          if ($LASTEXITCODE -ne 0) { throw "Vulnerability audit failed to run." }
+          if ($report -match 'has the following vulnerable packages') {
+            throw "Vulnerable NuGet packages found. Update or pin patched versions before merging."
+          }
 
       - name: Build
         run: dotnet build $env:SOLUTION -c Release --no-restore --warnaserror
@@ -70,31 +102,40 @@ jobs:
       # The hosted desktop limits native window sizes. Keep resizing checks
       # active in the local suite; run all other UI and functional tests here.
       - name: Test (excluding interactive desktop resizing)
-        run: dotnet test $env:SOLUTION -c Release --no-build --no-restore --verbosity minimal --filter "Category!=InteractiveDesktop"
+        timeout-minutes: 20
+        run: dotnet test $env:SOLUTION -c Release --no-build --no-restore --verbosity minimal --filter "Category!=InteractiveDesktop" --logger trx --results-directory TestResults
 
       - name: Publish and validate release packages
+        timeout-minutes: 25
         shell: pwsh
         run: ./build/Publish-Release.ps1 -NoRestore
 
       # Installs products only on this disposable hosted runner. Creates a temporary
       # non-administrator account to verify genuine per-user installation.
       - name: Validate installer lifecycle in disposable Windows
+        timeout-minutes: 30
         shell: pwsh
         run: ./build/Test-InstallerLifecycle.ps1 -PayloadDirectory publish/complete -DisposableEnvironment
 
-      - name: Retain installer diagnostic logs on failure
-        timeout-minutes: 2
+      # Diagnostics are best effort: an unavailable artifact service must neither
+      # hide the original failure nor hold the runner (seen on 2026-11-11).
+      - name: Retain diagnostic logs on failure
+        timeout-minutes: 5
+        continue-on-error: true
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: installer-diagnostics-${{ github.run_id }}
-          path: C:/Users/Public/DBCTInstallerTests/**/*.log
+          name: diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            TestResults/**/*.trx
+            C:/Users/Public/DBCTInstallerTests/**/*.log
           if-no-files-found: ignore
           retention-days: 1
 
       # Transfer the expected release files in one ZIP container. Compression is
       # disabled because the packages are already compressed.
       - name: Upload temporary release bundle
+        timeout-minutes: 15
         if: startsWith(github.ref, 'refs/tags/v')
         id: release_bundle
         uses: actions/upload-artifact@v7
@@ -124,6 +165,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: validate
     runs-on: windows-latest
+    timeout-minutes: 30
     permissions:
       contents: write
       actions: write
