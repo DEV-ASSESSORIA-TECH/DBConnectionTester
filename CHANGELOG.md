@@ -6,20 +6,23 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-11-12
+
 ### Adicionado
 
+- `dbct run --detach`: execução em segundo plano, independente do terminal (sobrevive ao fechamento da janela ou da sessão SSH).
+- `dbct run --autostart`: execução contínua que volta a cada início do Windows (SYSTEM, no boot) ou logon (usuário), sem exigir perfil. Parâmetros ao lado do `data.db`, senha cifrada com DPAPI.
+- `dbct autostart show`, `start` e `disable`: consultar, retomar sem reiniciar e remover a execução automática.
+- `dbct run status` e `dbct run stop`: acompanhar e parar a execução ativa da CLI a partir de qualquer terminal.
 - `dbct history cycles <id> --after <n> --limit <m>`: leitura incremental dos ciclos, inclusive de uma execução ativa.
 - `dbct run --no-progress`: execução sem progresso no stderr, para execuções supervisionadas.
-- `dbct run --detach`: execução em segundo plano, independente do terminal (sobrevive ao fechamento da janela ou da sessão SSH).
-- `dbct run --autostart`: execução contínua que volta a cada início do Windows (SYSTEM, no boot) ou logon (usuário), sem exigir perfil; `dbct autostart show` e `disable`.
-- `dbct run status` e `dbct run stop`: acompanhar e parar a execução ativa da CLI a partir de qualquer terminal.
-- [Monitoramento com Grafana Alloy](docs/monitoring.md) pelo módulo `dbct` do `alloyctl`.
+- Script de instalação e atualização para RMM ([`tools/rmm`](tools/rmm/Install-DBConnectionTester.ps1)), que preserva as execuções automáticas durante a atualização.
+- [Monitoramento com Grafana Alloy](docs/monitoring.md) pelo módulo opcional do `alloyctl`.
 
 ### Alterado
 
 - Fechar o console, encerrar a sessão, desligar o Windows ou parar a tarefa registram a execução da CLI como `Stopped`, em vez de deixá-la `Running` até o próximo início.
 - Saída redirecionada da CLI (stdout, stderr e stdin) sempre em UTF-8, sem alterar a página de código do console.
-
 - Assistente do instalador com o layout padrão do WiX (faixa de título, separadores, imagem nas telas de boas-vindas e opções agrupadas em caixas) e resumo da instalação com o estado do PATH.
 
 ### Corrigido
@@ -124,7 +127,8 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - Dashboard com DNS, Ping, TCP, conexão, consulta, estatísticas e tendências.
 - Exportação contínua CSV/TXT, operação em bandeja e automação inicial de release.
 
-[Unreleased]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v1.0.3...v2.0.0
 [1.0.3]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v1.0.2...v1.0.3

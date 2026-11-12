@@ -2,7 +2,7 @@
 
 ## Versão e contratos
 
-`VERSION` é a fonte da versão do projeto, dos artefatos e da tag esperada. Para esta entrega: **3.0.0**. `AssemblyVersion` pode aparecer como `3.0.0.0`; não é outro lançamento. SQLite e os formatos JSON permanecem na versão de contrato 1.
+`VERSION` é a fonte da versão do projeto, dos artefatos e da tag esperada. Para esta entrega: **3.1.0**. `AssemblyVersion` pode aparecer como `3.1.0.0`; não é outro lançamento. SQLite e os formatos JSON permanecem na versão de contrato 1.
 
 Atualize `VERSION`, README, changelog e notas da release juntos quando a versão mudar. Os nomes dos arquivos de download são gerados pelo script a partir de `VERSION`, sem valores hardcoded.
 
@@ -29,12 +29,12 @@ Não use o comando interno de preparação do armazenamento compartilhado como t
 
 | Arquivo | Uso |
 |---|---|
-| `DBConnectionTester-v3.0.0-win-x64-framework-dependent.zip` | Requer .NET 10 Desktop Runtime x64. |
-| `DBConnectionTester-v3.0.0-win-x64-self-contained.zip` | Inclui runtime, com arquivos separados. |
-| `DBConnectionTester-v3.0.0-win-x64-self-contained.exe` | EXE único, com runtime e bibliotecas nativas extraídas quando necessário. |
-| `DBConnectionTester-v3.0.0-win-x64-portable-complete.zip` | GUI e CLI em dois executáveis self-contained independentes, mais instruções. |
-| `DBConnectionTester-v3.0.0-win-x64-portable-cli.zip` | CLI self-contained sem WinForms, mais instruções. |
-| `DBConnectionTester-v3.0.0-win-x64.msi` | GUI e CLI com escopo por usuário ou por máquina, PATH opcional e dados preservados. |
+| `DBConnectionTester-v3.1.0-win-x64-framework-dependent.zip` | Requer .NET 10 Desktop Runtime x64. |
+| `DBConnectionTester-v3.1.0-win-x64-self-contained.zip` | Inclui runtime, com arquivos separados. |
+| `DBConnectionTester-v3.1.0-win-x64-self-contained.exe` | EXE único, com runtime e bibliotecas nativas extraídas quando necessário. |
+| `DBConnectionTester-v3.1.0-win-x64-portable-complete.zip` | GUI e CLI em dois executáveis self-contained independentes, mais instruções. |
+| `DBConnectionTester-v3.1.0-win-x64-portable-cli.zip` | CLI self-contained sem WinForms, mais instruções. |
+| `DBConnectionTester-v3.1.0-win-x64.msi` | GUI e CLI com escopo por usuário ou por máquina, PATH opcional e dados preservados. |
 | `SHA256SUMS.txt` e `*.sha256` | Hash dos seis artefatos. |
 
 O script verifica que os ZIPs contêm o EXE e limita o EXE único a 120 MiB. Compare os hashes após transferir os arquivos. Não distribua apenas o apphost pequeno gerado por `dotnet build`: ele depende dos outros arquivos da pasta.

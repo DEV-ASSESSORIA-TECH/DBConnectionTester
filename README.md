@@ -2,7 +2,7 @@
 
 Aplicativo Windows portátil para testar repetidamente cada camada envolvida no acesso a bancos de dados: DNS, Ping/ICMP, TCP, conexão ADO.NET e `SELECT 1`.
 
-**Versão atual:** `3.0.0`
+**Versão atual:** `3.1.0`
 
 ![Painel Nova execução: conexão, parâmetros de execução e resumo estatístico](docs/images/execution-panel.png)
 
@@ -145,7 +145,7 @@ Os arquivos são gravados em `artifacts/`. A automação de release é executada
 - [Solução de problemas](docs/troubleshooting.md)
 - [Códigos de diagnóstico](docs/diagnostics/README.md)
 - [Histórico de versões](CHANGELOG.md)
-- [Notas da versão 3.0.0](docs/release-notes-3.0.0.md) e [2.0.0](docs/release-notes-2.0.0.md)
+- Notas das versões [3.1.0](docs/release-notes-3.1.0.md), [3.0.0](docs/release-notes-3.0.0.md) e [2.0.0](docs/release-notes-2.0.0.md)
 - [Roadmap e pendências](docs/roadmap.md)
 - [Preparação e publicação da release](docs/releasing.md)
 

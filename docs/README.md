@@ -1,4 +1,4 @@
-# Documentação — DB Connection Tester 3.0.0
+# Documentação — DB Connection Tester 3.1.0
 
 ## Uso
 
@@ -8,7 +8,7 @@
 - [Instalação MSI](installation.md): escopos, PATH, manutenção, preservação de dados e validação.
 - [Solução de problemas](troubleshooting.md): armazenamento, exportação, drivers e DPI.
 - [Segurança e privacidade](security.md): dados persistidos, redação e distribuição.
-- [Notas da versão 3.0.0](release-notes-3.0.0.md), [versão 2.0.0](release-notes-2.0.0.md) e [changelog](../CHANGELOG.md).
+- Notas das versões [3.1.0](release-notes-3.1.0.md), [3.0.0](release-notes-3.0.0.md) e [2.0.0](release-notes-2.0.0.md), e [changelog](../CHANGELOG.md).
 
 ## Dados e portabilidade
 
@@ -24,7 +24,7 @@
 - [Manifesto de relatório ZIP v1](schemas/run-export-manifest-v1.schema.json).
 - [Manifesto de pacote portátil v1](schemas/portable-package-v1.schema.json).
 
-`VERSION`, versão do esquema SQLite e `formatVersion` dos arquivos são conceitos independentes. A aplicação 3.0.0 usa SQLite v1 e os contratos JSON v1.
+`VERSION`, versão do esquema SQLite e `formatVersion` dos arquivos são conceitos independentes. A aplicação 3.1.0 usa SQLite v1 e os contratos JSON v1.
 
 Os [exemplos](examples/) foram gerados com os serviços reais e dados fictícios para validar a estrutura. Os manifestos descrevem arquivos de validação temporários; seus hashes não são checksums de downloads nem um pacote restaurável fornecido pela documentação.
 
