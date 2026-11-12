@@ -33,10 +33,15 @@ public sealed partial class CliApplication
                 ?? throw new CliException(2, "O perfil informado não existe.");
             inputSettings = ProfileSettingsMapper.FromProfile(profile);
         }
+        var previousType = inputSettings.DatabaseType;
         inputSettings = ApplyOverrides(parse, inputSettings);
         var profileInfo = DatabaseProfiles.Get(inputSettings.DatabaseType);
-        var needsPassword = inputSettings.DatabaseTest && profileInfo.UsesCredentials &&
-            (!profileInfo.UsesSqlServerAuthentication || inputSettings.SqlServerAuthentication == SqlServerAuthentication.SqlLogin);
+        // A target type without a default port (tcp) must not silently inherit 3306.
+        if (inputSettings.DatabaseType != previousType && profileInfo.UsesNetwork &&
+            profileInfo.DefaultPort is null && parse.GetValue<int?>("--port") is null)
+            throw new CliException(2, "Informe --port para o tipo de destino selecionado.");
+        var needsPassword = inputSettings.DatabaseTest &&
+            profileInfo.RequiresCredentials(inputSettings.SqlServerAuthentication);
         if (needsPassword && secret is null)
             throw new CliException(2, "Informe --password-env ou --password-stdin para esta autenticação.");
         var validation = new TestSettingsValidator().Validate(inputSettings with { Password = secret ?? "" });
@@ -44,12 +49,30 @@ public sealed partial class CliApplication
 
         store ??= await OpenStoreAsync(parse, allowCreate: true, token);
         var settings = await new PersistentSettingsRepository(store).GetAsync(token);
-        // Recovery must never mark a session from another live writer as interrupted.
-        await RunRecoveryService.RecoverAsync(store, token);
         var progress = new ConsoleProgress(error);
-        var runner = new TestRunner(new TestCycleExecutor(), new RunOutputFactory(store, settings));
+        // Recovery runs under the run's own write lease, so it can never mark a session
+        // from another live writer as interrupted.
+        var outputs = new RunIdCapturingFactory(new RunOutputFactory(store, settings, recoverInterruptedRuns: true));
+        var runner = new TestRunner(new TestCycleExecutor(), outputs);
         RunSummary summary;
         try { summary = await runner.RunAsync(validation.Settings!, progress, token); }
+        catch (Exception) when (outputs.RunId is { } failedRunId)
+        {
+            // The run was persisted as Failed: report its ID so automation can inspect it.
+            var failedDetails = await new RunHistoryRepository(store).GetDetailsAsync(failedRunId, CancellationToken.None);
+            WriteResult(parse, new
+            {
+                runId = failedRunId,
+                completed = failedDetails?.Run.CompletedCycles ?? progress.Latest?.Completed ?? 0,
+                terminationReason = RunTerminationReason.ExecutionFailed,
+                hasDiagnosticFailures = progress.HasFailures,
+                statistics = progress.Latest?.Statistics,
+                warnings = failedDetails?.Warnings,
+                failureMessage = failedDetails?.Run.FailureMessage
+            });
+            error.WriteLine("A execução falhou e foi registrada no histórico como Failed.");
+            return 5;
+        }
         finally { progress.Complete(); }
         var details = await new RunHistoryRepository(store).GetDetailsAsync(summary.RunId, CancellationToken.None);
         WriteResult(parse, new
@@ -60,7 +83,19 @@ public sealed partial class CliApplication
             warnings = details?.Warnings,
             summary.CsvPath, summary.TxtPath
         });
-        return summary.Stopped ? 130 : summary.Failed ? 5 : progress.HasFailures ? 1 : 0;
+        return summary.Stopped ? 130 : progress.HasFailures ? 1 : 0;
+    }
+
+    private sealed class RunIdCapturingFactory(IRunOutputFactory inner) : IRunOutputFactory
+    {
+        public Guid? RunId { get; private set; }
+
+        public async Task<IRunOutput> CreateAsync(TestSettings settings)
+        {
+            var output = await inner.CreateAsync(settings);
+            RunId = output.RunId;
+            return output;
+        }
     }
 
     private static TestSettingsInput ApplyOverrides(ParseResult parse, TestSettingsInput settings)

@@ -4,6 +4,7 @@
 #include <shlobj.h>
 #include <string>
 #include <vector>
+#include <cstdlib>
 
 namespace
 {
@@ -222,7 +223,7 @@ extern "C" UINT __stdcall CheckFilesInUse(MSIHANDLE session)
         if (folder.empty()) return ERROR_INSTALL_FAILURE;
         while (FilesBusy(folder))
         {
-            if (Property(session, L"UILevel") < L"4")
+            if (_wtoi(Property(session, L"UILevel").c_str()) < 4)
             {
                 Message(session, L"Encerre a GUI e a CLI instaladas antes de instalar, reparar ou remover o produto. Nenhum processo foi encerrado.");
                 return ERROR_INSTALL_FAILURE;

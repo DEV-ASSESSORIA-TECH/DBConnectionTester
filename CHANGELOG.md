@@ -24,6 +24,14 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 ### Corrigido
 
 - Dependência transitiva de criptografia fixada em versão corrigida, mantendo a auditoria NuGet habilitada.
+- `dbct run` com falha de execução passa a emitir o envelope com `runId` e `failureMessage`, em vez de apenas uma mensagem genérica.
+- Segundo Ctrl+C encerra a CLI imediatamente quando um driver ignora o cancelamento.
+- `dbct run --type tcp` exige `--port`, em vez de usar 3306 silenciosamente.
+- Exportação para arquivo existente retorna código 2 com mensagem explícita.
+- `history show` só valida a paginação quando `--cycles` é informado.
+- A recuperação de execuções interrompidas pela CLI ocorre sob a mesma trava de escrita da nova execução.
+- Regra de credenciais obrigatórias centralizada no perfil de banco (GUI, CLI e validação).
+- Ação nativa do instalador compara `UILevel` numericamente.
 
 ## [2.0.0] - 2026-10-09
 

@@ -59,8 +59,7 @@ public sealed class TestSettingsValidator
             return TestSettingsValidationResult.Failure("Selecione um arquivo SQLite existente.");
         if (databaseTest && profile.UsesOdbcDriver && string.IsNullOrWhiteSpace(input.OdbcDriver))
             return TestSettingsValidationResult.Failure("Informe o nome do driver ODBC do SQL Anywhere.");
-        var credentialsRequired = databaseTest && profile.UsesCredentials &&
-            (!profile.UsesSqlServerAuthentication || input.SqlServerAuthentication == SqlServerAuthentication.SqlLogin);
+        var credentialsRequired = databaseTest && profile.RequiresCredentials(input.SqlServerAuthentication);
         if (credentialsRequired && string.IsNullOrWhiteSpace(input.User))
             return TestSettingsValidationResult.Failure("Informe o usuário do banco de dados.");
         if (!dns && !ping && !tcp && !databaseTest)

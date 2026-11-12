@@ -18,8 +18,7 @@ public sealed record DatabaseUiState(
     public static DatabaseUiState Create(DatabaseType type, SqlServerAuthentication authentication)
     {
         var profile = DatabaseProfiles.Get(type);
-        var showCredentials = profile.UsesCredentials &&
-            (!profile.UsesSqlServerAuthentication || authentication == SqlServerAuthentication.SqlLogin);
+        var showCredentials = profile.RequiresCredentials(authentication);
 
         return new DatabaseUiState(
             profile.UsesNetwork,

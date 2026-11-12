@@ -37,6 +37,17 @@ public sealed class CliProcessTests
     }
 
     [Fact]
+    public async Task TcpTargetRequiresExplicitPort()
+    {
+        using var fixture = new CliFixture();
+        var result = await fixture.ExecuteAsync(["run", "--data-dir", fixture.Data, "--type", "tcp",
+            "--host", "127.0.0.1", "--count", "1", "--interval", "0"]);
+        Assert.Equal(2, result.ExitCode);
+        Assert.Contains("--port", result.Error);
+        Assert.False(Directory.Exists(fixture.Data));
+    }
+
+    [Fact]
     public async Task QueryDoesNotCreateMissingStore()
     {
         using var fixture = new CliFixture();
@@ -78,7 +89,9 @@ public sealed class CliProcessTests
             Assert.Equal(0, (await fixture.ExecuteAsync(args)).ExitCode);
             var before = await File.ReadAllBytesAsync(path);
             Assert.NotEmpty(before);
-            Assert.Equal(5, (await fixture.ExecuteAsync(args)).ExitCode);
+            var again = await fixture.ExecuteAsync(args);
+            Assert.Equal(2, again.ExitCode);
+            Assert.Contains("já existe", again.Error);
             Assert.Equal(before, await File.ReadAllBytesAsync(path));
         }
         Assert.DoesNotContain(secret, await File.ReadAllTextAsync(Path.Combine(fixture.Root, "report.json")));

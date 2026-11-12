@@ -22,12 +22,17 @@ public sealed class DatabaseRunOutput : IRunOutput
 
     public static async Task<DatabaseRunOutput> CreateAsync(
         SqliteApplicationStore store,
-        TestSettings settings)
+        TestSettings settings,
+        bool recoverInterruptedRuns = false)
     {
         var lease = RunWriteLease.Acquire(store);
         try
         {
             var repository = new RunRepository(store);
+            // Under this lease no other writer exists, so any run still marked as running
+            // was abandoned. Recovering here avoids a gap between recovery and BeginAsync.
+            if (recoverInterruptedRuns)
+                await repository.RecoverInterruptedAsync();
             var runId = Guid.NewGuid();
             await repository.BeginAsync(runId, settings, settings.ProfileId);
             return new DatabaseRunOutput(runId, repository, lease);

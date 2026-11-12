@@ -40,13 +40,15 @@ public sealed partial class CliApplication
 
     private async Task<int> ShowHistoryAsync(ParseResult parse, CancellationToken token)
     {
-        var page = Page(parse);
+        var includeCycles = parse.GetValue<bool>("--cycles");
+        // Paging options only apply to the cycles page.
+        var page = includeCycles ? Page(parse) : null;
         var store = await OpenStoreAsync(parse, false, token);
         var history = new RunHistoryRepository(store);
         var id = parse.GetValue<Guid>("id");
         var details = await history.GetDetailsAsync(id, token)
             ?? throw new CliException(2, "A execução informada não existe.");
-        var cycles = parse.GetValue<bool>("--cycles") ? await history.GetCyclesAsync(id, page, token) : null;
+        var cycles = page is not null ? await history.GetCyclesAsync(id, page, token) : null;
         WriteResult(parse, new { details, cycles });
         return 0;
     }
@@ -63,6 +65,10 @@ public sealed partial class CliApplication
         var service = new RunExportService(history);
         var path = parse.GetValue<string>("--output")!;
         if (string.IsNullOrWhiteSpace(path)) throw new CliException(2, "Informe um novo arquivo de destino.");
+        // Usage error, not an operational failure. The service still creates the file
+        // with CreateNew, so a file appearing after this check is never overwritten.
+        if (File.Exists(path) || Directory.Exists(path))
+            throw new CliException(2, "O arquivo de destino já existe. Informe um novo caminho; a exportação não sobrescreve arquivos.");
         var format = parse.GetValue<string>("--format");
         var result = format == "zip" ? await service.ExportZipAsync(id, path, token) :
             await service.ExportAsync(id, format switch

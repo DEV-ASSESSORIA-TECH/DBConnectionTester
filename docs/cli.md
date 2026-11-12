@@ -39,7 +39,7 @@ diálogos nem solicitam confirmação. `--version` deve ser usado sozinho.
 | Opção | Uso |
 |---|---|
 | `--type` | `mysql`, `postgresql`, `sqlserver`, `sqlanywhere`, `sqlite` ou `tcp` |
-| `--host`, `--port` | Destino de rede; usa a porta padrão do tipo quando disponível |
+| `--host`, `--port` | Destino de rede; usa a porta padrão do tipo quando disponível. `--type tcp` exige `--port` |
 | `--user`, `--database` | Usuário e nome do banco |
 | `--auth` | SQL Server: `windows` ou `sql-login` |
 | `--sqlite-file` | Arquivo SQLite existente |
@@ -70,8 +70,10 @@ do SQL Server, inclusive em tarefas agendadas.
 As configurações persistidas de CSV/TXT contínuo também são respeitadas pela CLI.
 Falhas dessa saída opcional permanecem avisos; os resultados principais ficam no
 SQLite. Uma execução contínua não tem porcentagem de conclusão. Ctrl+C solicita
-parada e aguarda a finalização; uma chamada nativa ODBC pode sobreviver ao tempo
-de espera, conforme o comportamento existente do provider.
+parada e aguarda a finalização, registrando a execução como `Stopped`; uma chamada
+nativa ODBC pode sobreviver ao tempo de espera, conforme o comportamento existente do
+provider. Um segundo Ctrl+C encerra o processo imediatamente; nesse caso a execução
+fica como `Running` e é marcada como `Interrupted` na próxima execução.
 
 ## Armazenamento e concorrência
 
@@ -124,7 +126,10 @@ do formato do arquivo de relatório:
 ```
 
 Em `run`, `data` contém `runId`, ciclos concluídos, motivo de término, indicador de
-falhas, estatísticas, avisos e caminhos opcionais de CSV/TXT. O progresso é limitado
+falhas, estatísticas, avisos e caminhos opcionais de CSV/TXT. Se a execução falhar
+depois de registrada, o envelope também é emitido, com `terminationReason`
+`ExecutionFailed`, `failureMessage` e o `runId` para consulta; o código de saída é 5.
+O progresso é limitado
 a uma atualização a cada 250 ms, mais a atualização final. Erros usam stderr e não
 produzem envelope de sucesso. Argumentos inválidos não são repetidos na mensagem
 para evitar expor um segredo passado por engano.
@@ -133,10 +138,10 @@ para evitar expor um segredo passado por engano.
 |---|---|
 | 0 | Comando concluído; execução sem falhas nas etapas habilitadas |
 | 1 | Execução concluída com falhas de diagnóstico |
-| 2 | Argumentos/configuração inválidos, entrada de credencial inválida, ID inexistente ou execução ainda ativa na exportação |
+| 2 | Argumentos/configuração inválidos, entrada de credencial inválida, ID inexistente, execução ainda ativa na exportação ou arquivo de destino já existente |
 | 3 | Armazenamento indisponível, incompatível ou ambíguo |
 | 4 | Outra execução escritora ativa |
-| 5 | Falha operacional ou de exportação |
+| 5 | Falha operacional, de exportação ou da execução (com envelope e `runId` quando a execução chegou a ser registrada) |
 | 130 | Cancelamento solicitado |
 
 `Completed` no histórico significa que os ciclos terminaram, mesmo se houve

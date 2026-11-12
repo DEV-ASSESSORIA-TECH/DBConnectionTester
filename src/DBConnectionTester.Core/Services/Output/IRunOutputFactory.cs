@@ -14,20 +14,23 @@ public sealed class RunOutputFactory : IRunOutputFactory
     private readonly SqliteApplicationStore store;
     private readonly ApplicationSettings applicationSettings;
     private readonly OutputPathPolicy outputPathPolicy;
+    private readonly bool recoverInterruptedRuns;
 
     public RunOutputFactory(
         SqliteApplicationStore store,
         ApplicationSettings applicationSettings,
-        OutputPathPolicy? outputPathPolicy = null)
+        OutputPathPolicy? outputPathPolicy = null,
+        bool recoverInterruptedRuns = false)
     {
         this.store = store;
         this.applicationSettings = applicationSettings;
         this.outputPathPolicy = outputPathPolicy ?? new OutputPathPolicy();
+        this.recoverInterruptedRuns = recoverInterruptedRuns;
     }
 
     public async Task<IRunOutput> CreateAsync(TestSettings settings)
     {
-        var database = await DatabaseRunOutput.CreateAsync(store, settings);
+        var database = await DatabaseRunOutput.CreateAsync(store, settings, recoverInterruptedRuns);
         if (!applicationSettings.LegacyOutputEnabled)
             return database;
 

@@ -9,7 +9,12 @@ public sealed record DatabaseProfile(
     bool UsesCredentials,
     bool UsesFile,
     bool UsesSqlServerAuthentication,
-    bool UsesOdbcDriver);
+    bool UsesOdbcDriver)
+{
+    // Single source for "does this target need a user and a password?" (GUI, CLI, validator).
+    public bool RequiresCredentials(SqlServerAuthentication authentication) =>
+        UsesCredentials && (!UsesSqlServerAuthentication || authentication == SqlServerAuthentication.SqlLogin);
+}
 
 public static class DatabaseProfiles
 {
