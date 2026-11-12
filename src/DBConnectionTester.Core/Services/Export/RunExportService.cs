@@ -30,22 +30,14 @@ public sealed class RunExportService
         CancellationToken token = default)
     {
         var details = await RequireRunAsync(runId, token);
-        await using var stream = CreateNewFile(destinationPath);
-        switch (format)
+        var written = await WriteAtomicallyAsync(destinationPath, stream => format switch
         {
-            case RunExportFormat.Csv:
-                await WriteCsvAsync(details, stream, token);
-                break;
-            case RunExportFormat.Text:
-                await WriteTextAsync(details, stream, token);
-                break;
-            case RunExportFormat.Json:
-                await WriteJsonAsync(details, stream, token);
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(format));
-        }
-        return new RunExportResult(runId, [Path.GetFullPath(destinationPath)]);
+            RunExportFormat.Csv => WriteCsvAsync(details, stream, token),
+            RunExportFormat.Text => WriteTextAsync(details, stream, token),
+            RunExportFormat.Json => WriteJsonAsync(details, stream, token),
+            _ => throw new ArgumentOutOfRangeException(nameof(format))
+        });
+        return new RunExportResult(runId, [written]);
     }
 
     public async Task<RunExportResult> ExportZipAsync(Guid runId, string destinationPath, CancellationToken token = default)
@@ -69,11 +61,14 @@ public sealed class RunExportService
             var manifestPath = Path.Combine(temporaryDirectory, "manifest.json");
             await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(manifest, JsonOptions), new UTF8Encoding(false), token);
 
-            await using var destination = CreateNewFile(destinationPath);
-            using var archive = new ZipArchive(destination, ZipArchiveMode.Create, leaveOpen: true, Encoding.UTF8);
-            foreach (var path in files.Append(manifestPath))
-                archive.CreateEntryFromFile(path, Path.GetFileName(path), CompressionLevel.Optimal);
-            return new RunExportResult(runId, [Path.GetFullPath(destinationPath)]);
+            var written = await WriteAtomicallyAsync(destinationPath, destination =>
+            {
+                using (var archive = new ZipArchive(destination, ZipArchiveMode.Create, leaveOpen: true, Encoding.UTF8))
+                    foreach (var path in files.Append(manifestPath))
+                        archive.CreateEntryFromFile(path, Path.GetFileName(path), CompressionLevel.Optimal);
+                return Task.CompletedTask;
+            });
+            return new RunExportResult(runId, [written]);
         }
         finally
         {
@@ -214,6 +209,32 @@ public sealed class RunExportService
             Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.Read,
             Options = FileOptions.Asynchronous | FileOptions.SequentialScan
         });
+    }
+
+    // Write next to the destination and publish with a no-overwrite rename, so a failed
+    // or cancelled export never leaves a partial file that blocks the next attempt.
+    private static async Task<string> WriteAtomicallyAsync(string destinationPath, Func<Stream, Task> write)
+    {
+        var fullPath = Path.GetFullPath(destinationPath);
+        if (File.Exists(fullPath) || Directory.Exists(fullPath))
+            throw new IOException($"O arquivo de destino já existe: {fullPath}");
+        var temporaryPath = Path.Combine(Path.GetDirectoryName(fullPath)!,
+            $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.partial");
+        try
+        {
+            await using (var stream = CreateNewFile(temporaryPath))
+            {
+                await write(stream);
+                await stream.FlushAsync();
+            }
+            File.Move(temporaryPath, fullPath, overwrite: false);
+            return fullPath;
+        }
+        catch
+        {
+            try { File.Delete(temporaryPath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            throw;
+        }
     }
 
     private static async Task WriteFileAsync(string path, Func<Stream, Task> write)

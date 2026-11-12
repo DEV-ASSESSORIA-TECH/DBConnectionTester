@@ -1,5 +1,7 @@
 using System.CommandLine;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 using DBConnectionTester.Models;
 using DBConnectionTester.Services.Storage;
@@ -9,6 +11,11 @@ namespace DBConnectionTester.Cli;
 
 public sealed partial class CliApplication
 {
+    // Free-text fields that may echo provider or exception text. Masking every string
+    // instead would corrupt hosts, IDs and paths whenever the password is short.
+    [GeneratedRegex("message|error|technical|provider", RegexOptions.IgnoreCase)]
+    private static partial Regex FreeTextProperty();
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -115,13 +122,38 @@ public sealed partial class CliApplication
 
     private void WriteResult(ParseResult parse, object data)
     {
-        var options = new JsonSerializerOptions(JsonOptions);
-        if (!string.IsNullOrEmpty(secret)) options.Converters.Insert(0, new SecretStringConverter(secret));
-        var element = JsonSerializer.SerializeToElement(data, options);
+        var node = JsonSerializer.SerializeToNode(data, JsonOptions);
+        if (!string.IsNullOrEmpty(secret)) MaskSecret(node, secret, insideFreeText: false);
         if (parse.GetValue<string>("--format") == "json")
-            output.WriteLine(JsonSerializer.Serialize(new { formatVersion = 1, data = element }, JsonOptions));
+            output.WriteLine(JsonSerializer.Serialize(new { formatVersion = 1, data = node }, JsonOptions));
         else
-            WriteText(element, "");
+            WriteText(JsonSerializer.SerializeToElement(node, JsonOptions), "");
+    }
+
+    private static void MaskSecret(JsonNode? node, string password, bool insideFreeText)
+    {
+        switch (node)
+        {
+            case JsonObject item:
+                foreach (var (name, child) in item.ToArray())
+                {
+                    var freeText = insideFreeText || FreeTextProperty().IsMatch(name);
+                    if (child is JsonValue value && freeText && value.TryGetValue<string>(out var text))
+                        item[name] = text.Replace(password, "***", StringComparison.Ordinal);
+                    else
+                        MaskSecret(child, password, freeText);
+                }
+                break;
+            case JsonArray list:
+                for (var index = 0; index < list.Count; index++)
+                {
+                    if (list[index] is JsonValue value && insideFreeText && value.TryGetValue<string>(out var text))
+                        list[index] = text.Replace(password, "***", StringComparison.Ordinal);
+                    else
+                        MaskSecret(list[index], password, insideFreeText);
+                }
+                break;
+        }
     }
 
     private void WriteText(JsonElement element, string indent)
@@ -143,15 +175,6 @@ public sealed partial class CliApplication
                 WriteText(item, indent + "  ");
             }
         else output.WriteLine(indent + element);
-    }
-
-    private sealed class SecretStringConverter(string password) : JsonConverter<string>
-    {
-        public override string? Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) =>
-            reader.GetString();
-
-        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) =>
-            writer.WriteStringValue(value.Replace(password, "***", StringComparison.Ordinal));
     }
 
     private string Sanitize(string message) => string.IsNullOrEmpty(secret)

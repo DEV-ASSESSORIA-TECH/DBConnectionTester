@@ -30,9 +30,9 @@ public sealed partial class CliApplication
             .AcceptOnlyFromAmong("windows", "sql-login");
         Add<string?>(run, "--password-env", "Nome da variável de ambiente com a senha.");
         Add<bool>(run, "--password-stdin", "Ler uma linha de senha da entrada padrão.");
-        Add<long?>(run, "--count", "Quantidade de ciclos (padrão: 1000).");
+        Add<long?>(run, "--count", $"Quantidade de ciclos (padrão sem perfil: {CliRunDefaults.Count}).");
         Add<bool?>(run, "--continuous", "Executar até Ctrl+C; aceita true/false.");
-        Add<double?>(run, "--interval", "Intervalo em segundos (padrão: 5).");
+        Add<double?>(run, "--interval", $"Intervalo em segundos (padrão sem perfil: {CliRunDefaults.IntervalSeconds}).");
         Add<double?>(run, "--timeout", "Timeout em segundos (padrão: 5).");
         foreach (var stage in new[] { "dns", "ping", "tcp", "database-test" })
             Add<bool?>(run, "--" + stage, "Habilitar/desabilitar etapa; aceita true/false.");

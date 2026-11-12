@@ -44,9 +44,9 @@ diálogos nem solicitam confirmação. `--version` deve ser usado sozinho.
 | `--auth` | SQL Server: `windows` ou `sql-login` |
 | `--sqlite-file` | Arquivo SQLite existente |
 | `--odbc-driver` | Nome do driver SQL Anywhere x64 instalado |
-| `--count` | De 1 a 10.000.000 ciclos; padrão sem perfil: 1000 |
+| `--count` | De 1 a 10.000.000 ciclos; padrão sem perfil: 10 (com perfil: o do perfil) |
 | `--continuous [true\|false]` | Executar até Ctrl+C; padrão: desabilitado |
-| `--interval` | Segundos entre ciclos, de 0 a 3600; padrão: 5 |
+| `--interval` | Segundos entre ciclos, de 0 a 3600; padrão sem perfil: 1 (com perfil: o do perfil) |
 | `--timeout` | Segundos por etapa, de 1 a 120; padrão: 5 |
 | `--dns`, `--ping`, `--tcp`, `--database-test` | Aceitam `true` ou `false`; padrão: habilitadas nas camadas suportadas |
 | `--password-env` | Nome da variável de ambiente com a senha |

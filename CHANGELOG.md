@@ -28,6 +28,9 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - Segundo Ctrl+C encerra a CLI imediatamente quando um driver ignora o cancelamento.
 - `dbct run --type tcp` exige `--port`, em vez de usar 3306 silenciosamente.
 - Exportação para arquivo existente retorna código 2 com mensagem explícita.
+- Exportação grava em arquivo temporário e só publica ao final; falha ou cancelamento não deixam arquivo parcial no destino.
+- `dbct run` sem perfil usa 10 ciclos a cada 1 s (antes 1000 a cada 5 s, cerca de 83 minutos).
+- Ocultação da senha na saída da CLI restrita a campos de mensagem; senhas curtas não corrompem IDs, hosts ou caminhos.
 - `history show` só valida a paginação quando `--cycles` é informado.
 - A recuperação de execuções interrompidas pela CLI ocorre sob a mesma trava de escrita da nova execução.
 - Regra de credenciais obrigatórias centralizada no perfil de banco (GUI, CLI e validação).

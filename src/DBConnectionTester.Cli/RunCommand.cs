@@ -24,7 +24,13 @@ public sealed partial class CliApplication
 
         token.ThrowIfCancellationRequested();
         SqliteApplicationStore? store = null;
-        var inputSettings = ProfileSettingsMapper.CreateDefault();
+        // The GUI default (1000 cycles every 5 s, ~83 min) suits a monitoring window, not a
+        // terminal command. Without a profile the CLI answers in about ten seconds.
+        var inputSettings = ProfileSettingsMapper.CreateDefault() with
+        {
+            TestCount = CliRunDefaults.Count,
+            Interval = TimeSpan.FromSeconds(CliRunDefaults.IntervalSeconds)
+        };
         if (parse.GetValue<Guid?>("--profile") is { } profileId)
         {
             // Loading a saved profile must never create a missing store.
@@ -132,4 +138,10 @@ public sealed partial class CliApplication
             DatabaseTest = parse.GetValue<bool?>("--database-test") ?? settings.DatabaseTest
         };
     }
+}
+
+internal static class CliRunDefaults
+{
+    public const long Count = 10;
+    public const double IntervalSeconds = 1;
 }

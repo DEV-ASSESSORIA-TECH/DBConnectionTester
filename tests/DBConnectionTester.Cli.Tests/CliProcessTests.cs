@@ -37,6 +37,19 @@ public sealed class CliProcessTests
     }
 
     [Fact]
+    public async Task ShortPasswordDoesNotCorruptIdentifiersOrPaths()
+    {
+        using var fixture = new CliFixture();
+        // GUIDs and paths almost always contain "1"; masking must only touch free-text fields.
+        var run = await fixture.ExecuteAsync(fixture.RunArguments("--password-env", "DBCT_TEST_PASSWORD"), "1");
+        Assert.Equal(0, run.ExitCode);
+        using var json = JsonDocument.Parse(run.Output);
+        var id = json.RootElement.GetProperty("data").GetProperty("runId").GetGuid();
+        var details = await fixture.ExecuteAsync(["history", "show", id.ToString(), "--data-dir", fixture.Data, "--format", "json"]);
+        Assert.Equal(0, details.ExitCode);
+    }
+
+    [Fact]
     public async Task TcpTargetRequiresExplicitPort()
     {
         using var fixture = new CliFixture();
