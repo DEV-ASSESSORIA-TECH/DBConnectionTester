@@ -2,13 +2,13 @@
 
 Aplicativo Windows portátil para testar repetidamente cada camada envolvida no acesso a bancos de dados: DNS, Ping/ICMP, TCP, conexão ADO.NET e `SELECT 1`.
 
-**Versão atual:** `2.0.0`
+**Versão atual:** `3.0.0`
 
 ![Painel Nova execução: conexão, parâmetros de execução e resumo estatístico](docs/images/execution-panel.png)
 
 ## Começar a usar
 
-1. Baixe o EXE self-contained da [release](https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/releases). Os ZIPs alternativos estão descritos abaixo.
+1. Baixe o EXE self-contained da [release](https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/releases). Os ZIPs alternativos estão descritos abaixo.
 2. Abra **Nova execução**, configure o destino ou selecione um perfil e informe a senha quando necessária.
 3. Use **Testar uma vez** para conferir a conexão ou **Iniciar teste** para executar a sequência configurada.
 4. Acompanhe **Resumo estatístico**, **Ciclos recentes** e **Tendência**. **Parar** encerra a execução com os ciclos já gravados preservados.
@@ -30,6 +30,8 @@ Veja o [guia dos painéis e fluxos](docs/user-guide.md) para perfis, bandeja, co
 - Pacote portátil com backup consistente, manifesto e checksums SHA-256.
 - Recuperação de execuções interrompidas e bloqueio de uma única execução escritora por banco.
 - Execução em primeiro plano ou na bandeja do Windows.
+- CLI `dbct` para executar diagnósticos, consultar histórico e exportar pelo terminal, com saída JSON e códigos de saída para automação.
+- Instalador MSI por usuário ou por máquina, além dos pacotes portáteis.
 
 ## Bancos suportados
 
@@ -143,7 +145,8 @@ Os arquivos são gravados em `artifacts/`. A automação de release é executada
 - [Solução de problemas](docs/troubleshooting.md)
 - [Códigos de diagnóstico](docs/diagnostics/README.md)
 - [Histórico de versões](CHANGELOG.md)
-- [Notas da versão 2.0.0](docs/release-notes-2.0.0.md)
+- [Notas da versão 3.0.0](docs/release-notes-3.0.0.md) e [2.0.0](docs/release-notes-2.0.0.md)
+- [Roadmap e pendências](docs/roadmap.md)
 - [Preparação e publicação da release](docs/releasing.md)
 
 ## Desenvolvedor

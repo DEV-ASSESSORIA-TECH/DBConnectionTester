@@ -32,3 +32,29 @@ Esses recursos não fazem parte da próxima implementação.
 - Revisar a proposta e a apresentação do produto; avaliar uma mudança de nome, ainda sem decisão.
 
 O detalhamento técnico, os requisitos e a ordem de implementação serão definidos no planejamento.
+
+## Pendências após a 3.0.0
+
+Itens conhecidos que ficaram fora da release. Não são funcionalidades novas.
+
+- **Instalador:** no teste de ciclo de vida, uma atualização ou remoção com a CLI aberta não foi recusada como esperado. Reproduzir em VM e corrigir se for do produto.
+- **Validação manual do MSI:** assistente nos dois escopos, Windows limpo sem .NET, pendrive e driver SQL Anywhere x64 real.
+- **Assinatura:** MSI e executáveis sem Authenticode.
+- **SQL Server:** certificado autoassinado falha com a criptografia padrão do SqlClient; expor `--encrypt`/`--trust-server-certificate` e classificar o erro de certificado.
+- **Dependências:** Npgsql 10, SqlClient 7.1 (avaliar remover o pin de `Pkcs`), MySqlConnector 3, System.CommandLine 3 e pacotes de teste. Manter os pacotes do runtime na linha 10.x.
+- **Trava de escrita:** depende do compartilhamento de arquivos do Windows e não funciona no Linux; necessária antes de uma CLI Linux.
+- **Código:** `DatabaseUiState` é estado de interface e está no Core.
+- **GitHub:** duas execuções de CI presas desde 11/11 (#31 e #32), com chamado aberto no suporte.
+
+## Ideias: operação 100% pela CLI
+
+Objetivo: executar e acompanhar diagnósticos remotamente pelo terminal (por exemplo, via SSH).
+
+1. Tratar queda da sessão e desligamento como cancelamento, registrando a execução como `Stopped`.
+2. `run status`, `history show --follow`, `run stop <id>` e `run --detach`.
+3. `profiles add/update/remove` e `settings show/set`.
+4. `--credential <nome>` usando o Gerenciador de Credenciais do Windows.
+5. `--progress json` com uma linha por ciclo.
+6. Armazenamento e pacotes portáteis pela CLI (`storage`, `portable`).
+7. CLI para Linux.
+
