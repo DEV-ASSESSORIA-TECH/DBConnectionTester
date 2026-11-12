@@ -1,0 +1,5 @@
+LIBRARY "DBConnectionTester.Installer.Actions.dll"
+EXPORTS
+    PrepareSettings
+    FilterRelatedProducts
+    CheckFilesInUse

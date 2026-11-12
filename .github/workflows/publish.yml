@@ -1,23 +1,86 @@
 name: CI and release
 
+# Feature branches are validated through their pull request only; pushing to a
+# branch with an open PR would otherwise start two identical Windows runs.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      installer_lifecycle:
+        description: "Também instalar/atualizar/remover o MSI no runner (lento, ~10 min)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# One active validation per PR/branch: a newer commit cancels the older run.
+# Tag runs publish releases and are never cancelled midway.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 env:
   SOLUTION: DBConnectionTester.sln
-  TEST_PROJECT: tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj
+  DESKTOP_PROJECT: src/DBConnectionTester.Desktop/DBConnectionTester.Desktop.csproj
+  CLI_PROJECT: src/DBConnectionTester.Cli/DBConnectionTester.Cli.csproj
+  # Set this repository variable only after the owner reviews and accepts WiX's OSMF terms.
+  DBCT_WIX_ACCEPT_EULA: ${{ vars.DBCT_WIX_ACCEPT_EULA }}
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
 
 jobs:
+  # A merged PR produces a new commit on main, but when its tree is identical to
+  # the PR head that already passed this workflow, rebuilding proves nothing new.
+  # Only pushes to main are skipped; PRs, tags and manual runs always validate.
+  changes:
+    name: Detect already validated content
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Compare with validated pull request heads
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          skip=false
+          if [[ "$EVENT" == "push" && "$REF" == "refs/heads/main" ]]; then
+            tree=$(gh api "repos/$REPOSITORY/git/commits/$SHA" --jq .tree.sha)
+            for head in $(gh api "repos/$REPOSITORY/commits/$SHA/pulls" \
+                --jq '.[] | select(.merged_at != null and .base.ref == "main") | .head.sha'); do
+              head_tree=$(gh api "repos/$REPOSITORY/git/commits/$head" --jq .tree.sha)
+              passed=$(gh api "repos/$REPOSITORY/actions/workflows/publish.yml/runs?head_sha=$head&event=pull_request&status=success" \
+                --jq .total_count)
+              if [[ "$head_tree" == "$tree" && "$passed" -gt 0 ]]; then
+                echo "Tree $tree already passed on pull request head $head; skipping validation."
+                skip=true
+              fi
+            done
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
   validate:
     name: Validate Windows x64
+    needs: changes
+    if: needs.changes.outputs.skip != 'true'
     runs-on: windows-latest
+    # A healthy run takes ~5 minutes; fail fast instead of the 6-hour default.
+    timeout-minutes: 45
     outputs:
       version: ${{ steps.version.outputs.value }}
       release-artifact-id: ${{ steps.release_bundle.outputs.artifact-id }}
@@ -31,28 +94,54 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
+      # Restore failures of the cache service are non-fatal; restore falls back to nuget.org.
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.wixproj', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
       - name: Read and validate version
         id: version
         shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           $version = (Get-Content -Raw VERSION).Trim()
           if ($version -notmatch '^\d+\.\d+\.\d+$') {
             throw "VERSION must use semantic version format, for example 2.0.0."
           }
-          if ("${{ github.ref_type }}" -eq "tag" -and "${{ github.ref_name }}" -ne "v$version") {
-            throw "Tag ${{ github.ref_name }} does not match VERSION v$version."
+          if ($env:REF_TYPE -eq "tag" -and $env:REF_NAME -ne "v$version") {
+            throw "Tag $env:REF_NAME does not match VERSION v$version."
           }
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
           "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ($env:DBCT_WIX_ACCEPT_EULA -ne "wix7") {
+            throw "MSI build requires the owner's WiX OSMF acceptance in repository variable DBCT_WIX_ACCEPT_EULA. See docs/installation.md."
+          }
 
       - name: Restore
         shell: pwsh
         run: |
-          dotnet restore $env:TEST_PROJECT
-          dotnet restore DBConnectionTester.csproj -r win-x64
+          dotnet restore $env:SOLUTION
+          if ($LASTEXITCODE -ne 0) { throw "Solution restore failed." }
+          dotnet restore $env:DESKTOP_PROJECT -r win-x64
+          if ($LASTEXITCODE -ne 0) { throw "Desktop runtime restore failed." }
+          dotnet restore $env:CLI_PROJECT -r win-x64
+          if ($LASTEXITCODE -ne 0) { throw "CLI runtime restore failed." }
 
+      # 'dotnet list package --vulnerable' exits 0 even when it finds vulnerabilities.
       - name: Check vulnerable packages
-        run: dotnet list $env:TEST_PROJECT package --vulnerable --include-transitive --no-restore
+        shell: pwsh
+        run: |
+          $report = dotnet list $env:SOLUTION package --vulnerable --include-transitive --no-restore 2>&1 | Out-String
+          Write-Host $report
+          if ($LASTEXITCODE -ne 0) { throw "Vulnerability audit failed to run." }
+          if ($report -match 'has the following vulnerable packages') {
+            throw "Vulnerable NuGet packages found. Update or pin patched versions before merging."
+          }
 
       - name: Build
         run: dotnet build $env:SOLUTION -c Release --no-restore --warnaserror
@@ -60,15 +149,59 @@ jobs:
       # The hosted desktop limits native window sizes. Keep resizing checks
       # active in the local suite; run all other UI and functional tests here.
       - name: Test (excluding interactive desktop resizing)
-        run: dotnet test $env:TEST_PROJECT -c Release --no-build --no-restore --verbosity minimal --filter "Category!=InteractiveDesktop"
+        timeout-minutes: 20
+        run: dotnet test $env:SOLUTION -c Release --no-build --no-restore --verbosity minimal --filter "Category!=InteractiveDesktop" --logger trx --results-directory TestResults
 
       - name: Publish and validate release packages
+        timeout-minutes: 25
         shell: pwsh
         run: ./build/Publish-Release.ps1 -NoRestore
 
-      # Transfer the seven release files in one ZIP container. Compression is
+      # Installs products only on this disposable hosted runner. Creates a temporary
+      # non-administrator account to verify genuine per-user installation. Slow, so it
+      # runs only on demand; the MSI is still built and inspected (ICE, tables, hashes)
+      # by the previous step on every run.
+      - name: Validate installer lifecycle in disposable Windows
+        if: github.event_name == 'workflow_dispatch' && inputs.installer_lifecycle
+        timeout-minutes: 30
+        shell: pwsh
+        run: ./build/Test-InstallerLifecycle.ps1 -PayloadDirectory publish/complete -DisposableEnvironment
+
+      # upload-artifact needs a common root, and installer logs live on C: while the
+      # workspace is on D:. Copy them under the workspace before uploading.
+      - name: Collect installer diagnostics on failure
+        if: failure()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $source = 'C:\Users\Public\DBCTInstallerTests'
+          if (-not (Test-Path -LiteralPath $source)) { return }
+          $target = Join-Path $env:GITHUB_WORKSPACE 'diagnostics/installer'
+          foreach ($file in Get-ChildItem -LiteralPath $source -Recurse -File -Filter *.log) {
+            $destination = Join-Path $target $file.FullName.Substring($source.Length + 1)
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $destination
+          }
+
+      # Diagnostics are best effort: an unavailable artifact service must neither
+      # hide the original failure nor hold the runner (seen on 2026-11-11).
+      - name: Retain diagnostic logs on failure
+        timeout-minutes: 5
+        continue-on-error: true
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            TestResults/**/*.trx
+            diagnostics/**/*.log
+          if-no-files-found: ignore
+          retention-days: 1
+
+      # Transfer the expected release files in one ZIP container. Compression is
       # disabled because the packages are already compressed.
       - name: Upload temporary release bundle
+        timeout-minutes: 15
         if: startsWith(github.ref, 'refs/tags/v')
         id: release_bundle
         uses: actions/upload-artifact@v7
@@ -81,6 +214,12 @@ jobs:
             artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.zip.sha256
             artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.exe
             artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-self-contained.exe.sha256
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-portable-complete.zip
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-portable-complete.zip.sha256
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-portable-cli.zip
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64-portable-cli.zip.sha256
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64.msi
+            artifacts/DBConnectionTester-v${{ steps.version.outputs.value }}-win-x64.msi.sha256
             artifacts/SHA256SUMS.txt
           archive: true
           compression-level: 0
@@ -92,11 +231,15 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: validate
     runs-on: windows-latest
+    timeout-minutes: 30
     permissions:
       contents: write
       actions: write
 
     steps:
+      - name: Checkout release asset contract
+        uses: actions/checkout@v7
+
       - name: Download validated artifacts
         uses: actions/download-artifact@v7
         with:
@@ -111,7 +254,19 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           $files = @(Get-ChildItem -LiteralPath artifacts -File)
-          if ($files.Count -ne 7) { throw "Expected seven release files, found $($files.Count)." }
+          $expected = @(./build/Get-ReleaseAssetNames.ps1 -Version "${{ needs.validate.outputs.version }}")
+          $difference = @(Compare-Object ($expected | Sort-Object) ($files.Name | Sort-Object))
+          if ($difference.Count -ne 0) { throw "Release assets differ from the expected file list." }
+          foreach ($line in Get-Content artifacts/SHA256SUMS.txt) {
+            if ($line -notmatch '^([a-f0-9]{64})  (.+)$') { throw "Invalid checksum entry." }
+            $expectedHash = $Matches[1]
+            $assetName = $Matches[2]
+            if ($assetName -notin $expected -or [IO.Path]::GetFileName($assetName) -ne $assetName) {
+              throw "Unexpected checksum asset name."
+            }
+            $actualHash = (Get-FileHash -LiteralPath (Join-Path artifacts $assetName) -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actualHash -ne $expectedHash) { throw "Checksum mismatch: $assetName" }
+          }
           gh release view $env:RELEASE_TAG 2>$null
           $releaseExists = $LASTEXITCODE -eq 0
           if ($releaseExists) {

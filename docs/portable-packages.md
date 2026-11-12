@@ -1,5 +1,10 @@
 # Pacotes portáteis
 
+Este documento descreve o **pacote de dados v1** criado pela aplicação. Os ZIPs de
+release **Portable Complete** (GUI + CLI) e **Portable CLI** contêm binários sem dados
+de usuário; consulte [CLI](cli.md) e [publicação](releasing.md). O pacote de dados v1
+mantém no máximo um EXE opcional: o executável single-file que está criando o pacote.
+
 Um pacote portátil completo transfere configurações, perfis e histórico para outra pasta ou máquina sem depender do caminho original do EXE.
 
 ## Criação

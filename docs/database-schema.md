@@ -1,6 +1,6 @@
 # Esquema SQLite v1
 
-O banco do aplicativo é distinto dos bancos testados. Seu esquema é criado transacionalmente por `SqliteApplicationStore`; `PRAGMA user_version = 1` identifica o contrato atual. A fonte normativa das colunas é o SQL em [SqliteApplicationStore.cs](../Services/Storage/SqliteApplicationStore.cs).
+O banco do aplicativo é distinto dos bancos testados. Seu esquema é criado transacionalmente por `SqliteApplicationStore`; `PRAGMA user_version = 1` identifica o contrato atual. A fonte normativa das colunas é o SQL em [SqliteApplicationStore.cs](../src/DBConnectionTester.Core/Services/Storage/SqliteApplicationStore.cs).
 
 UUIDs, enums e datas ISO-8601 são armazenados como `TEXT`; contagens e milissegundos, como `INTEGER`; médias e mediana, como `REAL`. Colunas opcionais usam `NULL`. WAL, foreign keys e `busy_timeout` de 5.000 ms são configurados nas conexões. A estrutura não contém senha nem connection string.
 

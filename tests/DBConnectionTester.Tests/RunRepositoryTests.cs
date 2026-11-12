@@ -75,6 +75,27 @@ public sealed class RunRepositoryTests
     }
 
     [Fact]
+    public async Task NewOutputRecoversAbandonedRunsOnlyWhenRequested()
+    {
+        using var fixture = await RunFixture.CreateAsync();
+        var abandoned = Guid.NewGuid();
+        await fixture.Repository.BeginAsync(abandoned, Settings("abandoned"));
+
+        await using (await DatabaseRunOutput.CreateAsync(fixture.Store, Settings("plain"))) { }
+        await using (var connection = await fixture.Store.OpenConnectionAsync())
+            Assert.Equal(0L, await ScalarLongAsync(connection,
+                "SELECT COUNT(*) FROM runs WHERE status = 'Interrupted';", null));
+
+        await using var output = await DatabaseRunOutput.CreateAsync(
+            fixture.Store, Settings("recovering"), recoverInterruptedRuns: true);
+        await using var check = await fixture.Store.OpenConnectionAsync();
+        Assert.Equal("Interrupted", await ScalarStringAsync(check,
+            "SELECT status FROM runs WHERE run_id = $id;", abandoned));
+        Assert.Equal("Running", await ScalarStringAsync(check,
+            "SELECT status FROM runs WHERE run_id = $id;", output.RunId));
+    }
+
+    [Fact]
     public async Task OnlyOneWriterLeaseCanBeHeldAndReadersRemainAvailable()
     {
         using var fixture = await RunFixture.CreateAsync();

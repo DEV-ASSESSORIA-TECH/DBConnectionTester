@@ -248,7 +248,8 @@ public sealed class ProfilesLoadingTests
             {
                 form.ClientSize = new System.Drawing.Size(width, 620);
                 await Task.Delay(30);
-                Assert.Equal(width >= 720 ? Orientation.Vertical : Orientation.Horizontal, split.Orientation);
+                Assert.True(split.Orientation == (width >= 720 ? Orientation.Vertical : Orientation.Horizontal),
+                    $"requestedWidth={width}, split={split.ClientSize}, orientation={split.Orientation}; {UiTestWindow.Describe(form)}");
                 if (split.Orientation == Orientation.Vertical)
                     Assert.InRange(split.SplitterDistance * 96d / split.DeviceDpi, 180, 200);
                 foreach (Control control in editor.Controls)
@@ -285,6 +286,8 @@ public sealed class ProfilesLoadingTests
         {
             try
             {
+                // Surface native paint/layout failures instead of continuing with a stale UI.
+                System.Windows.Forms.Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
                 var repository = new Repository();
                 using var page = new ProfilesPage(repository);
                 page.EditDecision = _ => DialogResult.No;

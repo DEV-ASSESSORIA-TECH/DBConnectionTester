@@ -2,13 +2,13 @@
 
 Aplicativo Windows portátil para testar repetidamente cada camada envolvida no acesso a bancos de dados: DNS, Ping/ICMP, TCP, conexão ADO.NET e `SELECT 1`.
 
-**Versão atual:** `2.0.0`
+**Versão atual:** `3.0.0`
 
 ![Painel Nova execução: conexão, parâmetros de execução e resumo estatístico](docs/images/execution-panel.png)
 
 ## Começar a usar
 
-1. Baixe o EXE self-contained da [release](https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/releases). Os ZIPs alternativos estão descritos abaixo.
+1. Baixe o EXE self-contained da [release](https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/releases). Os ZIPs alternativos estão descritos abaixo.
 2. Abra **Nova execução**, configure o destino ou selecione um perfil e informe a senha quando necessária.
 3. Use **Testar uma vez** para conferir a conexão ou **Iniciar teste** para executar a sequência configurada.
 4. Acompanhe **Resumo estatístico**, **Ciclos recentes** e **Tendência**. **Parar** encerra a execução com os ciclos já gravados preservados.
@@ -30,6 +30,8 @@ Veja o [guia dos painéis e fluxos](docs/user-guide.md) para perfis, bandeja, co
 - Pacote portátil com backup consistente, manifesto e checksums SHA-256.
 - Recuperação de execuções interrompidas e bloqueio de uma única execução escritora por banco.
 - Execução em primeiro plano ou na bandeja do Windows.
+- CLI `dbct` para executar diagnósticos, consultar histórico e exportar pelo terminal, com saída JSON e códigos de saída para automação.
+- Instalador MSI por usuário ou por máquina, além dos pacotes portáteis.
 
 ## Bancos suportados
 
@@ -95,11 +97,14 @@ Leia [Segurança e privacidade](docs/security.md) e a [documentação dos diagn�
 
 ## Downloads
 
-Cada release oferece três artefatos Windows x64:
+O empacotamento passa a oferecer seis artefatos Windows x64 (alterações em desenvolvimento, sem nova versão publicada):
 
 - **Framework-dependent ZIP:** requer o [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
 - **Self-contained ZIP:** inclui o runtime e mantém os arquivos separados.
 - **Self-contained EXE:** arquivo único pronto para executar.
+- **Portable Complete ZIP:** GUI + CLI, com dois executáveis self-contained independentes.
+- **Portable CLI ZIP:** somente `dbct.exe` self-contained, sem WinForms.
+- **MSI:** GUI + CLI, instalação por usuário ou por máquina, com PATH opcional. Veja [instalação e manutenção](docs/installation.md).
 
 Cada artefato possui checksum SHA-256. O EXE único é validado pela CI para permanecer abaixo de 120 MiB.
 
@@ -108,15 +113,16 @@ Cada artefato possui checksum SHA-256. O EXE único é validado pela CI para per
 Requisitos: Windows x64 e .NET 10 SDK.
 
 ```powershell
-dotnet restore tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj
+dotnet restore DBConnectionTester.sln
 dotnet build DBConnectionTester.sln -c Release --no-restore
-dotnet test tests/DBConnectionTester.Tests/DBConnectionTester.Tests.csproj -c Release --no-build
-dotnet run --project DBConnectionTester.csproj
+dotnet test DBConnectionTester.sln -c Release --no-build
+dotnet run --project src/DBConnectionTester.Desktop
+dotnet run --project src/DBConnectionTester.Cli -- --help
 ```
 
 O teste local executa a suíte completa. No CI, apenas dois testes que exigem redimensionamento real de janelas são excluídos pelo limite do desktop do runner; veja [validação de release](docs/releasing.md#ci-e-publicação).
 
-Gerar e validar os três artefatos:
+Gerar e validar os seis artefatos (MSI requer C++ Build Tools, Windows SDK e aceite WiX pelo responsável; [pré-requisitos](docs/installation.md#compilar-sem-instalar)):
 
 ```powershell
 ./build/Publish-Release.ps1
@@ -127,6 +133,9 @@ Os arquivos são gravados em `artifacts/`. A automação de release é executada
 ## Documentação
 
 - [Índice da documentação](docs/README.md)
+- [CLI e automações](docs/cli.md)
+- [Instalação MSI e manutenção](docs/installation.md)
+- [Arquitetura Core, Desktop e CLI](docs/architecture.md)
 - [Guia dos painéis e fluxos](docs/user-guide.md)
 - [Arquitetura de armazenamento](docs/storage.md)
 - [Esquema SQLite v1](docs/database-schema.md)
@@ -136,7 +145,8 @@ Os arquivos são gravados em `artifacts/`. A automação de release é executada
 - [Solução de problemas](docs/troubleshooting.md)
 - [Códigos de diagnóstico](docs/diagnostics/README.md)
 - [Histórico de versões](CHANGELOG.md)
-- [Notas da versão 2.0.0](docs/release-notes-2.0.0.md)
+- [Notas da versão 3.0.0](docs/release-notes-3.0.0.md) e [2.0.0](docs/release-notes-2.0.0.md)
+- [Roadmap e pendências](docs/roadmap.md)
 - [Preparação e publicação da release](docs/releasing.md)
 
 ## Desenvolvedor

@@ -6,6 +6,27 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-11-12
+
+### Adicionado
+
+- CLI `dbct`, independente da GUI e com o mesmo motor de diagnóstico: `run` por parâmetros ou perfil salvo, `profiles list/show`, `history list/show` e `export` em CSV, TXT, JSON ou ZIP.
+- Automação pela CLI: envelope JSON (`formatVersion` 1) no stdout, progresso no stderr, senha por `--password-env` ou `--password-stdin` e códigos de saída documentados. Execuções que falham após registradas também retornam o `runId`.
+- Cancelamento pela CLI: o primeiro Ctrl+C encerra a execução como `Stopped`; o segundo encerra o processo quando um driver ignora o cancelamento.
+- Pacotes Portable Complete (GUI + CLI) e Portable CLI self-contained, com checksums e validação funcional.
+- Instalador MSI Windows x64 com assistente em português, instalação por usuário ou por máquina, PATH opcional, atalhos e preservação dos dados em reparo, atualização e remoção.
+
+### Alterado
+
+- Solução reorganizada em `src/DBConnectionTester.Core`, `src/DBConnectionTester.Desktop` e `src/DBConnectionTester.Cli`. Contratos SQLite/JSON v1 e o executável da GUI foram preservados.
+- A release passa a ter treze arquivos: seis artefatos (incluindo os dois novos ZIPs e o MSI), seus checksums e `SHA256SUMS.txt`.
+- CI: uma validação por PR, cancelamento de execuções substituídas, limites de tempo, auditoria de vulnerabilidades que falha de fato e cache NuGet. Push em `main` com conteúdo já validado na PR não é recompilado; o teste de instalação real do MSI passou a ser sob demanda.
+
+### Corrigido
+
+- Exportações (GUI e CLI) gravam em arquivo temporário e só publicam ao final; falha ou cancelamento não deixam arquivo parcial no destino.
+- Dependência transitiva de criptografia fixada em versão corrigida.
+
 ## [2.0.0] - 2026-10-09
 
 ### Adicionado
@@ -83,9 +104,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - Dashboard com DNS, Ping, TCP, conexão, consulta, estatísticas e tendências.
 - Exportação contínua CSV/TXT, operação em bandeja e automação inicial de release.
 
-[Unreleased]: https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/compare/v2.0.0...HEAD
-[2.0.0]: https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/compare/v1.0.3...v2.0.0
-[1.0.3]: https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/compare/v1.0.2...v1.0.3
-[1.0.2]: https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/compare/v1.0.1...v1.0.2
-[1.0.1]: https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/GUILHERME-GARCIATECH/DBConnectionTester/releases/tag/v1.0.0
+[Unreleased]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v2.0.0...v3.0.0
+[2.0.0]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v1.0.3...v2.0.0
+[1.0.3]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v1.0.2...v1.0.3
+[1.0.2]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/releases/tag/v1.0.0

@@ -68,6 +68,23 @@ public sealed class RunExportServiceTests
         Assert.Equal("keep", await File.ReadAllTextAsync(path));
     }
 
+    [Fact]
+    public async Task FailedExportLeavesNoFileBehind()
+    {
+        using var fixture = await ExportFixture.CreateAsync();
+        var runId = await fixture.AddRunAsync();
+        var path = fixture.PathFor("failed.json");
+
+        // An invalid format fails while writing, after the temporary file was created.
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => fixture.Exporter.ExportAsync(runId, (RunExportFormat)99, path));
+
+        Assert.False(File.Exists(path));
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.partial"));
+        await fixture.Exporter.ExportAsync(runId, RunExportFormat.Json, path);
+        Assert.True(File.Exists(path));
+    }
+
     private sealed class ExportFixture : IDisposable
     {
         private ExportFixture(string root, SqliteApplicationStore store)

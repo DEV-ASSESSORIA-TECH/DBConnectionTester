@@ -1,11 +1,13 @@
-# Documentação — DB Connection Tester 2.0.0
+# Documentação — DB Connection Tester 3.0.0
 
 ## Uso
 
 - [Guia dos painéis e fluxos](user-guide.md): execução, perfis, histórico, configurações e bandeja.
+- [CLI e automações](cli.md): comandos, credenciais, JSON, armazenamento e códigos de saída.
+- [Instalação MSI](installation.md): escopos, PATH, manutenção, preservação de dados e validação.
 - [Solução de problemas](troubleshooting.md): armazenamento, exportação, drivers e DPI.
 - [Segurança e privacidade](security.md): dados persistidos, redação e distribuição.
-- [Notas da versão 2.0.0](release-notes-2.0.0.md) e [changelog](../CHANGELOG.md).
+- [Notas da versão 3.0.0](release-notes-3.0.0.md), [versão 2.0.0](release-notes-2.0.0.md) e [changelog](../CHANGELOG.md).
 
 ## Dados e portabilidade
 
@@ -21,14 +23,15 @@
 - [Manifesto de relatório ZIP v1](schemas/run-export-manifest-v1.schema.json).
 - [Manifesto de pacote portátil v1](schemas/portable-package-v1.schema.json).
 
-`VERSION`, versão do esquema SQLite e `formatVersion` dos arquivos são conceitos independentes. A aplicação 2.0.0 usa SQLite v1 e os contratos JSON v1.
+`VERSION`, versão do esquema SQLite e `formatVersion` dos arquivos são conceitos independentes. A aplicação 3.0.0 usa SQLite v1 e os contratos JSON v1.
 
 Os [exemplos](examples/) foram gerados com os serviços reais e dados fictícios para validar a estrutura. Os manifestos descrevem arquivos de validação temporários; seus hashes não são checksums de downloads nem um pacote restaurável fornecido pela documentação.
 
 ## Desenvolvimento e publicação
 
 - [Roadmap](roadmap.md): próximo escopo, recursos adiados e melhorias transversais.
+- [Arquitetura Core, Desktop e CLI](architecture.md): limites entre projetos e contratos compartilhados.
 - [Preparação e publicação](releasing.md): validação local, artefatos e comportamento da CI.
-- Fontes: [projeto](../DBConnectionTester.csproj), [workflow](../.github/workflows/publish.yml) e [script de empacotamento](../build/Publish-Release.ps1).
+- Fontes: [solução](../DBConnectionTester.sln), [Desktop](../src/DBConnectionTester.Desktop/DBConnectionTester.Desktop.csproj), [Core](../src/DBConnectionTester.Core/DBConnectionTester.Core.csproj), [CLI](../src/DBConnectionTester.Cli/DBConnectionTester.Cli.csproj), [workflow](../.github/workflows/publish.yml) e [script de empacotamento](../build/Publish-Release.ps1).
 
 As capturas dos cinco painéis estão no guia. Os SVGs de arquitetura e fluxos permanecem em `images/`.
