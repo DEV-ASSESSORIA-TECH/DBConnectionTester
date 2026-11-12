@@ -40,12 +40,17 @@ internal sealed class CliFixture : IDisposable
         }
     }
 
+    private static readonly System.Text.UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
+
     public Process Start(string[] arguments, string? password = null)
     {
         var info = new ProcessStartInfo(ExecutablePath)
         {
             UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Root,
-            RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true
+            RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true,
+            // Contract: redirected CLI streams are UTF-8 on every platform. Reading them with the
+            // Windows console code page would garble accented messages.
+            StandardOutputEncoding = Utf8, StandardErrorEncoding = Utf8, StandardInputEncoding = Utf8
         };
         foreach (var argument in arguments) info.ArgumentList.Add(argument);
         if (password is not null) info.Environment["DBCT_TEST_PASSWORD"] = password;
