@@ -6,6 +6,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ## [Unreleased]
 
+### Corrigido
+
+- MySQL/MariaDB: a etapa TCP não abre mais uma conexão extra que era fechada sem o handshake. Cada ciclo gerava um `Aborted_connects` no servidor e somava no contador de erros por máquina (`max_connect_errors`), que pode bloquear a máquina cliente. Com a etapa de banco habilitada, a etapa TCP passa a ser medida na conexão do próprio driver, mantendo latência, IP remoto e códigos `DBT-TCP-*`; o IP local deixa de ser registrado nesse modo. Veja [Etapa TCP em MySQL/MariaDB](docs/user-guide.md#etapa-tcp-em-mysqlmariadb).
+
 ## [3.1.0] - 2026-11-12
 
 ### Adicionado

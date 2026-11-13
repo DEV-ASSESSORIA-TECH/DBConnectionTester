@@ -14,6 +14,11 @@ public sealed record DatabaseProfile(
     // Single source for "does this target need a user and a password?" (GUI, CLI, validator).
     public bool RequiresCredentials(SqlServerAuthentication authentication) =>
         UsesCredentials && (!UsesSqlServerAuthentication || authentication == SqlServerAuthentication.SqlLogin);
+
+    // A bare TCP probe (connect and close without the handshake) is an error for the server: MySQL/MariaDB count
+    // it in Aborted_connects and in the per-host counter limited by max_connect_errors, which blocks the client.
+    // With the database stage enabled, the TCP stage is measured on the driver's own connection instead.
+    public bool TcpStageThroughDriver => Type == DatabaseType.MySqlMariaDb;
 }
 
 public static class DatabaseProfiles

@@ -18,6 +18,14 @@ O Início reúne **Nova execução**, **Usar um perfil** e **Abrir histórico**.
 
 O intervalo é uma espera entre ciclos, após concluir o anterior; não garante uma frequência fixa. Quantidade aceita de 1 a 10.000.000, intervalo de 0 a 3.600 segundos e timeout de 1 a 120 segundos. Nem todas as etapas se aplicam a todos os tipos; por exemplo, Somente TCP não executa conexão ADO.NET ou `SELECT 1`.
 
+### Etapa TCP em MySQL/MariaDB
+
+Abrir e fechar uma conexão TCP sem o handshake do banco não é neutro para o MySQL e o MariaDB: cada sondagem conta em `Aborted_connects` e no contador de erros por máquina limitado por `max_connect_errors`. Quando esse limite é atingido, o servidor bloqueia a máquina cliente ("Host is blocked because of many connection errors"), inclusive para os sistemas que usam o banco.
+
+Por isso, com a etapa de banco habilitada, o DBCT não abre um socket extra para MySQL/MariaDB: a etapa TCP é medida na própria conexão que o driver abre para o `SELECT 1`. O resultado continua sendo uma etapa separada, com latência do connect, IP remoto e os códigos `DBT-TCP-*` em caso de falha (recusada, timeout, inalcançável). O IP local não é registrado nesse modo. Se o nome não resolve e nenhum socket chega a ser aberto, a etapa TCP fica como não executada e a falha aparece no DNS e na conexão.
+
+Com a etapa de banco desabilitada, a etapa TCP de um alvo MySQL/MariaDB continua sendo a sondagem simples e gera um `Aborted_connects` por ciclo. Para monitorar um MySQL/MariaDB de forma contínua, mantenha a etapa de banco habilitada.
+
 **Resumo estatístico** é a aba inicial. **Ciclos recentes** apresenta os últimos resultados visuais e **Tendência** permite acompanhar latência por etapa. O histórico completo permanece no SQLite, mesmo que a grade visual mostre apenas resultados recentes.
 
 Durante a execução, a configuração fica bloqueada, mas a navegação e o Histórico continuam disponíveis. O progresso fica entre os parâmetros e as abas de resultado. Execução contínua mostra contagem e tempo, sem porcentagem de conclusão.
