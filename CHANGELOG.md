@@ -6,6 +6,12 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-11-13
+
+### Corrigido
+
+- MySQL/MariaDB: a etapa TCP não abre mais uma conexão extra que era fechada sem o handshake. Cada ciclo gerava um `Aborted_connects` no servidor e somava no contador de erros por máquina (`max_connect_errors`), que pode bloquear a máquina cliente. Com a etapa de banco habilitada, a etapa TCP passa a ser medida na conexão do próprio driver, mantendo latência, IP remoto e códigos `DBT-TCP-*`; o IP local deixa de ser registrado nesse modo. Veja [Etapa TCP em MySQL/MariaDB](docs/user-guide.md#etapa-tcp-em-mysqlmariadb).
+
 ## [3.1.0] - 2026-11-12
 
 ### Adicionado
@@ -127,7 +133,8 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - Dashboard com DNS, Ping, TCP, conexão, consulta, estatísticas e tendências.
 - Exportação contínua CSV/TXT, operação em bandeja e automação inicial de release.
 
-[Unreleased]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/DEV-ASSESSORIA-TECH/DBConnectionTester/compare/v1.0.3...v2.0.0

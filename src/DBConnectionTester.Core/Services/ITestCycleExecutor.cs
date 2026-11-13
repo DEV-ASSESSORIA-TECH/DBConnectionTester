@@ -24,6 +24,19 @@ public sealed class TestCycleExecutor : ITestCycleExecutor
         var ping = settings.Ping
             ? await NetworkTester.TestPingAsync(settings.Host, settings.Timeout.Value, token)
             : StepResult.Skipped();
+        if (settings.Tcp && settings.DatabaseTest && settings.Profile.TcpStageThroughDriver)
+        {
+            // No extra socket: the TCP stage is the connection the driver opens for the database stage.
+            DatabaseResult observed;
+            TcpResult derived;
+            using (var observer = DriverTcpObserver.Start())
+            {
+                observed = await DatabaseTester.TestAsync(settings, token);
+                derived = observer.ToTcpResult(observed, settings.Timeout.Value);
+            }
+            return new TestCycleResult(number, startedAt, dns, ping, derived, observed);
+        }
+
         var tcp = settings.Tcp
             ? await NetworkTester.TestTcpAsync(settings.Host, settings.Port!.Value, settings.Timeout.Value, token)
             : TcpResult.Skipped();
