@@ -64,8 +64,8 @@ todos os usuários com a CLI no PATH e não configura nenhum monitoramento:
 .\Install-DBConnectionTester.ps1
 
 # Versão fixa, ou um MSI já copiado para a máquina (sem acesso ao GitHub).
-.\Install-DBConnectionTester.ps1 -Version 3.1.0
-.\Install-DBConnectionTester.ps1 -MsiPath C:\Instaladores\DBConnectionTester-v3.1.0-win-x64.msi
+.\Install-DBConnectionTester.ps1 -Version 3.1.1
+.\Install-DBConnectionTester.ps1 -MsiPath C:\Instaladores\DBConnectionTester-v3.1.1-win-x64.msi
 ```
 
 O mesmo script atualiza. Como o MSI não encerra processos em uso, ele para antes as

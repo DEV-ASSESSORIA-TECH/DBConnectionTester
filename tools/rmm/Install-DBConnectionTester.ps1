@@ -20,7 +20,7 @@ Codigos de saida: 0 sucesso (inclusive com reinicio pendente do Windows Installe
 Manter este arquivo em ASCII: o Windows PowerShell 5.1 le arquivos sem BOM como ANSI.
 
 .PARAMETER Version
-Versao da release a baixar, por exemplo 3.1.0. Padrao: latest (ultima release).
+Versao da release a baixar, por exemplo 3.1.1. Padrao: latest (ultima release).
 
 .PARAMETER MsiPath
 MSI ja copiado para a maquina (sem acesso ao GitHub). Quando informado, nada e baixado.
@@ -35,10 +35,10 @@ Log detalhado do Windows Installer.
 .\Install-DBConnectionTester.ps1
 
 .EXAMPLE
-.\Install-DBConnectionTester.ps1 -Version 3.1.0
+.\Install-DBConnectionTester.ps1 -Version 3.1.1
 
 .EXAMPLE
-.\Install-DBConnectionTester.ps1 -MsiPath C:\Instaladores\DBConnectionTester-v3.1.0-win-x64.msi
+.\Install-DBConnectionTester.ps1 -MsiPath C:\Instaladores\DBConnectionTester-v3.1.1-win-x64.msi
 #>
 [CmdletBinding()]
 param(
